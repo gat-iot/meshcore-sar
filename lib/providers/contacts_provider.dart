@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:latlong2/latlong.dart';
 import '../models/contact.dart';
 import '../services/cayenne_lpp_parser.dart';
 import '../services/contact_storage_service.dart';
@@ -330,9 +331,27 @@ class ContactsProvider with ChangeNotifier {
 
     try {
       // Parse Cayenne LPP data
-      final telemetry = CayenneLppParser.parse(lppData);
+      var telemetry = CayenneLppParser.parse(lppData);
       debugPrint('  ✅ Parsed new telemetry');
       debugPrint('  New telemetry timestamp: ${telemetry.timestamp}');
+
+      // Ignore placeholder GPS coordinates (0,0) so we don't overwrite a
+      // previously known/saved position with invalid telemetry data.
+      if (_isInvalidTelemetryGps(telemetry.gpsLocation)) {
+        debugPrint(
+          '  ⚠️ Ignoring invalid telemetry GPS coordinates: ${telemetry.gpsLocation}',
+        );
+        telemetry = ContactTelemetry(
+          gpsLocation: null,
+          batteryPercentage: telemetry.batteryPercentage,
+          batteryMilliVolts: telemetry.batteryMilliVolts,
+          temperature: telemetry.temperature,
+          timestamp: telemetry.timestamp,
+          humidity: telemetry.humidity,
+          pressure: telemetry.pressure,
+          extraSensorData: telemetry.extraSensorData,
+        );
+      }
 
       // Update contact with new telemetry AND last seen time
       // lastAdvert is Unix timestamp in seconds
@@ -357,6 +376,18 @@ class ContactsProvider with ChangeNotifier {
       debugPrint('  ❌ Failed to parse telemetry: $e');
       debugPrint('Failed to parse telemetry: $e');
     }
+  }
+
+  bool _isInvalidTelemetryGps(LatLng? location) {
+    if (location == null) return false;
+    final lat = location.latitude;
+    final lon = location.longitude;
+
+    if (!lat.isFinite || !lon.isFinite) return true;
+
+    // Many devices report "0000" placeholder GPS as (0.0, 0.0).
+    const epsilon = 1e-7;
+    return lat.abs() < epsilon && lon.abs() < epsilon;
   }
 
   /// Find contact by public key prefix (6 bytes)
