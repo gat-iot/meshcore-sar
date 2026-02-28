@@ -335,14 +335,30 @@ class ContactsProvider with ChangeNotifier {
       debugPrint('  ✅ Parsed new telemetry');
       debugPrint('  New telemetry timestamp: ${telemetry.timestamp}');
 
-      // Ignore placeholder GPS coordinates (0,0) so we don't overwrite a
-      // previously known/saved position with invalid telemetry data.
-      if (_isInvalidTelemetryGps(telemetry.gpsLocation)) {
-        debugPrint(
-          '  ⚠️ Ignoring invalid telemetry GPS coordinates: ${telemetry.gpsLocation}',
-        );
+      final incomingGps = telemetry.gpsLocation;
+      if (_isInvalidTelemetryGps(incomingGps)) {
+        // Always sanitize invalid placeholder GPS to null first.
         telemetry = ContactTelemetry(
           gpsLocation: null,
+          batteryPercentage: telemetry.batteryPercentage,
+          batteryMilliVolts: telemetry.batteryMilliVolts,
+          temperature: telemetry.temperature,
+          timestamp: telemetry.timestamp,
+          humidity: telemetry.humidity,
+          pressure: telemetry.pressure,
+          extraSensorData: telemetry.extraSensorData,
+        );
+      }
+
+      // Keep last valid GPS for router/chat/room contacts when current
+      // telemetry does not provide a valid GPS fix.
+      if (_shouldRetainLastValidGps(contact, telemetry.gpsLocation)) {
+        debugPrint(
+          '  ⚠️ Retaining last valid GPS. Incoming telemetry GPS is invalid/missing: $incomingGps',
+        );
+        final previousGps = _getValidGpsOrNull(contact.telemetry?.gpsLocation);
+        telemetry = ContactTelemetry(
+          gpsLocation: previousGps,
           batteryPercentage: telemetry.batteryPercentage,
           batteryMilliVolts: telemetry.batteryMilliVolts,
           temperature: telemetry.temperature,
@@ -388,6 +404,29 @@ class ContactsProvider with ChangeNotifier {
     // Many devices report "0000" placeholder GPS as (0.0, 0.0).
     const epsilon = 1e-7;
     return lat.abs() < epsilon && lon.abs() < epsilon;
+  }
+
+  LatLng? _getValidGpsOrNull(LatLng? location) {
+    if (location == null || _isInvalidTelemetryGps(location)) {
+      return null;
+    }
+    return location;
+  }
+
+  bool _shouldRetainLastValidGps(Contact contact, LatLng? incomingGps) {
+    final isSupportedType =
+        contact.isChat || contact.isRepeater || contact.isRoom;
+    if (!isSupportedType) {
+      return false;
+    }
+
+    final hasPreviousValidGps =
+        _getValidGpsOrNull(contact.telemetry?.gpsLocation) != null;
+    if (!hasPreviousValidGps) {
+      return false;
+    }
+
+    return incomingGps == null;
   }
 
   /// Find contact by public key prefix (6 bytes)

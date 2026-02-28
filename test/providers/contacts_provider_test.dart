@@ -9,6 +9,29 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  Uint8List createPublicKey(int seed) {
+    return Uint8List.fromList(List<int>.generate(32, (index) => seed + index));
+  }
+
+  Contact createContact({
+    required Uint8List key,
+    required ContactType type,
+    String? name,
+  }) {
+    return Contact(
+      publicKey: key,
+      type: type,
+      flags: 0,
+      outPathLen: 0,
+      outPath: Uint8List(64),
+      advName: name ?? 'Test Contact',
+      lastAdvert: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      advLat: (46.0569 * 1e6).toInt(),
+      advLon: (14.5058 * 1e6).toInt(),
+      lastMod: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    );
+  }
+
   group('ContactsProvider.updateTelemetry', () {
     late ContactsProvider provider;
     late Uint8List publicKey;
@@ -106,5 +129,70 @@ void main() {
       expect(updated.displayLocation!.latitude, closeTo(45.0001, 0.0001));
       expect(updated.displayLocation!.longitude, closeTo(13.9999, 0.0001));
     });
+
+    test(
+      'retains last valid gps for chat/repeater/room when telemetry gps is invalid or missing',
+      () {
+        final contactTypes = <ContactType>[
+          ContactType.chat,
+          ContactType.repeater,
+          ContactType.room,
+        ];
+
+        for (var i = 0; i < contactTypes.length; i++) {
+          final scopedProvider = ContactsProvider();
+          final scopedKey = createPublicKey(16 + i);
+          final contactType = contactTypes[i];
+          scopedProvider.addOrUpdateContact(
+            createContact(
+              key: scopedKey,
+              type: contactType,
+              name: 'Contact ${contactType.name}',
+            ),
+          );
+
+          final validGps = CayenneLppParser.createGpsData(
+            latitude: 45.1234,
+            longitude: 13.8765,
+          );
+          scopedProvider.updateTelemetry(scopedKey.sublist(0, 6), validGps);
+
+          // No GPS frame should keep previous valid GPS.
+          final batteryOnly = CayenneLppParser.createBatteryData(3.8);
+          scopedProvider.updateTelemetry(scopedKey.sublist(0, 6), batteryOnly);
+
+          var updated = scopedProvider.findContactByKey(scopedKey)!;
+          expect(updated.telemetry, isNotNull);
+          expect(updated.telemetry!.gpsLocation, isNotNull);
+          expect(
+            updated.telemetry!.gpsLocation!.latitude,
+            closeTo(45.1234, 0.0001),
+          );
+          expect(
+            updated.telemetry!.gpsLocation!.longitude,
+            closeTo(13.8765, 0.0001),
+          );
+
+          // Invalid 0,0 GPS frame should also keep previous valid GPS.
+          final invalidGps = CayenneLppParser.createGpsData(
+            latitude: 0.0,
+            longitude: 0.0,
+          );
+          scopedProvider.updateTelemetry(scopedKey.sublist(0, 6), invalidGps);
+
+          updated = scopedProvider.findContactByKey(scopedKey)!;
+          expect(updated.telemetry, isNotNull);
+          expect(updated.telemetry!.gpsLocation, isNotNull);
+          expect(
+            updated.telemetry!.gpsLocation!.latitude,
+            closeTo(45.1234, 0.0001),
+          );
+          expect(
+            updated.telemetry!.gpsLocation!.longitude,
+            closeTo(13.8765, 0.0001),
+          );
+        }
+      },
+    );
   });
 }
