@@ -93,6 +93,16 @@ class VoiceProvider with ChangeNotifier {
   bool hasOutgoingSession(String sessionId) =>
       _outgoingSessions.containsKey(sessionId);
 
+  List<int> missingPacketIndices(String sessionId) {
+    final session = _sessions[sessionId];
+    if (session == null) return const [];
+    final missing = <int>[];
+    for (var i = 0; i < session.total; i++) {
+      if (session.packets[i] == null) missing.add(i);
+    }
+    return missing;
+  }
+
   // ── Packet reception ─────────────────────────────────────────────────────
 
   /// Add an incoming [packet] to its session.  Creates the session on first packet.
@@ -132,6 +142,7 @@ class VoiceProvider with ChangeNotifier {
   Future<bool> serveSessionTo({
     required String sessionId,
     required Contact requester,
+    Set<int>? requestedIndices,
   }) async {
     final cached = _outgoingSessions[sessionId];
     if (cached == null) {
@@ -152,6 +163,10 @@ class VoiceProvider with ChangeNotifier {
     }
 
     for (final packet in cached.packets) {
+      if (requestedIndices != null &&
+          !requestedIndices.contains(packet.index)) {
+        continue;
+      }
       try {
         await sendRawPacketCallback!(
           contactPath: requester.outPath,
@@ -229,9 +244,7 @@ class VoiceProvider with ChangeNotifier {
                 'sessionId': session.sessionId,
                 'modeId': session.mode.id,
                 'total': session.total,
-                'packets': session.packets
-                    .map((p) => p?.encodeText())
-                    .toList(),
+                'packets': session.packets.map((p) => p?.encodeText()).toList(),
               },
             )
             .toList(),
@@ -264,7 +277,10 @@ class VoiceProvider with ChangeNotifier {
         final sessionId = map['sessionId'] as String?;
         final modeId = map['modeId'] as int?;
         final total = map['total'] as int?;
-        if (sessionId == null || modeId == null || total == null || total <= 0) {
+        if (sessionId == null ||
+            modeId == null ||
+            total == null ||
+            total <= 0) {
           continue;
         }
         final mode = VoicePacketMode.fromId(modeId);
@@ -325,8 +341,5 @@ class _OutgoingVoiceSession {
   final String sessionId;
   final List<VoicePacket> packets;
 
-  const _OutgoingVoiceSession({
-    required this.sessionId,
-    required this.packets,
-  });
+  const _OutgoingVoiceSession({required this.sessionId, required this.packets});
 }

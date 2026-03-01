@@ -446,13 +446,15 @@ class _MessagesTabState extends State<MessagesTab> {
 
     setState(() => _isSendingImage = true);
     try {
-      // Compress to grayscale AVIF using user-selected size and compression.
+      // Compress AVIF using user-selected size, compression and color mode.
       final maxSize = await ImagePreferences.getMaxSize();
       final compression = await ImagePreferences.getCompression();
+      final grayscale = await ImagePreferences.getGrayscale();
       final result = await ImageCodecService.compress(
         rawBytes,
         maxDimension: maxSize,
         compression: compression,
+        grayscale: grayscale,
       );
       if (result == null) {
         ToastLogger.error(context, 'Image compression failed');
@@ -467,10 +469,21 @@ class _MessagesTabState extends State<MessagesTab> {
       ).join();
 
       // Fragment.
+      var imageDataBytesPerFragment = ImagePacket.maxDataBytes;
+      if (_destinationType ==
+              MessageDestinationPreferences.destinationTypeContact &&
+          _selectedRecipient != null &&
+          _selectedRecipient!.outPathLen >= 0) {
+        imageDataBytesPerFragment = safeImageDataBytesForPath(
+          _selectedRecipient!.outPathLen,
+        );
+      }
+
       final fragments = fragmentImage(
         sessionId: sessionId,
         format: ImageFormat.avif,
         bytes: compressed,
+        maxDataBytes: imageDataBytesPerFragment,
       );
 
       if (fragments.isEmpty) {
@@ -548,7 +561,8 @@ class _MessagesTabState extends State<MessagesTab> {
 
       debugPrint(
         '📷 [Image] Sent IE1 for session $sessionId: '
-        '${fragments.length} fragments, ${compressed.length}B',
+        '${fragments.length} fragments, ${compressed.length}B, '
+        'chunk=${imageDataBytesPerFragment}B',
       );
     } catch (e, st) {
       debugPrint('❌ [Image] _pickAndSendImage: $e\n$st');

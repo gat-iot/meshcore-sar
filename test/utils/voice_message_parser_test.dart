@@ -59,6 +59,22 @@ void main() {
         isNull,
       );
     });
+
+    test('encodes and parses missing-packet request', () {
+      final req = VoiceFetchRequest(
+        sessionId: '00112233',
+        want: 'missing',
+        missingIndices: const [0, 3, 7],
+        requesterKey6: 'ffeeddccbbaa',
+        timestampSec: 1700000001,
+      );
+      final text = req.encodeText();
+
+      final parsed = VoiceFetchRequest.tryParseText(text);
+      expect(parsed, isNotNull);
+      expect(parsed!.want, equals('missing'));
+      expect(parsed.missingIndices, equals([0, 3, 7]));
+    });
   });
 
   group('VoicePacket backward compatibility', () {

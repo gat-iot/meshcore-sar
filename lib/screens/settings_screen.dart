@@ -50,6 +50,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _voiceBitrate = VoiceBitratePreferences.defaultBitrate;
   int _imageMaxSize = ImagePreferences.defaultMaxSize;
   int _imageCompression = ImagePreferences.defaultQuality;
+  bool _imageGrayscale = ImagePreferences.defaultGrayscale;
   final LocationTrackingService _locationService = LocationTrackingService();
 
   @override
@@ -119,10 +120,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadImagePreferences() async {
     final size = await ImagePreferences.getMaxSize();
     final compression = await ImagePreferences.getCompression();
+    final grayscale = await ImagePreferences.getGrayscale();
     if (!mounted) return;
     setState(() {
       _imageMaxSize = size;
       _imageCompression = compression;
+      _imageGrayscale = grayscale;
     });
   }
 
@@ -694,6 +697,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (v) => setState(() => _imageCompression = v.round()),
               onChangeEnd: (v) => _saveImageCompression(v.round()),
             ),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.invert_colors),
+            title: const Text('Grayscale'),
+            subtitle: const Text(
+              'Converts image to grayscale for smaller file size',
+            ),
+            value: _imageGrayscale,
+            onChanged: (value) async {
+              await ImagePreferences.setGrayscale(value);
+              setState(() => _imageGrayscale = value);
+            },
           ),
           const Divider(),
 

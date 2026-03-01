@@ -1,5 +1,9 @@
 import 'dart:typed_data';
 
+const int _maxCompanionFrameBytes = 172; // MeshCore MAX_FRAME_SIZE
+const int _cmdSendRawDataOverheadBytes = 2; // cmd + pathLen
+const int _maxMeshPacketPayloadBytes = 184; // MeshCore MAX_PACKET_PAYLOAD
+
 /// Compressed image format used in the image packet protocol.
 enum ImageFormat {
   avif(0, 'AVIF'),
@@ -20,7 +24,7 @@ enum ImageFormat {
 /// Binary format (direct contacts, via pushRawData / cmdSendRawData):
 ///   [0x49 'I'][sessionId:4B][fmt:1B][idx:1B][total:1B][imageData...]
 ///
-/// Max total packet size is 160 bytes → 152 bytes of image data per fragment.
+/// Legacy default is 152 data bytes per fragment.
 class ImagePacket {
   final String sessionId; // 8 hex chars (4 bytes)
   final ImageFormat format;
@@ -38,7 +42,8 @@ class ImagePacket {
 
   static const int _magic = 0x49; // 'I'
   static const int _headerLen = 8; // magic(1)+session(4)+fmt(1)+idx(1)+total(1)
-  static const int maxDataBytes = 152; // 160 - 8 header bytes
+  static const int maxDataBytes =
+      152; // Conservative default for compatibility.
 
   static bool isImageBinary(Uint8List payload) =>
       payload.isNotEmpty && payload[0] == _magic;
@@ -88,6 +93,30 @@ class ImagePacket {
   @override
   String toString() =>
       'ImagePacket($sessionId ${format.label} [$index/${total - 1}] ${data.length}B)';
+}
+
+/// Compute the maximum safe image data bytes for a direct route path.
+///
+/// This accounts for:
+/// - companion command-frame limit (MAX_FRAME_SIZE=172),
+/// - cmdSendRawData overhead (`cmd` + `pathLen`),
+/// - image packet binary header (8 bytes),
+/// - mesh packet payload limit (MAX_PACKET_PAYLOAD=184).
+///
+/// Path length follows Contact.outPathLen semantics: 0 = direct, 1+ = hops.
+int safeImageDataBytesForPath(int pathLen) {
+  final normalizedPathLen = pathLen.clamp(0, 64).toInt();
+  final maxRawPayloadFromCommandFrame =
+      _maxCompanionFrameBytes -
+      _cmdSendRawDataOverheadBytes -
+      normalizedPathLen;
+  final maxRawPayloadFromMesh =
+      _maxMeshPacketPayloadBytes - ImagePacket._headerLen;
+  final maxRawPayload = maxRawPayloadFromCommandFrame < maxRawPayloadFromMesh
+      ? maxRawPayloadFromCommandFrame
+      : maxRawPayloadFromMesh;
+  final maxData = maxRawPayload - ImagePacket._headerLen;
+  return maxData.clamp(1, 255).toInt();
 }
 
 /// Envelope announcing image availability (control plane).
@@ -165,7 +194,7 @@ class ImageEnvelope {
   }
 
   String encode() =>
-      '${prefix}${sessionId.toLowerCase()}:${format.id}:$total:$width:$height:$sizeBytes:${senderKey6.toLowerCase()}:$timestampSec:$version';
+      '$prefix${sessionId.toLowerCase()}:${format.id}:$total:$width:$height:$sizeBytes:${senderKey6.toLowerCase()}:$timestampSec:$version';
 }
 
 /// Direct request to fetch image fragments (control plane).
@@ -178,7 +207,8 @@ class ImageFetchRequest {
   static const String prefix = 'IR1:';
 
   final String sessionId;
-  final String want; // always 'all'
+  final String want; // 'all' or 'missing'
+  final List<int> missingIndices;
   final String requesterKey6; // 12 hex chars
   final int timestampSec;
   final int version;
@@ -186,6 +216,7 @@ class ImageFetchRequest {
   const ImageFetchRequest({
     required this.sessionId,
     this.want = 'all',
+    this.missingIndices = const [],
     required this.requesterKey6,
     required this.timestampSec,
     this.version = 1,
@@ -204,10 +235,24 @@ class ImageFetchRequest {
       final requesterKey6 = parts[2];
       final ts = int.tryParse(parts[3]);
       final ver = int.tryParse(parts[4]);
-      final normalizedWant = wantToken == 'a' ? 'all' : wantToken;
+      final normalizedWant = wantToken == 'a'
+          ? 'all'
+          : (wantToken.startsWith('m-') ? 'missing' : wantToken);
 
       if (!RegExp(r'^[0-9a-fA-F]{8}$').hasMatch(sid)) return null;
-      if (normalizedWant != 'all') return null;
+      final missingIndices = <int>[];
+      if (normalizedWant == 'missing') {
+        final encoded = wantToken.substring(2);
+        if (encoded.isEmpty) return null;
+        for (final raw in encoded.split(',')) {
+          final idx = int.tryParse(raw);
+          if (idx == null || idx < 0 || idx > 254) return null;
+          missingIndices.add(idx);
+        }
+        if (missingIndices.isEmpty) return null;
+      } else if (normalizedWant != 'all') {
+        return null;
+      }
       if (!RegExp(r'^[0-9a-fA-F]{12}$').hasMatch(requesterKey6)) return null;
       if (ts == null || ts <= 0) return null;
       if (ver == null || ver != 1) return null;
@@ -215,6 +260,7 @@ class ImageFetchRequest {
       return ImageFetchRequest(
         sessionId: sid.toLowerCase(),
         want: normalizedWant,
+        missingIndices: missingIndices,
         requesterKey6: requesterKey6.toLowerCase(),
         timestampSec: ts,
         version: ver,
@@ -225,8 +271,10 @@ class ImageFetchRequest {
   }
 
   String encode() {
-    final wantToken = want == 'all' ? 'a' : want;
-    return '${prefix}${sessionId.toLowerCase()}:$wantToken:${requesterKey6.toLowerCase()}:$timestampSec:$version';
+    final wantToken = want == 'missing' && missingIndices.isNotEmpty
+        ? 'm-${missingIndices.join(',')}'
+        : (want == 'all' ? 'a' : want);
+    return '$prefix${sessionId.toLowerCase()}:$wantToken:${requesterKey6.toLowerCase()}:$timestampSec:$version';
   }
 }
 
@@ -239,8 +287,9 @@ List<ImagePacket> fragmentImage({
   required String sessionId,
   required ImageFormat format,
   required Uint8List bytes,
+  int maxDataBytes = ImagePacket.maxDataBytes,
 }) {
-  const chunkSize = ImagePacket.maxDataBytes;
+  final chunkSize = maxDataBytes.clamp(1, 255).toInt();
   final chunks = <Uint8List>[];
   for (var offset = 0; offset < bytes.length; offset += chunkSize) {
     final end = (offset + chunkSize).clamp(0, bytes.length);

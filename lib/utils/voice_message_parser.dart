@@ -259,6 +259,7 @@ class VoiceFetchRequest {
 
   final String sessionId;
   final String want;
+  final List<int> missingIndices;
   final String requesterKey6;
   final int timestampSec;
   final int version;
@@ -266,6 +267,7 @@ class VoiceFetchRequest {
   const VoiceFetchRequest({
     required this.sessionId,
     this.want = 'all',
+    this.missingIndices = const [],
     required this.requesterKey6,
     required this.timestampSec,
     this.version = 1,
@@ -288,12 +290,26 @@ class VoiceFetchRequest {
       final requesterKey6 = parts[2];
       final ts = int.tryParse(parts[3]);
       final ver = int.tryParse(parts[4]);
-      final normalizedWant = wantToken == 'a' ? 'all' : wantToken;
+      final normalizedWant = wantToken == 'a'
+          ? 'all'
+          : (wantToken.startsWith('m-') ? 'missing' : wantToken);
 
       if (!RegExp(r'^[0-9a-fA-F]{8}$').hasMatch(sid)) {
         return null;
       }
-      if (normalizedWant != 'all') return null;
+      final missingIndices = <int>[];
+      if (normalizedWant == 'missing') {
+        final encoded = wantToken.substring(2);
+        if (encoded.isEmpty) return null;
+        for (final raw in encoded.split(',')) {
+          final idx = int.tryParse(raw);
+          if (idx == null || idx < 0 || idx > 254) return null;
+          missingIndices.add(idx);
+        }
+        if (missingIndices.isEmpty) return null;
+      } else if (normalizedWant != 'all') {
+        return null;
+      }
       if (!RegExp(r'^[0-9a-fA-F]{12}$').hasMatch(requesterKey6)) {
         return null;
       }
@@ -303,6 +319,7 @@ class VoiceFetchRequest {
       return VoiceFetchRequest(
         sessionId: sid.toLowerCase(),
         want: normalizedWant,
+        missingIndices: missingIndices,
         requesterKey6: requesterKey6.toLowerCase(),
         timestampSec: ts,
         version: ver,
@@ -313,7 +330,9 @@ class VoiceFetchRequest {
   }
 
   String encodeText() {
-    final wantToken = want == 'all' ? 'a' : want;
+    final wantToken = want == 'missing' && missingIndices.isNotEmpty
+        ? 'm-${missingIndices.join(',')}'
+        : (want == 'all' ? 'a' : want);
     return '$_prefix${sessionId.toLowerCase()}:$wantToken:${requesterKey6.toLowerCase()}:$timestampSec:$version';
   }
 }

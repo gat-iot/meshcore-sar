@@ -47,6 +47,15 @@ class AppProvider with ChangeNotifier {
   bool _isVoiceLimiterEnabled = true;
   bool get isVoiceLimiterEnabled => _isVoiceLimiterEnabled;
 
+  static const Duration _packetRetryDelay = Duration(milliseconds: 1200);
+  static const int _maxPacketRetryAttempts = 4;
+  final Map<String, String> _voiceSessionSenderKey6 = {};
+  final Map<String, String> _imageSessionSenderKey6 = {};
+  final Map<String, Timer> _voiceMissingRetryTimers = {};
+  final Map<String, Timer> _imageMissingRetryTimers = {};
+  final Map<String, int> _voiceMissingRetryAttempts = {};
+  final Map<String, int> _imageMissingRetryAttempts = {};
+
   AppProvider({
     required this.connectionProvider,
     required this.contactsProvider,
@@ -472,6 +481,9 @@ class AppProvider with ChangeNotifier {
           voiceProvider.serveSessionTo(
             sessionId: voiceFetchRequest.sessionId,
             requester: requester,
+            requestedIndices: voiceFetchRequest.want == 'missing'
+                ? voiceFetchRequest.missingIndices.toSet()
+                : null,
           ),
         );
         return;
@@ -519,6 +531,9 @@ class AppProvider with ChangeNotifier {
       // Voice envelope message (new public/direct on-demand format).
       final voiceEnvelope = VoiceEnvelope.tryParseText(enrichedMessage.text);
       if (voiceEnvelope != null) {
+        _voiceSessionSenderKey6[voiceEnvelope.sessionId] = voiceEnvelope
+            .senderKey6
+            .toLowerCase();
         enrichedMessage = enrichedMessage.copyWith(
           isVoice: true,
           voiceId: voiceEnvelope.sessionId,
@@ -544,7 +559,9 @@ class AppProvider with ChangeNotifier {
       }
 
       // Image fetch request (IR1): requester asks us to stream image fragments.
-      final imageFetchRequest = ImageFetchRequest.tryParse(enrichedMessage.text);
+      final imageFetchRequest = ImageFetchRequest.tryParse(
+        enrichedMessage.text,
+      );
       if (imageFetchRequest != null) {
         final senderPrefix = enrichedMessage.senderPublicKeyPrefix;
         if (senderPrefix != null) {
@@ -562,6 +579,9 @@ class AppProvider with ChangeNotifier {
                 imageProvider.serveSessionTo(
                   sessionId: imageFetchRequest.sessionId,
                   requester: requester,
+                  requestedIndices: imageFetchRequest.want == 'missing'
+                      ? imageFetchRequest.missingIndices.toSet()
+                      : null,
                 ),
               );
             }
@@ -573,6 +593,9 @@ class AppProvider with ChangeNotifier {
       // Image envelope (IE1): announce image availability.
       final imageEnvelope = ImageEnvelope.tryParse(enrichedMessage.text);
       if (imageEnvelope != null) {
+        _imageSessionSenderKey6[imageEnvelope.sessionId] = imageEnvelope
+            .senderKey6
+            .toLowerCase();
         imageProvider.registerEnvelope(imageEnvelope);
         messagesProvider.addMessage(
           enrichedMessage,
@@ -660,11 +683,12 @@ class AppProvider with ChangeNotifier {
         if (frag == null) return;
         debugPrint('📷 [AppProvider] Binary image fragment received: $frag');
         final session = imageProvider.session(frag.sessionId);
-        imageProvider.addFragment(
+        final justComplete = imageProvider.addFragment(
           frag,
           width: session?.width ?? 0,
           height: session?.height ?? 0,
         );
+        _scheduleImageMissingRetry(frag.sessionId, justComplete: justComplete);
         return;
       }
 
@@ -673,6 +697,7 @@ class AppProvider with ChangeNotifier {
       if (pkt == null) return;
       debugPrint('🎙️ [AppProvider] Binary voice packet received: $pkt');
       final justComplete = voiceProvider.addPacket(pkt);
+      _scheduleVoiceMissingRetry(pkt.sessionId, justComplete: justComplete);
       // Insert or update the placeholder message in the chat list
       _handleIncomingVoicePacket(pkt, justComplete: justComplete);
     };
@@ -990,6 +1015,158 @@ class AppProvider with ChangeNotifier {
     }
   }
 
+  Contact? _resolveContactByPrefixHex(String prefixHex) {
+    if (prefixHex.length != 12) return null;
+    return contactsProvider.findContactByPrefixHex(prefixHex.toLowerCase());
+  }
+
+  void _scheduleVoiceMissingRetry(
+    String sessionId, {
+    required bool justComplete,
+  }) {
+    if (justComplete || voiceProvider.isComplete(sessionId)) {
+      _voiceMissingRetryTimers.remove(sessionId)?.cancel();
+      _voiceMissingRetryAttempts.remove(sessionId);
+      return;
+    }
+
+    _voiceMissingRetryAttempts[sessionId] = 0;
+    _voiceMissingRetryTimers[sessionId]?.cancel();
+    _voiceMissingRetryTimers[sessionId] = Timer(_packetRetryDelay, () {
+      unawaited(_requestMissingVoicePackets(sessionId));
+    });
+  }
+
+  Future<void> _requestMissingVoicePackets(String sessionId) async {
+    if (voiceProvider.isComplete(sessionId)) {
+      _voiceMissingRetryTimers.remove(sessionId)?.cancel();
+      _voiceMissingRetryAttempts.remove(sessionId);
+      return;
+    }
+
+    final attempt = _voiceMissingRetryAttempts[sessionId] ?? 0;
+    if (attempt >= _maxPacketRetryAttempts) {
+      debugPrint(
+        '⚠️ [AppProvider] Voice re-request limit reached for $sessionId',
+      );
+      _voiceMissingRetryTimers.remove(sessionId)?.cancel();
+      return;
+    }
+
+    final senderKey6 = _voiceSessionSenderKey6[sessionId];
+    if (senderKey6 == null) return;
+    final sender = _resolveContactByPrefixHex(senderKey6);
+    final deviceKey = connectionProvider.deviceInfo.publicKey;
+    if (sender == null || deviceKey == null || deviceKey.length < 6) return;
+
+    final missing = voiceProvider.missingPacketIndices(sessionId);
+    if (missing.isEmpty) {
+      _voiceMissingRetryTimers.remove(sessionId)?.cancel();
+      _voiceMissingRetryAttempts.remove(sessionId);
+      return;
+    }
+
+    final requesterKey6 = deviceKey
+        .sublist(0, 6)
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join('');
+
+    final request = VoiceFetchRequest(
+      sessionId: sessionId,
+      want: 'missing',
+      missingIndices: missing,
+      requesterKey6: requesterKey6,
+      timestampSec: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      version: 1,
+    );
+
+    final sent = await connectionProvider.sendTextMessage(
+      contactPublicKey: sender.publicKey,
+      text: request.encodeText(),
+      contact: sender,
+    );
+    if (!sent) return;
+
+    _voiceMissingRetryAttempts[sessionId] = attempt + 1;
+    _voiceMissingRetryTimers[sessionId]?.cancel();
+    _voiceMissingRetryTimers[sessionId] = Timer(_packetRetryDelay, () {
+      unawaited(_requestMissingVoicePackets(sessionId));
+    });
+  }
+
+  void _scheduleImageMissingRetry(
+    String sessionId, {
+    required bool justComplete,
+  }) {
+    if (justComplete || imageProvider.isComplete(sessionId)) {
+      _imageMissingRetryTimers.remove(sessionId)?.cancel();
+      _imageMissingRetryAttempts.remove(sessionId);
+      return;
+    }
+
+    _imageMissingRetryAttempts[sessionId] = 0;
+    _imageMissingRetryTimers[sessionId]?.cancel();
+    _imageMissingRetryTimers[sessionId] = Timer(_packetRetryDelay, () {
+      unawaited(_requestMissingImageFragments(sessionId));
+    });
+  }
+
+  Future<void> _requestMissingImageFragments(String sessionId) async {
+    if (imageProvider.isComplete(sessionId)) {
+      _imageMissingRetryTimers.remove(sessionId)?.cancel();
+      _imageMissingRetryAttempts.remove(sessionId);
+      return;
+    }
+
+    final attempt = _imageMissingRetryAttempts[sessionId] ?? 0;
+    if (attempt >= _maxPacketRetryAttempts) {
+      debugPrint(
+        '⚠️ [AppProvider] Image re-request limit reached for $sessionId',
+      );
+      _imageMissingRetryTimers.remove(sessionId)?.cancel();
+      return;
+    }
+
+    final senderKey6 = _imageSessionSenderKey6[sessionId];
+    if (senderKey6 == null) return;
+    final sender = _resolveContactByPrefixHex(senderKey6);
+    final deviceKey = connectionProvider.deviceInfo.publicKey;
+    if (sender == null || deviceKey == null || deviceKey.length < 6) return;
+
+    final missing = imageProvider.missingFragmentIndices(sessionId);
+    if (missing.isEmpty) {
+      _imageMissingRetryTimers.remove(sessionId)?.cancel();
+      _imageMissingRetryAttempts.remove(sessionId);
+      return;
+    }
+
+    final requesterKey6 = deviceKey
+        .sublist(0, 6)
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join('');
+
+    final request = ImageFetchRequest(
+      sessionId: sessionId,
+      want: 'missing',
+      missingIndices: missing,
+      requesterKey6: requesterKey6,
+      timestampSec: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    );
+
+    final sent = await connectionProvider.sendTextMessage(
+      contactPublicKey: sender.publicKey,
+      text: request.encode(),
+      contact: sender,
+    );
+    if (!sent) return;
+
+    _imageMissingRetryAttempts[sessionId] = attempt + 1;
+    _imageMissingRetryTimers[sessionId]?.cancel();
+    _imageMissingRetryTimers[sessionId] = Timer(_packetRetryDelay, () {
+      unawaited(_requestMissingImageFragments(sessionId));
+    });
+  }
+
   /// Insert or update a voice placeholder message for binary raw-data packets.
   ///
   /// Binary voice packets arrive without a chat message, so we synthesise one
@@ -1120,6 +1297,18 @@ class AppProvider with ChangeNotifier {
     messagesProvider.clearAll();
     unawaited(voiceProvider.clearStoredVoiceData());
     unawaited(imageProvider.clearAll());
+    for (final timer in _voiceMissingRetryTimers.values) {
+      timer.cancel();
+    }
+    for (final timer in _imageMissingRetryTimers.values) {
+      timer.cancel();
+    }
+    _voiceMissingRetryTimers.clear();
+    _imageMissingRetryTimers.clear();
+    _voiceMissingRetryAttempts.clear();
+    _imageMissingRetryAttempts.clear();
+    _voiceSessionSenderKey6.clear();
+    _imageSessionSenderKey6.clear();
     notifyListeners();
   }
 
@@ -1148,6 +1337,12 @@ class AppProvider with ChangeNotifier {
     locationTrackingService.onTrackingStateChanged = null;
     // Dispose the location tracking service to stop GPS stream and clean up resources
     locationTrackingService.dispose();
+    for (final timer in _voiceMissingRetryTimers.values) {
+      timer.cancel();
+    }
+    for (final timer in _imageMissingRetryTimers.values) {
+      timer.cancel();
+    }
     super.dispose();
   }
 }

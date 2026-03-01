@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/contact.dart';
@@ -62,6 +61,16 @@ class ImageProvider with ChangeNotifier {
   bool isComplete(String sessionId) =>
       _sessions[sessionId]?.isComplete ?? false;
   bool hasOutgoing(String sessionId) => _outgoing.containsKey(sessionId);
+
+  List<int> missingFragmentIndices(String sessionId) {
+    final session = _sessions[sessionId];
+    if (session == null) return const [];
+    final missing = <int>[];
+    for (var i = 0; i < session.total; i++) {
+      if (session.fragments[i] == null) missing.add(i);
+    }
+    return missing;
+  }
 
   // ── Incoming fragment reception ──────────────────────────────────────────
 
@@ -166,6 +175,7 @@ class ImageProvider with ChangeNotifier {
   Future<bool> serveSessionTo({
     required String sessionId,
     required Contact requester,
+    Set<int>? requestedIndices,
   }) async {
     final cached = _outgoing[sessionId];
     if (cached == null) {
@@ -177,13 +187,15 @@ class ImageProvider with ChangeNotifier {
       return false;
     }
     if (requester.outPathLen < 0) {
-      debugPrint(
-        '⚠️ [ImageProvider] ${requester.advName} has no direct path',
-      );
+      debugPrint('⚠️ [ImageProvider] ${requester.advName} has no direct path');
       return false;
     }
 
     for (final fragment in cached.fragments) {
+      if (requestedIndices != null &&
+          !requestedIndices.contains(fragment.index)) {
+        continue;
+      }
       try {
         await sendRawPacketCallback!(
           contactPath: requester.outPath,
@@ -217,9 +229,7 @@ class ImageProvider with ChangeNotifier {
 
   void _evictExpiredOutgoing() {
     final now = DateTime.now();
-    _outgoing.removeWhere(
-      (_, s) => now.difference(s.cachedAt) > _outgoingTtl,
-    );
+    _outgoing.removeWhere((_, s) => now.difference(s.cachedAt) > _outgoingTtl);
   }
 
   Future<void> _persist() async {
@@ -237,9 +247,7 @@ class ImageProvider with ChangeNotifier {
                 'height': s.height,
                 'fragments': s.fragments
                     .map(
-                      (f) => f == null
-                          ? null
-                          : base64.encode(f.encodeBinary()),
+                      (f) => f == null ? null : base64.encode(f.encodeBinary()),
                     )
                     .toList(),
               },

@@ -21,6 +21,7 @@ class ImageCodecService {
     Uint8List rawBytes, {
     int maxDimension = 256,
     int compression = 90,
+    bool grayscale = true,
   }) async {
     try {
       // 1a. Probe original dimensions (no resize).
@@ -64,17 +65,19 @@ class ImageCodecService {
       image.dispose();
       if (byteData == null) return null;
 
-      // 3. Convert to grayscale in-place (luminance, keep alpha = 255).
+      // 3. Optionally convert to grayscale in-place (luminance).
       final rgba = byteData.buffer.asUint8List();
-      for (var i = 0; i < rgba.length; i += 4) {
-        final lum =
-            (0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2])
-                .round()
-                .clamp(0, 255);
-        rgba[i] = lum;
-        rgba[i + 1] = lum;
-        rgba[i + 2] = lum;
-        rgba[i + 3] = 255; // fully opaque
+      if (grayscale) {
+        for (var i = 0; i < rgba.length; i += 4) {
+          final lum =
+              (0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2])
+                  .round()
+                  .clamp(0, 255);
+          rgba[i] = lum;
+          rgba[i + 1] = lum;
+          rgba[i + 2] = lum;
+          rgba[i + 3] = 255;
+        }
       }
 
       // 4. Re-encode grayscale RGBA → PNG so encodeAvif can decode it.
