@@ -3790,4 +3790,55 @@
   "@noContactsAvailable": {
     "description": "Message when there are no chat contacts to send to"
   }
+,
+
+  "reply": "Απάντηση",
+
+  "technicalDetails": "Τεχνικές λεπτομέρειες",
+
+  "messageTechnicalDetails": "Τεχνικές λεπτομέρειες μηνύματος",
+
+  "linkQuality": "Ποιότητα σύνδεσης",
+
+  "delivery": "Παράδοση",
+
+  "status": "Κατάσταση",
+
+  "expectedAckTag": "Αναμενόμενη ετικέτα ACK",
+
+  "roundTrip": "Χρόνος μετ' επιστροφής",
+
+  "retryAttempt": "Απόπειρα επανάληψης",
+
+  "floodFallback": "Εφεδρική πλημμύρα",
+
+  "identity": "Ταυτότητα",
+
+  "messageId": "Αναγνωριστικό μηνύματος",
+
+  "sender": "Αποστολέας",
+
+  "senderKey": "Κλειδί αποστολέα",
+
+  "recipient": "Παραλήπτης",
+
+  "recipientKey": "Κλειδί παραλήπτη",
+
+  "voice": "Φωνή",
+
+  "voiceId": "Αναγνωριστικό φωνής",
+
+  "envelope": "Φάκελος",
+
+  "sessionProgress": "Πρόοδος συνεδρίας",
+
+  "complete": "Ολοκληρώθηκε",
+
+  "rawDump": "Ακατέργαστα δεδομένα",
+
+  "cannotRetryMissingRecipient": "Δεν είναι δυνατή η επανάληψη: λείπουν πληροφορίες παραλήπτη",
+
+  "voiceUnavailable": "Η φωνή δεν είναι διαθέσιμη αυτή τη στιγμή",
+
+  "requestingVoice": "Αίτηση φωνής"
 }

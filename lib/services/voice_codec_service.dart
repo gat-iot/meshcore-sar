@@ -32,8 +32,10 @@ VoicePacketMode voiceModeForBandwidth(int radioBandwidthHz) {
 /// executed in a background isolate so the UI thread is never blocked.
 class VoiceCodecService {
   void _ensureCodec2Supported() {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) {
-      throw UnsupportedError('Codec2 is enabled only on iOS.');
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.iOS &&
+            defaultTargetPlatform != TargetPlatform.android)) {
+      throw UnsupportedError('Codec2 is enabled only on iOS and Android.');
     }
   }
 

@@ -2248,4 +2248,80 @@ class AppLocalizationsEl extends AppLocalizations {
 
   @override
   String get noContactsAvailable => 'No team contacts available';
+
+  @override
+  String get reply => 'Απάντηση';
+
+  @override
+  String get technicalDetails => 'Τεχνικές λεπτομέρειες';
+
+  @override
+  String get messageTechnicalDetails => 'Τεχνικές λεπτομέρειες μηνύματος';
+
+  @override
+  String get linkQuality => 'Ποιότητα σύνδεσης';
+
+  @override
+  String get delivery => 'Παράδοση';
+
+  @override
+  String get status => 'Κατάσταση';
+
+  @override
+  String get expectedAckTag => 'Αναμενόμενη ετικέτα ACK';
+
+  @override
+  String get roundTrip => 'Χρόνος μετ\' επιστροφής';
+
+  @override
+  String get retryAttempt => 'Απόπειρα επανάληψης';
+
+  @override
+  String get floodFallback => 'Εφεδρική πλημμύρα';
+
+  @override
+  String get identity => 'Ταυτότητα';
+
+  @override
+  String get messageId => 'Αναγνωριστικό μηνύματος';
+
+  @override
+  String get sender => 'Αποστολέας';
+
+  @override
+  String get senderKey => 'Κλειδί αποστολέα';
+
+  @override
+  String get recipient => 'Παραλήπτης';
+
+  @override
+  String get recipientKey => 'Κλειδί παραλήπτη';
+
+  @override
+  String get voice => 'Φωνή';
+
+  @override
+  String get voiceId => 'Αναγνωριστικό φωνής';
+
+  @override
+  String get envelope => 'Φάκελος';
+
+  @override
+  String get sessionProgress => 'Πρόοδος συνεδρίας';
+
+  @override
+  String get complete => 'Ολοκληρώθηκε';
+
+  @override
+  String get rawDump => 'Ακατέργαστα δεδομένα';
+
+  @override
+  String get cannotRetryMissingRecipient =>
+      'Δεν είναι δυνατή η επανάληψη: λείπουν πληροφορίες παραλήπτη';
+
+  @override
+  String get voiceUnavailable => 'Η φωνή δεν είναι διαθέσιμη αυτή τη στιγμή';
+
+  @override
+  String get requestingVoice => 'Αίτηση φωνής';
 }

@@ -2285,4 +2285,80 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get noContactsAvailable => 'Aucun contact d\'équipe disponible';
+
+  @override
+  String get reply => 'Répondre';
+
+  @override
+  String get technicalDetails => 'Détails techniques';
+
+  @override
+  String get messageTechnicalDetails => 'Détails techniques du message';
+
+  @override
+  String get linkQuality => 'Qualité du lien';
+
+  @override
+  String get delivery => 'Livraison';
+
+  @override
+  String get status => 'Statut';
+
+  @override
+  String get expectedAckTag => 'Balise ACK attendue';
+
+  @override
+  String get roundTrip => 'Aller-retour';
+
+  @override
+  String get retryAttempt => 'Tentative de renvoi';
+
+  @override
+  String get floodFallback => 'Repli inondation';
+
+  @override
+  String get identity => 'Identité';
+
+  @override
+  String get messageId => 'ID du message';
+
+  @override
+  String get sender => 'Expéditeur';
+
+  @override
+  String get senderKey => 'Clé de l\'expéditeur';
+
+  @override
+  String get recipient => 'Destinataire';
+
+  @override
+  String get recipientKey => 'Clé du destinataire';
+
+  @override
+  String get voice => 'Voix';
+
+  @override
+  String get voiceId => 'ID vocal';
+
+  @override
+  String get envelope => 'Enveloppe';
+
+  @override
+  String get sessionProgress => 'Progression de session';
+
+  @override
+  String get complete => 'Complet';
+
+  @override
+  String get rawDump => 'Vidage brut';
+
+  @override
+  String get cannotRetryMissingRecipient =>
+      'Impossible de réessayer : informations du destinataire manquantes';
+
+  @override
+  String get voiceUnavailable => 'Voix indisponible pour le moment';
+
+  @override
+  String get requestingVoice => 'Demande de voix';
 }

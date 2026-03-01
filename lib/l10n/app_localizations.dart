@@ -4054,6 +4054,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No team contacts available'**
   String get noContactsAvailable;
+
+  /// No description provided for @reply.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply'**
+  String get reply;
+
+  /// No description provided for @technicalDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Technical details'**
+  String get technicalDetails;
+
+  /// No description provided for @messageTechnicalDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Message technical details'**
+  String get messageTechnicalDetails;
+
+  /// No description provided for @linkQuality.
+  ///
+  /// In en, this message translates to:
+  /// **'Link quality'**
+  String get linkQuality;
+
+  /// No description provided for @delivery.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery'**
+  String get delivery;
+
+  /// No description provided for @status.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get status;
+
+  /// No description provided for @expectedAckTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Expected ACK tag'**
+  String get expectedAckTag;
+
+  /// No description provided for @roundTrip.
+  ///
+  /// In en, this message translates to:
+  /// **'Round-trip'**
+  String get roundTrip;
+
+  /// No description provided for @retryAttempt.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry attempt'**
+  String get retryAttempt;
+
+  /// No description provided for @floodFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Flood fallback'**
+  String get floodFallback;
+
+  /// No description provided for @identity.
+  ///
+  /// In en, this message translates to:
+  /// **'Identity'**
+  String get identity;
+
+  /// No description provided for @messageId.
+  ///
+  /// In en, this message translates to:
+  /// **'Message ID'**
+  String get messageId;
+
+  /// No description provided for @sender.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender'**
+  String get sender;
+
+  /// No description provided for @senderKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender key'**
+  String get senderKey;
+
+  /// No description provided for @recipient.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipient'**
+  String get recipient;
+
+  /// No description provided for @recipientKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipient key'**
+  String get recipientKey;
+
+  /// No description provided for @voice.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice'**
+  String get voice;
+
+  /// No description provided for @voiceId.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice ID'**
+  String get voiceId;
+
+  /// No description provided for @envelope.
+  ///
+  /// In en, this message translates to:
+  /// **'Envelope'**
+  String get envelope;
+
+  /// No description provided for @sessionProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Session progress'**
+  String get sessionProgress;
+
+  /// No description provided for @complete.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete'**
+  String get complete;
+
+  /// No description provided for @rawDump.
+  ///
+  /// In en, this message translates to:
+  /// **'Raw dump'**
+  String get rawDump;
+
+  /// No description provided for @cannotRetryMissingRecipient.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot retry: recipient information missing'**
+  String get cannotRetryMissingRecipient;
+
+  /// No description provided for @voiceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice unavailable right now'**
+  String get voiceUnavailable;
+
+  /// No description provided for @requestingVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Requesting voice'**
+  String get requestingVoice;
 }
 
 class _AppLocalizationsDelegate

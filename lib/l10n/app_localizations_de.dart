@@ -2275,4 +2275,80 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get noContactsAvailable => 'Keine Team-Kontakte verfügbar';
+
+  @override
+  String get reply => 'Antworten';
+
+  @override
+  String get technicalDetails => 'Technische Details';
+
+  @override
+  String get messageTechnicalDetails => 'Technische Nachrichtendetails';
+
+  @override
+  String get linkQuality => 'Verbindungsqualität';
+
+  @override
+  String get delivery => 'Zustellung';
+
+  @override
+  String get status => 'Status';
+
+  @override
+  String get expectedAckTag => 'Erwartetes ACK-Tag';
+
+  @override
+  String get roundTrip => 'Roundtrip';
+
+  @override
+  String get retryAttempt => 'Wiederholungsversuch';
+
+  @override
+  String get floodFallback => 'Flood-Fallback';
+
+  @override
+  String get identity => 'Identität';
+
+  @override
+  String get messageId => 'Nachrichten-ID';
+
+  @override
+  String get sender => 'Absender';
+
+  @override
+  String get senderKey => 'Absenderschlüssel';
+
+  @override
+  String get recipient => 'Empfänger';
+
+  @override
+  String get recipientKey => 'Empfängerschlüssel';
+
+  @override
+  String get voice => 'Sprachnachricht';
+
+  @override
+  String get voiceId => 'Sprach-ID';
+
+  @override
+  String get envelope => 'Umschlag';
+
+  @override
+  String get sessionProgress => 'Sitzungsfortschritt';
+
+  @override
+  String get complete => 'Vollständig';
+
+  @override
+  String get rawDump => 'Rohdaten';
+
+  @override
+  String get cannotRetryMissingRecipient =>
+      'Wiederholung nicht möglich: Empfängerinformationen fehlen';
+
+  @override
+  String get voiceUnavailable => 'Sprachnachricht momentan nicht verfügbar';
+
+  @override
+  String get requestingVoice => 'Sprachnachricht wird angefordert';
 }

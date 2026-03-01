@@ -2832,4 +2832,55 @@
   "directMessagesInfo": "Direktnachrichten mit Bestätigungen. An {count} Teammitglieder gesendet.",
   "sarMarkerSentToContacts": "SAR-Marker an {count} Kontakte gesendet",
   "noContactsAvailable": "Keine Team-Kontakte verfügbar"
+,
+
+  "reply": "Antworten",
+
+  "technicalDetails": "Technische Details",
+
+  "messageTechnicalDetails": "Technische Nachrichtendetails",
+
+  "linkQuality": "Verbindungsqualität",
+
+  "delivery": "Zustellung",
+
+  "status": "Status",
+
+  "expectedAckTag": "Erwartetes ACK-Tag",
+
+  "roundTrip": "Roundtrip",
+
+  "retryAttempt": "Wiederholungsversuch",
+
+  "floodFallback": "Flood-Fallback",
+
+  "identity": "Identität",
+
+  "messageId": "Nachrichten-ID",
+
+  "sender": "Absender",
+
+  "senderKey": "Absenderschlüssel",
+
+  "recipient": "Empfänger",
+
+  "recipientKey": "Empfängerschlüssel",
+
+  "voice": "Sprachnachricht",
+
+  "voiceId": "Sprach-ID",
+
+  "envelope": "Umschlag",
+
+  "sessionProgress": "Sitzungsfortschritt",
+
+  "complete": "Vollständig",
+
+  "rawDump": "Rohdaten",
+
+  "cannotRetryMissingRecipient": "Wiederholung nicht möglich: Empfängerinformationen fehlen",
+
+  "voiceUnavailable": "Sprachnachricht momentan nicht verfügbar",
+
+  "requestingVoice": "Sprachnachricht wird angefordert"
 }

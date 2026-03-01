@@ -2248,4 +2248,80 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noContactsAvailable => 'No team contacts available';
+
+  @override
+  String get reply => 'Reply';
+
+  @override
+  String get technicalDetails => 'Technical details';
+
+  @override
+  String get messageTechnicalDetails => 'Message technical details';
+
+  @override
+  String get linkQuality => 'Link quality';
+
+  @override
+  String get delivery => 'Delivery';
+
+  @override
+  String get status => 'Status';
+
+  @override
+  String get expectedAckTag => 'Expected ACK tag';
+
+  @override
+  String get roundTrip => 'Round-trip';
+
+  @override
+  String get retryAttempt => 'Retry attempt';
+
+  @override
+  String get floodFallback => 'Flood fallback';
+
+  @override
+  String get identity => 'Identity';
+
+  @override
+  String get messageId => 'Message ID';
+
+  @override
+  String get sender => 'Sender';
+
+  @override
+  String get senderKey => 'Sender key';
+
+  @override
+  String get recipient => 'Recipient';
+
+  @override
+  String get recipientKey => 'Recipient key';
+
+  @override
+  String get voice => 'Voice';
+
+  @override
+  String get voiceId => 'Voice ID';
+
+  @override
+  String get envelope => 'Envelope';
+
+  @override
+  String get sessionProgress => 'Session progress';
+
+  @override
+  String get complete => 'Complete';
+
+  @override
+  String get rawDump => 'Raw dump';
+
+  @override
+  String get cannotRetryMissingRecipient =>
+      'Cannot retry: recipient information missing';
+
+  @override
+  String get voiceUnavailable => 'Voice unavailable right now';
+
+  @override
+  String get requestingVoice => 'Requesting voice';
 }

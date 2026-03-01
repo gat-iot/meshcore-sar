@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/contact.dart';
 import '../../models/message.dart';
 import '../../providers/connection_provider.dart';
@@ -137,6 +138,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                     isComplete: isComplete,
                     isRequesting: _isRequesting,
                     errorText: _errorText,
+                    requestingLabel: AppLocalizations.of(context)!.requestingVoice,
                   ),
                   style: TextStyle(
                     fontSize: 11,
@@ -200,7 +202,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     setState(() {
       _isRequesting = false;
       _autoPlayWhenReady = false;
-      _errorText = 'Voice unavailable right now';
+      _errorText = AppLocalizations.of(context)!.voiceUnavailable;
     });
   }
 
@@ -239,11 +241,12 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     required bool isComplete,
     required bool isRequesting,
     required String? errorText,
+    required String requestingLabel,
   }) {
     if (errorText != null) return errorText;
     final progress = total > 0 ? ' ($received/$total)' : '';
     if (isRequesting) {
-      return 'Requesting voice$progress';
+      return '$requestingLabel$progress';
     }
     if (!isComplete && total > 0) {
       return '🎙️ $durationLabel · $modeLabel$progress';

@@ -1103,4 +1103,55 @@
   "directMessagesInfo": "Izravne poruke s potvrdom. Poslano {count} članovima tima.",
   "sarMarkerSentToContacts": "SAR oznaka poslana {count} kontaktima",
   "noContactsAvailable": "Nema dostupnih kontakata tima"
+,
+
+  "reply": "Odgovori",
+
+  "technicalDetails": "Tehnički detalji",
+
+  "messageTechnicalDetails": "Tehnički detalji poruke",
+
+  "linkQuality": "Kvaliteta veze",
+
+  "delivery": "Dostava",
+
+  "status": "Status",
+
+  "expectedAckTag": "Očekivana ACK oznaka",
+
+  "roundTrip": "Povratno putovanje",
+
+  "retryAttempt": "Pokušaj ponovnog slanja",
+
+  "floodFallback": "Flood rezerva",
+
+  "identity": "Identitet",
+
+  "messageId": "ID poruke",
+
+  "sender": "Pošiljatelj",
+
+  "senderKey": "Ključ pošiljatelja",
+
+  "recipient": "Primatelj",
+
+  "recipientKey": "Ključ primatelja",
+
+  "voice": "Glas",
+
+  "voiceId": "ID glasa",
+
+  "envelope": "Omotnica",
+
+  "sessionProgress": "Napredak sesije",
+
+  "complete": "Dovršeno",
+
+  "rawDump": "Sirovi ispis",
+
+  "cannotRetryMissingRecipient": "Nije moguće ponoviti: nedostaju informacije o primatelju",
+
+  "voiceUnavailable": "Glas trenutno nije dostupan",
+
+  "requestingVoice": "Zahtjev za glasom"
 }

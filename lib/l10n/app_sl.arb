@@ -1107,4 +1107,55 @@
   "directMessagesInfo": "Neposredna sporočila s potrditvami. Poslano {count} članom ekipe.",
   "sarMarkerSentToContacts": "SAR označevalec poslan {count} stikom",
   "noContactsAvailable": "Ni razpoložljivih stikov ekipe"
+,
+
+  "reply": "Odgovori",
+
+  "technicalDetails": "Tehnični podrobnosti",
+
+  "messageTechnicalDetails": "Tehnični podrobnosti sporočila",
+
+  "linkQuality": "Kakovost povezave",
+
+  "delivery": "Dostava",
+
+  "status": "Status",
+
+  "expectedAckTag": "Pričakovana oznaka ACK",
+
+  "roundTrip": "Povratna pot",
+
+  "retryAttempt": "Poskus ponovnega pošiljanja",
+
+  "floodFallback": "Flood rezerva",
+
+  "identity": "Identiteta",
+
+  "messageId": "ID sporočila",
+
+  "sender": "Pošiljatelj",
+
+  "senderKey": "Ključ pošiljatelja",
+
+  "recipient": "Prejemnik",
+
+  "recipientKey": "Ključ prejemnika",
+
+  "voice": "Glas",
+
+  "voiceId": "ID glasu",
+
+  "envelope": "Ovojnica",
+
+  "sessionProgress": "Napredek seje",
+
+  "complete": "Dokončano",
+
+  "rawDump": "Surovi izpis",
+
+  "cannotRetryMissingRecipient": "Ponovnega pošiljanja ni mogoče: informacije o prejemniku manjkajo",
+
+  "voiceUnavailable": "Glas trenutno ni na voljo",
+
+  "requestingVoice": "Zahteva za glasom"
 }

@@ -2260,4 +2260,80 @@ class AppLocalizationsHr extends AppLocalizations {
 
   @override
   String get noContactsAvailable => 'Nema dostupnih kontakata tima';
+
+  @override
+  String get reply => 'Odgovori';
+
+  @override
+  String get technicalDetails => 'Tehnički detalji';
+
+  @override
+  String get messageTechnicalDetails => 'Tehnički detalji poruke';
+
+  @override
+  String get linkQuality => 'Kvaliteta veze';
+
+  @override
+  String get delivery => 'Dostava';
+
+  @override
+  String get status => 'Status';
+
+  @override
+  String get expectedAckTag => 'Očekivana ACK oznaka';
+
+  @override
+  String get roundTrip => 'Povratno putovanje';
+
+  @override
+  String get retryAttempt => 'Pokušaj ponovnog slanja';
+
+  @override
+  String get floodFallback => 'Flood rezerva';
+
+  @override
+  String get identity => 'Identitet';
+
+  @override
+  String get messageId => 'ID poruke';
+
+  @override
+  String get sender => 'Pošiljatelj';
+
+  @override
+  String get senderKey => 'Ključ pošiljatelja';
+
+  @override
+  String get recipient => 'Primatelj';
+
+  @override
+  String get recipientKey => 'Ključ primatelja';
+
+  @override
+  String get voice => 'Glas';
+
+  @override
+  String get voiceId => 'ID glasa';
+
+  @override
+  String get envelope => 'Omotnica';
+
+  @override
+  String get sessionProgress => 'Napredak sesije';
+
+  @override
+  String get complete => 'Dovršeno';
+
+  @override
+  String get rawDump => 'Sirovi ispis';
+
+  @override
+  String get cannotRetryMissingRecipient =>
+      'Nije moguće ponoviti: nedostaju informacije o primatelju';
+
+  @override
+  String get voiceUnavailable => 'Glas trenutno nije dostupan';
+
+  @override
+  String get requestingVoice => 'Zahtjev za glasom';
 }

@@ -2279,4 +2279,80 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get noContactsAvailable => 'No hay contactos del equipo disponibles';
+
+  @override
+  String get reply => 'Responder';
+
+  @override
+  String get technicalDetails => 'Detalles técnicos';
+
+  @override
+  String get messageTechnicalDetails => 'Detalles técnicos del mensaje';
+
+  @override
+  String get linkQuality => 'Calidad del enlace';
+
+  @override
+  String get delivery => 'Entrega';
+
+  @override
+  String get status => 'Estado';
+
+  @override
+  String get expectedAckTag => 'Etiqueta ACK esperada';
+
+  @override
+  String get roundTrip => 'Ida y vuelta';
+
+  @override
+  String get retryAttempt => 'Intento de reenvío';
+
+  @override
+  String get floodFallback => 'Reserva de inundación';
+
+  @override
+  String get identity => 'Identidad';
+
+  @override
+  String get messageId => 'ID de mensaje';
+
+  @override
+  String get sender => 'Remitente';
+
+  @override
+  String get senderKey => 'Clave del remitente';
+
+  @override
+  String get recipient => 'Destinatario';
+
+  @override
+  String get recipientKey => 'Clave del destinatario';
+
+  @override
+  String get voice => 'Voz';
+
+  @override
+  String get voiceId => 'ID de voz';
+
+  @override
+  String get envelope => 'Envolvente';
+
+  @override
+  String get sessionProgress => 'Progreso de sesión';
+
+  @override
+  String get complete => 'Completo';
+
+  @override
+  String get rawDump => 'Volcado sin procesar';
+
+  @override
+  String get cannotRetryMissingRecipient =>
+      'No se puede reintentar: falta información del destinatario';
+
+  @override
+  String get voiceUnavailable => 'Voz no disponible en este momento';
+
+  @override
+  String get requestingVoice => 'Solicitando voz';
 }

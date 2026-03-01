@@ -104,7 +104,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           messagesProvider.markMessageFailed(retryMessageId);
           ToastLogger.error(
             context,
-            'Cannot retry: recipient information missing',
+            AppLocalizations.of(context)!.cannotRetryMissingRecipient,
           );
           return;
         }
@@ -176,7 +176,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             if (canReply)
               ListTile(
                 leading: const Icon(Icons.reply),
-                title: const Text('Reply'),
+                title: Text(AppLocalizations.of(context)!.reply),
                 onTap: () {
                   Navigator.pop(context);
                   _showReplySheet(context);
@@ -269,7 +269,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             // Technical details option
             ListTile(
               leading: const Icon(Icons.data_object),
-              title: const Text('Technical details'),
+              title: Text(AppLocalizations.of(context)!.technicalDetails),
               onTap: () {
                 Navigator.pop(context);
                 _showTechnicalDetails(context);
@@ -427,15 +427,17 @@ class _MessageBubbleState extends State<MessageBubble> {
       }
     }
 
-    void copyField(String label, String value) {
+    final l10n = AppLocalizations.of(context)!;
+
+    void copyField(String value) {
       Clipboard.setData(ClipboardData(text: value));
-      ToastLogger.success(context, '$label copied');
+      ToastLogger.success(context, l10n.textCopiedToClipboard);
     }
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Message technical details'),
+        title: Text(l10n.messageTechnicalDetails),
         content: SizedBox(
           width: double.maxFinite,
           child: SingleChildScrollView(
@@ -477,7 +479,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                   _techSection(
                     context,
                     icon: Icons.network_check,
-                    title: 'Link quality',
+                    title: l10n.linkQuality,
                     child: Column(
                       children: [
                         if (widget.message.lastEchoRssiDbm != null)
@@ -518,35 +520,35 @@ class _MessageBubbleState extends State<MessageBubble> {
                 _techSection(
                   context,
                   icon: Icons.tune,
-                  title: 'Delivery',
+                  title: l10n.delivery,
                   child: Column(
                     children: [
                       _detailRow(
                         context,
-                        label: 'Status',
+                        label: l10n.status,
                         value: widget.message.deliveryStatus.name,
                       ),
                       _detailRow(
                         context,
-                        label: 'Expected ACK tag',
+                        label: l10n.expectedAckTag,
                         value: widget.message.expectedAckTag?.toString() ?? '-',
                       ),
                       _detailRow(
                         context,
-                        label: 'Round-trip',
+                        label: l10n.roundTrip,
                         value: widget.message.roundTripTimeMs != null
                             ? '${widget.message.roundTripTimeMs} ms'
                             : '-',
                       ),
                       _detailRow(
                         context,
-                        label: 'Retry attempt',
+                        label: l10n.retryAttempt,
                         value: widget.message.retryAttempt.toString(),
                       ),
                       _detailRow(
                         context,
-                        label: 'Flood fallback',
-                        value: widget.message.usedFloodFallback ? 'Yes' : 'No',
+                        label: l10n.floodFallback,
+                        value: widget.message.usedFloodFallback ? l10n.yes : l10n.no,
                       ),
                     ],
                   ),
@@ -555,41 +557,39 @@ class _MessageBubbleState extends State<MessageBubble> {
                 _techSection(
                   context,
                   icon: Icons.badge,
-                  title: 'Identity',
+                  title: l10n.identity,
                   child: Column(
                     children: [
                       _detailRow(
                         context,
-                        label: 'Message ID',
+                        label: l10n.messageId,
                         value: widget.message.id,
-                        onCopy: () =>
-                            copyField('Message ID', widget.message.id),
+                        onCopy: () => copyField(widget.message.id),
                       ),
                       _detailRow(
                         context,
-                        label: 'Sender',
+                        label: l10n.sender,
                         value: senderName ?? widget.message.senderName ?? '-',
                       ),
                       _detailRow(
                         context,
-                        label: 'Sender key',
+                        label: l10n.senderKey,
                         value: senderPrefixHex ?? '-',
                         onCopy: senderPrefixHex != null
-                            ? () => copyField('Sender key', senderPrefixHex)
+                            ? () => copyField(senderPrefixHex)
                             : null,
                       ),
                       _detailRow(
                         context,
-                        label: 'Recipient',
+                        label: l10n.recipient,
                         value: recipientName ?? '-',
                       ),
                       _detailRow(
                         context,
-                        label: 'Recipient key',
+                        label: l10n.recipientKey,
                         value: recipientPrefixHex ?? '-',
                         onCopy: recipientPrefixHex != null
-                            ? () =>
-                                  copyField('Recipient key', recipientPrefixHex)
+                            ? () => copyField(recipientPrefixHex)
                             : null,
                       ),
                     ],
@@ -600,35 +600,35 @@ class _MessageBubbleState extends State<MessageBubble> {
                   _techSection(
                     context,
                     icon: Icons.graphic_eq,
-                    title: 'Voice',
+                    title: l10n.voice,
                     child: Column(
                       children: [
                         _detailRow(
                           context,
-                          label: 'Voice ID',
+                          label: l10n.voiceId,
                           value: widget.message.voiceId ?? '-',
                         ),
                         _detailRow(
                           context,
-                          label: 'Envelope',
+                          label: l10n.envelope,
                           value: envelope != null
                               ? 'VE1 compact'
                               : legacyVoicePacket != null
                               ? 'Legacy V packet'
-                              : 'Unknown',
+                              : l10n.unknown,
                         ),
                         if (voiceSession != null)
                           _detailRow(
                             context,
-                            label: 'Session progress',
+                            label: l10n.sessionProgress,
                             value:
                                 '${voiceSession.receivedCount}/${voiceSession.total} segments',
                           ),
                         if (voiceSession != null)
                           _detailRow(
                             context,
-                            label: 'Complete',
-                            value: voiceSession.isComplete ? 'Yes' : 'No',
+                            label: l10n.complete,
+                            value: voiceSession.isComplete ? l10n.yes : l10n.no,
                           ),
                       ],
                     ),
@@ -639,9 +639,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                   tilePadding: EdgeInsets.zero,
                   dense: true,
                   visualDensity: VisualDensity.compact,
-                  title: const Text(
-                    'Raw dump',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  title: Text(
+                    l10n.rawDump,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                   children: [
                     Container(

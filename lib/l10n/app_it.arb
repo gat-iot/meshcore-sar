@@ -2835,4 +2835,55 @@
   "directMessagesInfo": "Messaggi diretti con conferme. Inviato a {count} membri del team.",
   "sarMarkerSentToContacts": "Marcatore SAR inviato a {count} contatti",
   "noContactsAvailable": "Nessun contatto del team disponibile"
+,
+
+  "reply": "Rispondi",
+
+  "technicalDetails": "Dettagli tecnici",
+
+  "messageTechnicalDetails": "Dettagli tecnici del messaggio",
+
+  "linkQuality": "Qualità del collegamento",
+
+  "delivery": "Consegna",
+
+  "status": "Stato",
+
+  "expectedAckTag": "Tag ACK atteso",
+
+  "roundTrip": "Andata e ritorno",
+
+  "retryAttempt": "Tentativo di nuovo invio",
+
+  "floodFallback": "Fallback inondazione",
+
+  "identity": "Identità",
+
+  "messageId": "ID messaggio",
+
+  "sender": "Mittente",
+
+  "senderKey": "Chiave mittente",
+
+  "recipient": "Destinatario",
+
+  "recipientKey": "Chiave destinatario",
+
+  "voice": "Voce",
+
+  "voiceId": "ID vocale",
+
+  "envelope": "Busta",
+
+  "sessionProgress": "Avanzamento sessione",
+
+  "complete": "Completato",
+
+  "rawDump": "Dump grezzo",
+
+  "cannotRetryMissingRecipient": "Impossibile riprovare: informazioni destinatario mancanti",
+
+  "voiceUnavailable": "Voce non disponibile al momento",
+
+  "requestingVoice": "Richiesta voce"
 }

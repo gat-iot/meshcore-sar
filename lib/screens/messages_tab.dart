@@ -58,7 +58,7 @@ class _MessagesTabState extends State<MessagesTab> {
   static const double _silenceRmsThreshold = 500.0;
   static const double _silencePeakThreshold = 1400.0;
   static const int _maxInteriorSilentChunks = 1;
-  bool get _voiceSupported => Platform.isIOS;
+  bool get _voiceSupported => Platform.isIOS || Platform.isAndroid;
   StreamSubscription<Int16List>? _voiceStreamSub;
   String? _currentVoiceSessionId;
   final List<Int16List> _recordedChunks = [];

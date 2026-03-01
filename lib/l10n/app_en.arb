@@ -3790,4 +3790,80 @@
   "@noContactsAvailable": {
     "description": "Message when there are no chat contacts to send to"
   }
+,
+
+  "reply": "Reply",
+  "@reply": {},
+
+  "technicalDetails": "Technical details",
+  "@technicalDetails": {},
+
+  "messageTechnicalDetails": "Message technical details",
+  "@messageTechnicalDetails": {},
+
+  "linkQuality": "Link quality",
+  "@linkQuality": {},
+
+  "delivery": "Delivery",
+  "@delivery": {},
+
+  "status": "Status",
+  "@status": {},
+
+  "expectedAckTag": "Expected ACK tag",
+  "@expectedAckTag": {},
+
+  "roundTrip": "Round-trip",
+  "@roundTrip": {},
+
+  "retryAttempt": "Retry attempt",
+  "@retryAttempt": {},
+
+  "floodFallback": "Flood fallback",
+  "@floodFallback": {},
+
+  "identity": "Identity",
+  "@identity": {},
+
+  "messageId": "Message ID",
+  "@messageId": {},
+
+  "sender": "Sender",
+  "@sender": {},
+
+  "senderKey": "Sender key",
+  "@senderKey": {},
+
+  "recipient": "Recipient",
+  "@recipient": {},
+
+  "recipientKey": "Recipient key",
+  "@recipientKey": {},
+
+  "voice": "Voice",
+  "@voice": {},
+
+  "voiceId": "Voice ID",
+  "@voiceId": {},
+
+  "envelope": "Envelope",
+  "@envelope": {},
+
+  "sessionProgress": "Session progress",
+  "@sessionProgress": {},
+
+  "complete": "Complete",
+  "@complete": {},
+
+  "rawDump": "Raw dump",
+  "@rawDump": {},
+
+  "cannotRetryMissingRecipient": "Cannot retry: recipient information missing",
+  "@cannotRetryMissingRecipient": {},
+
+  "voiceUnavailable": "Voice unavailable right now",
+  "@voiceUnavailable": {},
+
+  "requestingVoice": "Requesting voice",
+  "@requestingVoice": {}
 }

@@ -2274,4 +2274,80 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get noContactsAvailable => 'Nessun contatto del team disponibile';
+
+  @override
+  String get reply => 'Rispondi';
+
+  @override
+  String get technicalDetails => 'Dettagli tecnici';
+
+  @override
+  String get messageTechnicalDetails => 'Dettagli tecnici del messaggio';
+
+  @override
+  String get linkQuality => 'Qualità del collegamento';
+
+  @override
+  String get delivery => 'Consegna';
+
+  @override
+  String get status => 'Stato';
+
+  @override
+  String get expectedAckTag => 'Tag ACK atteso';
+
+  @override
+  String get roundTrip => 'Andata e ritorno';
+
+  @override
+  String get retryAttempt => 'Tentativo di nuovo invio';
+
+  @override
+  String get floodFallback => 'Fallback inondazione';
+
+  @override
+  String get identity => 'Identità';
+
+  @override
+  String get messageId => 'ID messaggio';
+
+  @override
+  String get sender => 'Mittente';
+
+  @override
+  String get senderKey => 'Chiave mittente';
+
+  @override
+  String get recipient => 'Destinatario';
+
+  @override
+  String get recipientKey => 'Chiave destinatario';
+
+  @override
+  String get voice => 'Voce';
+
+  @override
+  String get voiceId => 'ID vocale';
+
+  @override
+  String get envelope => 'Busta';
+
+  @override
+  String get sessionProgress => 'Avanzamento sessione';
+
+  @override
+  String get complete => 'Completato';
+
+  @override
+  String get rawDump => 'Dump grezzo';
+
+  @override
+  String get cannotRetryMissingRecipient =>
+      'Impossibile riprovare: informazioni destinatario mancanti';
+
+  @override
+  String get voiceUnavailable => 'Voce non disponibile al momento';
+
+  @override
+  String get requestingVoice => 'Richiesta voce';
 }

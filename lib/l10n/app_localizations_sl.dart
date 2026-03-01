@@ -2262,4 +2262,80 @@ class AppLocalizationsSl extends AppLocalizations {
 
   @override
   String get noContactsAvailable => 'Ni razpoložljivih stikov ekipe';
+
+  @override
+  String get reply => 'Odgovori';
+
+  @override
+  String get technicalDetails => 'Tehnični podrobnosti';
+
+  @override
+  String get messageTechnicalDetails => 'Tehnični podrobnosti sporočila';
+
+  @override
+  String get linkQuality => 'Kakovost povezave';
+
+  @override
+  String get delivery => 'Dostava';
+
+  @override
+  String get status => 'Status';
+
+  @override
+  String get expectedAckTag => 'Pričakovana oznaka ACK';
+
+  @override
+  String get roundTrip => 'Povratna pot';
+
+  @override
+  String get retryAttempt => 'Poskus ponovnega pošiljanja';
+
+  @override
+  String get floodFallback => 'Flood rezerva';
+
+  @override
+  String get identity => 'Identiteta';
+
+  @override
+  String get messageId => 'ID sporočila';
+
+  @override
+  String get sender => 'Pošiljatelj';
+
+  @override
+  String get senderKey => 'Ključ pošiljatelja';
+
+  @override
+  String get recipient => 'Prejemnik';
+
+  @override
+  String get recipientKey => 'Ključ prejemnika';
+
+  @override
+  String get voice => 'Glas';
+
+  @override
+  String get voiceId => 'ID glasu';
+
+  @override
+  String get envelope => 'Ovojnica';
+
+  @override
+  String get sessionProgress => 'Napredek seje';
+
+  @override
+  String get complete => 'Dokončano';
+
+  @override
+  String get rawDump => 'Surovi izpis';
+
+  @override
+  String get cannotRetryMissingRecipient =>
+      'Ponovnega pošiljanja ni mogoče: informacije o prejemniku manjkajo';
+
+  @override
+  String get voiceUnavailable => 'Glas trenutno ni na voljo';
+
+  @override
+  String get requestingVoice => 'Zahteva za glasom';
 }

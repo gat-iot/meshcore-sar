@@ -2827,4 +2827,55 @@
   "directMessagesInfo": "Mensajes directos con confirmaciones. Enviado a {count} miembros del equipo.",
   "sarMarkerSentToContacts": "Marcador SAR enviado a {count} contactos",
   "noContactsAvailable": "No hay contactos del equipo disponibles"
+,
+
+  "reply": "Responder",
+
+  "technicalDetails": "Detalles técnicos",
+
+  "messageTechnicalDetails": "Detalles técnicos del mensaje",
+
+  "linkQuality": "Calidad del enlace",
+
+  "delivery": "Entrega",
+
+  "status": "Estado",
+
+  "expectedAckTag": "Etiqueta ACK esperada",
+
+  "roundTrip": "Ida y vuelta",
+
+  "retryAttempt": "Intento de reenvío",
+
+  "floodFallback": "Reserva de inundación",
+
+  "identity": "Identidad",
+
+  "messageId": "ID de mensaje",
+
+  "sender": "Remitente",
+
+  "senderKey": "Clave del remitente",
+
+  "recipient": "Destinatario",
+
+  "recipientKey": "Clave del destinatario",
+
+  "voice": "Voz",
+
+  "voiceId": "ID de voz",
+
+  "envelope": "Envolvente",
+
+  "sessionProgress": "Progreso de sesión",
+
+  "complete": "Completo",
+
+  "rawDump": "Volcado sin procesar",
+
+  "cannotRetryMissingRecipient": "No se puede reintentar: falta información del destinatario",
+
+  "voiceUnavailable": "Voz no disponible en este momento",
+
+  "requestingVoice": "Solicitando voz"
 }
