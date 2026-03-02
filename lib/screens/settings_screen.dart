@@ -1206,24 +1206,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Max image size'),
         content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: ImagePreferences.supportedSizes
-                .map(
-                  (size) => RadioListTile<int>(
-                    value: size,
-                    groupValue: _imageMaxSize,
-                    title: Text('${size}×$size px'),
-                    subtitle: size == ImagePreferences.defaultMaxSize
-                        ? const Text('Default')
-                        : null,
-                    onChanged: (value) {
-                      if (value != null) _saveImageMaxSize(value);
-                      Navigator.pop(context);
-                    },
-                  ),
-                )
-                .toList(),
+          child: RadioGroup<int>(
+            groupValue: _imageMaxSize,
+            onChanged: (value) {
+              if (value != null) _saveImageMaxSize(value);
+              Navigator.pop(context);
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: ImagePreferences.supportedSizes
+                  .map(
+                    (size) => RadioListTile<int>(
+                      value: size,
+                      title: Text('$size×$size px'),
+                      subtitle: size == ImagePreferences.defaultMaxSize
+                          ? const Text('Default')
+                          : null,
+                    ),
+                  )
+                  .toList(),
+            ),
           ),
         ),
         actions: [

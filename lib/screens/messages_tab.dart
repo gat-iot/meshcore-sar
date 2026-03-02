@@ -457,6 +457,7 @@ class _MessagesTabState extends State<MessagesTab> {
         grayscale: grayscale,
       );
       if (result == null) {
+        if (!mounted) return;
         ToastLogger.error(context, 'Image compression failed');
         return;
       }
@@ -487,6 +488,7 @@ class _MessagesTabState extends State<MessagesTab> {
       );
 
       if (fragments.isEmpty) {
+        if (!mounted) return;
         ToastLogger.error(context, 'Image fragmentation failed');
         return;
       }
@@ -494,6 +496,7 @@ class _MessagesTabState extends State<MessagesTab> {
       // Build envelope.
       final deviceKey = connectionProvider.deviceInfo.publicKey;
       if (deviceKey == null || deviceKey.length < 6) {
+        if (!mounted) return;
         ToastLogger.error(context, 'Device key unavailable');
         return;
       }
@@ -512,6 +515,8 @@ class _MessagesTabState extends State<MessagesTab> {
         senderKey6: senderKey6,
         timestampSec: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       );
+
+      if (!mounted) return;
 
       // Cache for deferred serving.
       final imageProvider = context.read<ip.ImageProvider>();
@@ -555,6 +560,7 @@ class _MessagesTabState extends State<MessagesTab> {
         );
         if (!sent) {
           messagesProvider.markMessageFailed(msgId);
+          if (!mounted) return;
           ToastLogger.error(context, 'Failed to announce image');
         }
       }
@@ -566,6 +572,7 @@ class _MessagesTabState extends State<MessagesTab> {
       );
     } catch (e, st) {
       debugPrint('❌ [Image] _pickAndSendImage: $e\n$st');
+      if (!mounted) return;
       ToastLogger.error(context, 'Image send failed');
     } finally {
       if (mounted) setState(() => _isSendingImage = false);
