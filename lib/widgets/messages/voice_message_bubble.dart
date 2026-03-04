@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,7 @@ import '../../providers/connection_provider.dart';
 import '../../providers/contacts_provider.dart';
 import '../../providers/voice_provider.dart';
 import '../../utils/voice_message_parser.dart';
+import 'transfer_timeout.dart';
 
 /// A message bubble that shows a voice recording with play/stop controls.
 class VoiceMessageBubble extends StatefulWidget {
@@ -28,6 +30,13 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   bool _isRequesting = false;
   bool _autoPlayWhenReady = false;
   String? _errorText;
+  Timer? _requestTimeoutTimer;
+
+  @override
+  void dispose() {
+    _requestTimeoutTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,7 +115,14 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                   await voiceProvider.play(voiceId);
                   return;
                 }
-                await _requestAndPlayVoice(voiceId);
+                await _requestAndPlayVoice(
+                  voiceId,
+                  envelope: envelope,
+                  radioBw: radioBw,
+                  radioSf: radioSf,
+                  radioCr: radioCr,
+                  pathLen: widget.message.pathLen,
+                );
               },
               borderRadius: BorderRadius.circular(24),
               child: Container(
@@ -174,13 +190,18 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     );
   }
 
-  Future<void> _requestAndPlayVoice(String sessionId) async {
+  Future<void> _requestAndPlayVoice(
+    String sessionId, {
+    VoiceEnvelope? envelope,
+    int? radioBw,
+    int? radioSf,
+    int? radioCr,
+    int pathLen = 0,
+  }) async {
     if (_isRequesting) return;
     var sender = _resolveSenderContact();
     if (sender == null) {
       final connectionProvider = context.read<ConnectionProvider>();
-      // Retry once after refreshing contacts; resumable sessions may outlive
-      // the in-memory contact cache.
       await connectionProvider.getContacts();
       if (!mounted) return;
       sender = _resolveSenderContact();
@@ -221,7 +242,30 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     );
     if (!sent) {
       _setUnavailable();
+      return;
     }
+
+    // Timeout = 2× estimated LoRa airtime (min 30s).
+    final txEstimate = envelope != null
+        ? estimateVoiceTransmitDuration(
+            packetCount: envelope.total,
+            mode: envelope.mode,
+            durationMs: envelope.durationMs,
+            pathLen: pathLen,
+            radioBw: radioBw,
+            radioSf: radioSf,
+            radioCr: radioCr,
+          )
+        : const Duration(seconds: 15);
+    _requestTimeoutTimer?.cancel();
+    _requestTimeoutTimer = TransferTimeout.start(
+      txEstimate: txEstimate,
+      onTimeout: () {
+        if (mounted && _isRequesting) {
+          _setUnavailable();
+        }
+      },
+    );
   }
 
   void _setUnavailable() {

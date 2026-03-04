@@ -9,6 +9,7 @@ import '../../providers/connection_provider.dart';
 import '../../providers/contacts_provider.dart';
 import '../../providers/image_provider.dart' as ip;
 import '../../utils/image_message_parser.dart';
+import 'transfer_timeout.dart';
 
 /// A message bubble that shows a received or sent image.
 ///
@@ -90,6 +91,9 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
                     received: received,
                     total: total,
                     envelope: envelope,
+                    radioBw: radioBw,
+                    radioSf: radioSf,
+                    radioCr: radioCr,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -131,6 +135,9 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
     required int received,
     required int total,
     required ImageEnvelope envelope,
+    required int? radioBw,
+    required int? radioSf,
+    required int? radioCr,
   }) {
     if (isComplete && imageBytes != null) {
       return AspectRatio(
@@ -167,7 +174,13 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
             ] else ...[
               // Tap-to-load icon.
               IconButton(
-                onPressed: () => _requestAndFetch(envelope),
+                onPressed: () => _requestAndFetch(
+                  envelope,
+                  radioBw: radioBw,
+                  radioSf: radioSf,
+                  radioCr: radioCr,
+                  pathLen: widget.message.pathLen,
+                ),
                 icon: const Icon(Icons.download_rounded, size: 40),
                 color: Colors.white70,
                 tooltip: 'Load image',
@@ -179,7 +192,13 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
     );
   }
 
-  Future<void> _requestAndFetch(ImageEnvelope envelope) async {
+  Future<void> _requestAndFetch(
+    ImageEnvelope envelope, {
+    int? radioBw,
+    int? radioSf,
+    int? radioCr,
+    int pathLen = 0,
+  }) async {
     if (_isRequesting) return;
     var sender = _resolveSender(envelope);
     if (sender == null) {
@@ -242,13 +261,26 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
       return;
     }
 
-    // Reset after 30s so user can retry if transfer stalls.
+    // Timeout = 2× estimated LoRa airtime (min 30s).
+    final txEstimate = estimateImageTransmitDuration(
+      fragmentCount: missing.isEmpty ? envelope.total : missing.length,
+      sizeBytes: missing.isEmpty
+          ? envelope.sizeBytes
+          : (envelope.sizeBytes * missing.length / envelope.total).round(),
+      pathLen: pathLen,
+      radioBw: radioBw,
+      radioSf: radioSf,
+      radioCr: radioCr,
+    );
     _requestTimeoutTimer?.cancel();
-    _requestTimeoutTimer = Timer(const Duration(seconds: 30), () {
-      if (mounted && _isRequesting && !imageProvider.isComplete(envelope.sessionId)) {
-        setState(() => _isRequesting = false);
-      }
-    });
+    _requestTimeoutTimer = TransferTimeout.start(
+      txEstimate: txEstimate,
+      onTimeout: () {
+        if (mounted && _isRequesting && !imageProvider.isComplete(envelope.sessionId)) {
+          setState(() => _isRequesting = false);
+        }
+      },
+    );
   }
 
   Contact? _resolveSender(ImageEnvelope envelope) {

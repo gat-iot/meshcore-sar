@@ -4,7 +4,7 @@ import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
 
-/// 简体中文翻译 (`zh`).
+/// The translations for Chinese (`zh`).
 class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
@@ -51,27 +51,27 @@ class AppLocalizationsZh extends AppLocalizations {
   String get locationPermissionPermanentlyDenied => '位置权限被永久拒绝。请在设置中启用。';
 
   @override
-  String get locationPermissionRequired => '需要位置权限以进行GPS跟踪和团队协调。您可以稍后在设置中启用。';
+  String get locationPermissionRequired => 'GPS 跟踪和团队协调需要位置权限。您可以稍后在设置中启用它。';
 
   @override
-  String get locationServicesDisabled => '位置服务已禁用。请在设置中启用。';
+  String get locationServicesDisabled => '位置服务已禁用。请在设置中启用它们。';
 
   @override
-  String get failedToGetGpsLocation => '获取GPS位置失败';
+  String get failedToGetGpsLocation => '获取 GPS 位置失败';
 
   @override
   String advertisedAtLocation(String latitude, String longitude) {
-    return '已在 $latitude, $longitude 发布位置';
+    return '已在 $latitude， $longitude 广播位置';
   }
 
   @override
   String failedToAdvertise(String error) {
-    return '发布失败: $error';
+    return '广播失败: $error';
   }
 
   @override
   String reconnecting(int attempt, int max) {
-    return '重新连接中... ($attempt/$max)';
+    return '正在重新连接... ($attempt/$max)';
   }
 
   @override
@@ -102,19 +102,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get blueDarkTheme => '蓝色深色主题';
 
   @override
-  String get sarRed => '搜救红 (警报/紧急模式)';
+  String get sarRed => '搜救红';
 
   @override
   String get alertEmergencyMode => '警报/紧急模式';
 
   @override
-  String get sarGreen => '搜救绿 (安全/解除模式)';
+  String get sarGreen => '搜救绿';
 
   @override
-  String get safeAllClearMode => '安全/解除模式';
+  String get safeAllClearMode => '安全/解除警报模式';
 
   @override
-  String get autoSystem => '自动 (跟随系统)';
+  String get autoSystem => '自动 (系统)';
 
   @override
   String get followSystemTheme => '跟随系统主题';
@@ -135,7 +135,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get disableMap => '禁用地图';
 
   @override
-  String get disableMapDescription => '隐藏地图标签以减少电池消耗';
+  String get disableMapDescription => '隐藏地图标签页以减少电池使用量';
 
   @override
   String get language => '语言';
@@ -190,7 +190,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String broadcastAfterMoving(String distance) {
-    return '仅在移动 $distance 米后广播';
+    return '仅移动 $distance 米后广播';
   }
 
   @override
@@ -206,7 +206,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String alwaysBroadcastEvery(String duration) {
-    return '每 $duration 始终广播';
+    return '每 $duration 始终广播一次';
   }
 
   @override
@@ -231,13 +231,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aboutMeshCoreSar => '关于 MeshCore 搜救';
 
   @override
-  String get aboutDescription => '专为应急响应团队设计的搜救应用。功能包括：\n\n• 基于BLE的网状网络，实现设备间直接通信\n• 支持多种图层的离线地图\n• 实时团队成员跟踪\n• 搜救战术标记（发现受困者、火点、集结区）\n• 联系人管理和消息传递\n• 带罗盘航向的GPS跟踪\n• 用于离线使用的地图瓦片缓存';
+  String get aboutDescription =>
+      '专为应急响应团队设计的搜救应用。功能包括：\n\n• 用于设备间通信的 BLE 网状网络\n• 支持多种图层选项的离线地图\n• 实时团队成员跟踪\n• 搜救战术标记（发现人员、火情、集结点）\n• 联系人管理和消息传递\n• 带指南针方向的 GPS 跟踪\n• 用于离线使用的地图瓦片缓存';
 
   @override
   String get technologiesUsed => '使用的技术：';
 
   @override
-  String get technologiesList => '• 使用Flutter进行跨平台开发\n• 使用BLE（低功耗蓝牙）进行网状网络通信\n• 使用OpenStreetMap进行地图显示\n• 使用Provider进行状态管理\n• 使用SharedPreferences进行本地存储';
+  String get technologiesList =>
+      '• 用于跨平台开发的 Flutter\n• 用于网状网络的 BLE（低功耗蓝牙）\n• 用于地图的 OpenStreetMap\n• 用于状态管理的 Provider\n• 用于本地存储的 SharedPreferences';
 
   @override
   String get moreInfo => '更多信息';
@@ -274,32 +276,32 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String loadedSampleData(
-      int teamCount,
-      int channelCount,
-      int sarCount,
-      int messageCount,
-      ) {
-    return '已加载 $teamCount 个团队成员, $channelCount 个频道, $sarCount 个搜救标记, $messageCount 条消息';
+    int teamCount,
+    int channelCount,
+    int sarCount,
+    int messageCount,
+  ) {
+    return '已加载 $teamCount 个团队成员， $channelCount 个频道， $sarCount 个搜救标记， $messageCount 条消息';
   }
 
   @override
   String failedToLoadSampleData(String error) {
-    return '加载示例数据失败: $error';
+    return '加载示例数据失败：$error';
   }
 
   @override
   String get allDataCleared => '所有数据已清除';
 
   @override
-  String get failedToStartBackgroundTracking => '启动后台跟踪失败。请检查权限和蓝牙连接。';
+  String get failedToStartBackgroundTracking => '启动后台跟踪失败。检查权限和 BLE 连接。';
 
   @override
   String locationBroadcast(String latitude, String longitude) {
-    return '位置广播: $latitude, $longitude';
+    return '位置广播：$latitude， $longitude';
   }
 
   @override
-  String get defaultPinInfo => '无屏幕设备的默认PIN码是123456。配对遇到问题？请在系统设置中忽略该蓝牙设备后重试。';
+  String get defaultPinInfo => '无屏幕设备的默认 PIN 码是 123456。配对有问题？请在系统设置中忘记此蓝牙设备。';
 
   @override
   String get noMessagesYet => '暂无消息';
@@ -323,7 +325,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sendDirectMessage => '发送';
 
   @override
-  String get resetPath => '重置路径 (重新路由)';
+  String get resetPath => '重置路径（重新路由）';
 
   @override
   String get publicKeyCopied => '公钥已复制到剪贴板';
@@ -338,7 +340,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String failedToSyncContacts(String error) {
-    return '同步联系人失败: $error';
+    return '同步联系人失败：$error';
   }
 
   @override
@@ -349,12 +351,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String loggingIn(String roomName) {
-    return '正在登录到 $roomName...';
+    return '正在登录 $roomName...';
   }
 
   @override
   String failedToSendLogin(String error) {
-    return '发送登录请求失败: $error';
+    return '发送登录命令失败：$error';
   }
 
   @override
@@ -376,13 +378,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get drawLine => '画线';
 
   @override
-  String get drawLineDesc => '在地图上手绘线条';
+  String get drawLineDesc => '在地图上画一条手绘线';
 
   @override
   String get drawRectangle => '画矩形';
 
   @override
-  String get drawRectangleDesc => '在地图上绘制矩形区域';
+  String get drawRectangleDesc => '在地图上绘制一个矩形区域';
 
   @override
   String get measureDistance => '测量距离';
@@ -395,7 +397,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String distanceLabel(String distance) {
-    return '距离: $distance';
+    return '距离：$distance';
   }
 
   @override
@@ -408,7 +410,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get longPressToStartNewMeasurement => '长按开始新测量';
 
   @override
-  String get shareDrawings => '分享绘图';
+  String get shareDrawings => '共享绘图';
 
   @override
   String get clearAllDrawings => '清除所有绘图';
@@ -418,17 +420,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String broadcastDrawingsToTeam(int count, String plural) {
-    return '向团队广播 $count 个绘图$plural';
+    return '向团队广播 $count 个绘图';
   }
 
   @override
   String removeAllDrawings(int count, String plural) {
-    return '移除所有 $count 个绘图$plural';
+    return '移除所有 $count 个绘图';
   }
 
   @override
   String deleteAllDrawingsConfirm(int count, String plural) {
-    return '从地图上删除所有 $count 个绘图$plural？';
+    return '从地图上删除所有 $count 个绘图吗？';
   }
 
   @override
@@ -436,29 +438,29 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String shareDrawingsCount(int count, String plural) {
-    return '分享 $count 个绘图$plural';
+    return '共享 $count 个绘图';
   }
 
   @override
   String sentDrawingsToRoom(int count, String plural, String roomName) {
-    return '已将 $count 个地图绘图$plural 发送到 $roomName';
+    return '已将 $count 个地图绘图发送到 $roomName';
   }
 
   @override
   String sharedDrawingsToRoom(
-      int success,
-      int total,
-      String plural,
-      String roomName,
-      ) {
-    return '已将 $success/$total 个绘图$plural 分享到 $roomName';
+    int success,
+    int total,
+    String plural,
+    String roomName,
+  ) {
+    return '已将 $success/$total 个绘图共享到 $roomName';
   }
 
   @override
   String get showReceivedDrawings => '显示接收到的绘图';
 
   @override
-  String get showingAllDrawings => '正在显示所有绘图';
+  String get showingAllDrawings => '显示所有绘图';
 
   @override
   String get showingOnlyYourDrawings => '仅显示您自己的绘图';
@@ -476,46 +478,46 @@ class AppLocalizationsZh extends AppLocalizations {
   String get clearAll => '全部清除';
 
   @override
-  String get noLocalDrawings => '没有可分享的本地绘图';
+  String get noLocalDrawings => '没有可共享的本地绘图';
 
   @override
   String get publicChannel => '公共频道';
 
   @override
-  String get broadcastToAll => '广播给附近所有节点（临时）';
+  String get broadcastToAll => '广播到所有附近节点（临时）';
 
   @override
   String get storedPermanently => '永久存储在房间中';
 
   @override
   String drawingsSentToPublicChannel(int count, String plural) {
-    return '已将 $count 个地图绘图$plural 发送到公共频道';
+    return '已将 $count 个地图绘图发送到公共频道';
   }
 
   @override
   String drawingsSharedToPublicChannel(int success, int total) {
-    return '已将 $success/$total 个绘图分享到公共频道';
+    return '已将 $success/$total 个绘图共享到公共频道';
   }
 
   @override
   String get notConnectedToDevice => '未连接到设备';
 
   @override
-  String get directMessage => '私信';
+  String get directMessage => '直连消息';
 
   @override
   String directMessageSentTo(String contactName) {
-    return '已发送私信给 $contactName';
+    return '已向 $contactName 发送直连消息';
   }
 
   @override
   String failedToSend(String error) {
-    return '发送失败: $error';
+    return '发送失败：$error';
   }
 
   @override
   String directMessageInfo(String contactName) {
-    return '此消息将直连发送给 $contactName。它也会显示在主消息列表中。';
+    return '此消息将直接发送给 $contactName。它也会出现在主消息列表中。';
   }
 
   @override
@@ -528,19 +530,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get markerType => '标记类型';
 
   @override
-  String get sendTo => '发送到';
+  String get sendTo => '发送至';
 
   @override
-  String get noDestinationsAvailable => '没有可用的目标。';
+  String get noDestinationsAvailable => '没有可用的目的地。';
 
   @override
-  String get selectDestination => '选择目标...';
+  String get selectDestination => '选择目的地...';
 
   @override
-  String get ephemeralBroadcastInfo => '临时广播：仅通过无线广播。不存储 - 节点必须在线才能接收。';
+  String get ephemeralBroadcastInfo => '临时：仅空中广播。不存储 - 节点必须在线。';
 
   @override
-  String get persistentRoomInfo => '持久存储：不可变地存储在房间中。自动同步并离线保存。';
+  String get persistentRoomInfo => '持久：不可变地存储在房间中。自动同步并可离线保存。';
 
   @override
   String get location => '位置';
@@ -549,7 +551,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get myLocation => '我的位置';
 
   @override
-  String get fromMap => '从地图选择';
+  String get fromMap => '来自地图';
 
   @override
   String get gettingLocation => '正在获取位置...';
@@ -565,7 +567,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String accuracyMeters(int accuracy) {
-    return '精度: ±${accuracy}米';
+    return '精度：±$accuracy米';
   }
 
   @override
@@ -576,14 +578,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String lowAccuracyWarning(int accuracy) {
-    return '位置精度为 ±${accuracy}米。这可能不足以进行搜救行动。\n\n是否继续？';
+    return '位置精度为 ±$accuracy米。这对于搜救行动可能不够准确。\n\n仍然继续吗？';
   }
 
   @override
-  String get loginToRoom => '登录房间';
+  String get loginToRoom => '登录到房间';
 
   @override
-  String get enterPasswordInfo => '输入密码以访问此房间。密码将被保存以备将来使用。';
+  String get enterPasswordInfo => '输入密码以访问此房间。密码将被保存以供将来使用。';
 
   @override
   String get password => '密码';
@@ -599,7 +601,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String failedToAddRoom(String error) {
-    return '未能将房间添加到设备: $error\n\n该房间可能尚未广播。\n请等待房间广播后再试。';
+    return '向设备添加房间失败：$error\n\n该房间可能尚未广播。请等待房间广播。';
   }
 
   @override
@@ -615,14 +617,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get loggedIn => '已登录';
 
   @override
-  String get noGpsData => '无GPS数据';
+  String get noGpsData => '无 GPS 数据';
 
   @override
   String get distance => '距离';
 
   @override
   String pingingDirect(String name) {
-    return '正在 ping $name (直连路径)...';
+    return '正在 ping $name (通过路径直连)...';
   }
 
   @override
@@ -632,12 +634,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String directPingTimeout(String name) {
-    return '直连 ping 超时 - 尝试用泛洪重试 $name...';
+    return '直连 ping 超时 - 正在使用泛洪重试 $name...';
   }
 
   @override
   String pingSuccessful(String name, String fallback) {
-    return 'Ping $name 成功$fallback';
+    return '成功 ping 到 $name$fallback';
   }
 
   @override
@@ -645,12 +647,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String pingFailed(String name) {
-    return 'Ping $name 失败 - 未收到响应';
+    return 'ping $name 失败 - 未收到响应';
   }
 
   @override
   String deleteContactConfirmation(String name) {
-    return '确定要删除 \"$name\" 吗？\n\n这将从应用和配对的无线电设备中移除该联系人。';
+    return '确定要删除“$name”吗？\n\n这将从应用和配套的无线电设备中移除该联系人。';
   }
 
   @override
@@ -660,12 +662,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String contactRemoved(String name) {
-    return '联系人 \"$name\" 已移除';
+    return '联系人“$name”已移除';
   }
 
   @override
   String failedToRemoveContact(String error) {
-    return '移除联系人失败: $error';
+    return '移除联系人失败：$error';
   }
 
   @override
@@ -687,7 +689,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notLoggedIn => '未登录';
 
   @override
-  String get adminAccess => '管理员权限';
+  String get adminAccess => '管理员访问权限';
 
   @override
   String get yes => '是';
@@ -702,7 +704,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get passwordSaved => '密码已保存';
 
   @override
-  String get locationColon => '位置:';
+  String get locationColon => '位置：';
 
   @override
   String get telemetry => '遥测';
@@ -725,7 +727,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get humidity => '湿度';
 
   @override
-  String get pressure => '压力';
+  String get pressure => '气压';
 
   @override
   String get gpsTelemetry => 'GPS (遥测)';
@@ -735,11 +737,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String pathResetInfo(String name) {
-    return '$name 的路径已重置。下一条消息将寻找新路由。';
+    return '$name 的路径已重置。下一条消息将找到新路由。';
   }
 
   @override
-  String get reLoginToRoom => '重新登录房间';
+  String get reLoginToRoom => '重新登录到房间';
 
   @override
   String get heading => '航向';
@@ -757,10 +759,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get direction => '方向';
 
   @override
-  String get filterMarkers => '过滤标记';
+  String get filterMarkers => '筛选标记';
 
   @override
-  String get filterMarkersTooltip => '过滤标记';
+  String get filterMarkersTooltip => '筛选标记';
 
   @override
   String get contactsFilter => '联系人';
@@ -772,13 +774,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sarMarkers => '搜救标记';
 
   @override
-  String get foundPerson => '发现受困者';
+  String get foundPerson => '找到人员';
 
   @override
-  String get fire => '火点';
+  String get fire => '火情';
 
   @override
-  String get stagingArea => '集结区';
+  String get stagingArea => '集结点';
 
   @override
   String get showAll => '显示全部';
@@ -804,7 +806,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String latLonFormat(String latitude, String longitude) {
-    return '纬度: $latitude 经度: $longitude';
+    return '纬度：$latitude 经度：$longitude';
   }
 
   @override
@@ -866,16 +868,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String minZoom(int zoom) {
-    return '最小: $zoom';
+    return '最小：$zoom';
   }
 
   @override
   String maxZoom(int zoom) {
-    return '最大: $zoom';
+    return '最大：$zoom';
   }
 
   @override
-  String get downloadingDots => '下载中...';
+  String get downloadingDots => '正在下载...';
 
   @override
   String get cancelDownload => '取消下载';
@@ -908,7 +910,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get downloadCancelled => '下载已取消';
 
   @override
-  String get startingDownload => '开始下载...';
+  String get startingDownload => '正在开始下载...';
 
   @override
   String get downloadingMapTiles => '正在下载地图瓦片...';
@@ -921,32 +923,32 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String errorLoadingStats(String error) {
-    return '加载统计信息出错: $error';
+    return '加载统计信息时出错：$error';
   }
 
   @override
   String downloadFailed(String error) {
-    return '下载失败: $error';
+    return '下载失败：$error';
   }
 
   @override
   String cancelFailed(String error) {
-    return '取消失败: $error';
+    return '取消失败：$error';
   }
 
   @override
   String clearCacheFailed(String error) {
-    return '清除缓存失败: $error';
+    return '清除缓存失败：$error';
   }
 
   @override
   String minZoomError(String error) {
-    return '最小缩放: $error';
+    return '最小缩放：$error';
   }
 
   @override
   String maxZoomError(String error) {
-    return '最大缩放: $error';
+    return '最大缩放：$error';
   }
 
   @override
@@ -965,7 +967,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get displayMarkerTypeCounts => '显示标记类型计数';
 
   @override
-  String get rotateMapWithHeading => '地图随航向旋转';
+  String get rotateMapWithHeading => '随航向旋转地图';
 
   @override
   String get mapFollowsDirection => '移动时地图跟随您的方向';
@@ -974,7 +976,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get resetMapRotation => '重置旋转';
 
   @override
-  String get resetMapRotationTooltip => '重置地图指北';
+  String get resetMapRotationTooltip => '将地图重置为北向上';
 
   @override
   String get showMapDebugInfo => '显示地图调试信息';
@@ -986,7 +988,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get fullscreenMode => '全屏模式';
 
   @override
-  String get hideUiFullMapView => '隐藏所有UI控件以获得全地图视图';
+  String get hideUiFullMapView => '隐藏所有 UI 控件以获得完整地图视图';
 
   @override
   String get openStreetMap => 'OpenStreetMap';
@@ -998,7 +1000,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get esriSatellite => 'ESRI 卫星图';
 
   @override
-  String get googleHybrid => 'Google 混合图';
+  String get googleHybrid => 'Google 混合';
 
   @override
   String get googleRoadmap => 'Google 道路图';
@@ -1035,7 +1037,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String failedToSendSarMarker(String error) {
-    return '发送搜救标记失败: $error';
+    return '发送搜救标记失败：$error';
   }
 
   @override
@@ -1056,7 +1058,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String syncFailed(String error) {
-    return '同步失败: $error';
+    return '同步失败：$error';
   }
 
   @override
@@ -1067,7 +1069,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String retryFailed(String error) {
-    return '重试失败: $error';
+    return '重试失败：$error';
   }
 
   @override
@@ -1077,7 +1079,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cannotReplySenderMissing => '无法回复：缺少发件人信息';
 
   @override
-  String get cannotReplyContactNotFound => '无法回复：未找到联系人';
+  String get cannotReplyContactNotFound => '无法回复：找不到联系人';
 
   @override
   String get messageDeleted => '消息已删除';
@@ -1086,7 +1088,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get copyText => '复制文本';
 
   @override
-  String get saveAsTemplate => '保存为模板';
+  String get saveAsTemplate => '另存为模板';
 
   @override
   String get templateSaved => '模板保存成功';
@@ -1101,23 +1103,23 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deleteMessageConfirmation => '确定要删除此消息吗？';
 
   @override
-  String get shareLocation => '分享位置';
+  String get shareLocation => '共享位置';
 
   @override
   String shareLocationText(
-      String markerInfo,
-      String lat,
-      String lon,
-      String url,
-      ) {
-    return '$markerInfo\n\n坐标: $lat, $lon\n\n谷歌地图: $url';
+    String markerInfo,
+    String lat,
+    String lon,
+    String url,
+  ) {
+    return '$markerInfo\n\n坐标：$lat， $lon\n\n谷歌地图：$url';
   }
 
   @override
   String get sarLocationShare => '搜救位置';
 
   @override
-  String get locationShared => '位置已分享';
+  String get locationShared => '位置已共享';
 
   @override
   String get refreshedContacts => '联系人已刷新';
@@ -1127,22 +1129,22 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String minutesAgo(int minutes) {
-    return '$minutes分钟前';
+    return '$minutes 分钟前';
   }
 
   @override
   String hoursAgo(int hours) {
-    return '$hours小时前';
+    return '$hours 小时前';
   }
 
   @override
   String daysAgo(int days) {
-    return '$days天前';
+    return '$days 天前';
   }
 
   @override
   String secondsAgo(int seconds) {
-    return '$seconds秒前';
+    return '$seconds 秒前';
   }
 
   @override
@@ -1156,7 +1158,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String deliveredWithTime(int time) {
-    return '已送达 (${time}毫秒)';
+    return '已送达 (${time}ms)';
   }
 
   @override
@@ -1180,16 +1182,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pending => '等待中';
 
   @override
-  String get sarMarkerFoundPerson => '发现受困者';
+  String get sarMarkerFoundPerson => '找到人员';
 
   @override
-  String get sarMarkerFire => '火点位置';
+  String get sarMarkerFire => '火情位置';
 
   @override
-  String get sarMarkerStagingArea => '集结区';
+  String get sarMarkerStagingArea => '集结点';
 
   @override
-  String get sarMarkerObject => '发现物品';
+  String get sarMarkerObject => '找到物品';
 
   @override
   String get from => '来自';
@@ -1207,7 +1209,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get frequencyMHz => '频率 (MHz)';
 
   @override
-  String get frequencyExample => '例如: 869.618';
+  String get frequencyExample => '例如：869.618';
 
   @override
   String get bandwidth => '带宽';
@@ -1223,7 +1225,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String maxPowerDbm(int power) {
-    return '最大: $power dBm';
+    return '最大：$power dBm';
   }
 
   @override
@@ -1233,13 +1235,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get offlineVectorMaps => '离线矢量地图';
 
   @override
-  String get offlineVectorMapsDescription => '导入和管理离线矢量地图瓦片（MBTiles格式），以便在无网络连接时使用';
+  String get offlineVectorMapsDescription =>
+      '导入和管理离线矢量地图瓦片（MBTiles 格式），以便在没有互联网连接时使用';
 
   @override
   String get importMbtiles => '导入 MBTiles 文件';
 
   @override
-  String get importMbtilesNote => '支持包含矢量瓦片（PBF/MVT格式）的MBTiles文件。Geofabrik的数据非常好用！';
+  String get importMbtilesNote =>
+      '支持带有矢量瓦片（PBF/MVT 格式）的 MBTiles 文件。Geofabrik 提取文件效果很好！';
 
   @override
   String get noMbtilesFiles => '未找到离线矢量地图';
@@ -1255,7 +1259,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String deleteMbtilesConfirmMessage(String name) {
-    return '确定要删除 \"$name\" 吗？这将永久移除该离线地图。';
+    return '确定要删除“$name”吗？这将永久移除该离线地图。';
   }
 
   @override
@@ -1265,10 +1269,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get failedToDeleteMbtiles => '删除离线地图失败';
 
   @override
-  String get importExportCachedTiles => '导入/导出缓存瓦片';
+  String get importExportCachedTiles => '导入/导出缓存的瓦片';
 
   @override
-  String get importExportDescription => '在不同设备间备份、分享和恢复已下载的地图瓦片';
+  String get importExportDescription => '在设备之间备份、共享和恢复已下载的地图瓦片';
 
   @override
   String get exportTilesToFile => '导出瓦片到文件';
@@ -1280,7 +1284,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get selectExportLocation => '选择导出位置';
 
   @override
-  String get selectImportFile => '选择瓦片存档文件';
+  String get selectImportFile => '选择瓦片存档';
 
   @override
   String get exportingTiles => '正在导出瓦片...';
@@ -1300,19 +1304,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String exportFailed(String error) {
-    return '导出失败: $error';
+    return '导出失败：$error';
   }
 
   @override
   String importFailed(String error) {
-    return '导入失败: $error';
+    return '导入失败：$error';
   }
 
   @override
-  String get exportNote => '创建一个压缩存档 (.fmtc) 文件，可以在其他设备上分享和导入。';
+  String get exportNote => '创建一个压缩存档 (.fmtc) 文件，可以共享并在其他设备上导入。';
 
   @override
-  String get importNote => '从之前导出的存档文件导入地图瓦片。瓦片将与现有缓存合并。';
+  String get importNote => '从先前导出的存档文件导入地图瓦片。瓦片将与现有缓存合并。';
 
   @override
   String get noTilesToExport => '没有可导出的瓦片';
@@ -1350,7 +1354,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get trailVisible => '轨迹在地图上可见';
 
   @override
-  String get trailHiddenRecording => '轨迹已隐藏（仍在记录中）';
+  String get trailHiddenRecording => '轨迹已隐藏（仍在记录）';
 
   @override
   String get duration => '持续时间';
@@ -1377,7 +1381,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get trailControls => '轨迹控制';
 
   @override
-  String get exportTrailToGpx => '导出轨迹为 GPX';
+  String get exportTrailToGpx => '将轨迹导出为 GPX';
 
   @override
   String get importTrailFromGpx => '从 GPX 导入轨迹';
@@ -1390,7 +1394,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String failedToImportTrail(String error) {
-    return '导入轨迹失败: $error';
+    return '导入轨迹失败：$error';
   }
 
   @override
@@ -1398,7 +1402,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String importTrailQuestion(int pointCount) {
-    return '导入包含 $pointCount 个点的轨迹？\n\n您可以替换当前轨迹或与新轨迹一同查看。';
+    return '导入包含 $pointCount 个点的轨迹？\n\n您可以替换当前轨迹或将其与当前轨迹并排查看。';
   }
 
   @override
@@ -1409,12 +1413,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String trailImported(int pointCount) {
-    return '轨迹已导入！($pointCount 个点)';
+    return '轨迹已导入！（$pointCount 个点）';
   }
 
   @override
   String trailReplaced(int pointCount) {
-    return '轨迹已替换！($pointCount 个点)';
+    return '轨迹已替换！（$pointCount 个点）';
   }
 
   @override
@@ -1424,7 +1428,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get showAllContactTrails => '显示所有联系人轨迹';
 
   @override
-  String get noContactsWithLocationHistory => '没有带位置历史记录的联系人';
+  String get noContactsWithLocationHistory => '没有带位置历史的联系人';
 
   @override
   String showingTrailsForContacts(int count) {
@@ -1438,7 +1442,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceInformation => '设备信息';
 
   @override
-  String get bleName => '蓝牙名称';
+  String get bleName => 'BLE 名称';
 
   @override
   String get meshName => '网格名称';
@@ -1474,7 +1478,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get nameBroadcastInMesh => '在网格广播中通告的名称';
 
   @override
-  String get telemetryAndLocationSharing => '遥测与位置共享';
+  String get telemetryAndLocationSharing => '遥测和位置共享';
 
   @override
   String get lat => '纬度';
@@ -1509,19 +1513,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String failedToSave(String error) {
-    return '保存失败: $error';
+    return '保存失败：$error';
   }
 
   @override
   String failedToGetLocation(String error) {
-    return '获取位置失败: $error';
+    return '获取位置失败：$error';
   }
 
   @override
   String get sarTemplates => '搜救模板';
 
   @override
-  String get manageSarTemplates => '管理光标目标模板';
+  String get manageSarTemplates => '管理目标标记模板';
 
   @override
   String get addTemplate => '添加模板';
@@ -1536,7 +1540,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get templateName => '模板名称';
 
   @override
-  String get templateNameHint => '例如: 发现受困者';
+  String get templateNameHint => '例如：找到的人员';
 
   @override
   String get templateEmoji => '表情符号';
@@ -1551,7 +1555,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get templateDescription => '描述（可选）';
 
   @override
-  String get templateDescriptionHint => '添加上下文信息...';
+  String get templateDescriptionHint => '添加上下文...';
 
   @override
   String get templateColor => '颜色';
@@ -1567,7 +1571,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String deleteTemplateConfirmation(String name) {
-    return '删除模板 \'$name\'？';
+    return '删除模板“$name”？';
   }
 
   @override
@@ -1603,19 +1607,19 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get resetToDefaults => '重置为默认';
+  String get resetToDefaults => '重置为默认值';
 
   @override
-  String get resetToDefaultsConfirmation => '这将删除所有自定义模板并恢复4个默认模板。是否继续？';
+  String get resetToDefaultsConfirmation => '这将删除所有自定义模板并恢复 4 个默认模板。继续吗？';
 
   @override
   String get reset => '重置';
 
   @override
-  String get resetComplete => '模板已重置为默认';
+  String get resetComplete => '模板已重置为默认值';
 
   @override
-  String get noTemplates => '没有可用模板';
+  String get noTemplates => '没有可用的模板';
 
   @override
   String get tapAddToCreate => '点击 + 创建您的第一个模板';
@@ -1633,19 +1637,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get checking => '检查中...';
 
   @override
-  String get locationPermissionGrantedAlways => '已授权（始终允许）';
+  String get locationPermissionGrantedAlways => '已授予（始终）';
 
   @override
-  String get locationPermissionGrantedWhileInUse => '已授权（使用时允许）';
+  String get locationPermissionGrantedWhileInUse => '已授予（使用时）';
 
   @override
   String get locationPermissionDeniedTapToRequest => '已拒绝 - 点击请求';
 
   @override
-  String get locationPermissionPermanentlyDeniedOpenSettings => '已永久拒绝 - 打开设置';
+  String get locationPermissionPermanentlyDeniedOpenSettings => '永久拒绝 - 打开设置';
 
   @override
-  String get locationPermissionDialogContent => '位置权限已被永久拒绝。请在设备设置中启用它，以使用GPS跟踪和位置共享功能。';
+  String get locationPermissionDialogContent =>
+      '位置权限被永久拒绝。请在您的设备设置中启用它，以使用 GPS 跟踪和位置共享功能。';
 
   @override
   String get openSettings => '打开设置';
@@ -1654,22 +1659,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get locationPermissionGranted => '位置权限已授予！';
 
   @override
-  String get locationPermissionRequiredForGps => 'GPS跟踪和位置共享需要位置权限。';
+  String get locationPermissionRequiredForGps => 'GPS 跟踪和位置共享需要位置权限。';
 
   @override
-  String get locationPermissionAlreadyGranted => '位置权限已授予。';
+  String get locationPermissionAlreadyGranted => '位置权限已经授予。';
 
   @override
-  String get sarNavyBlue => '搜救海军蓝 (专业/行动模式)';
+  String get sarNavyBlue => '搜救海军蓝';
 
   @override
-  String get sarNavyBlueDescription => '专业/行动模式';
+  String get sarNavyBlueDescription => '专业/操作模式';
 
   @override
   String get selectRecipient => '选择收件人';
 
   @override
-  String get broadcastToAllNearby => '广播给附近所有设备';
+  String get broadcastToAllNearby => '广播给所有附近的人';
 
   @override
   String get searchRecipients => '搜索收件人...';
@@ -1690,7 +1695,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noChannelsFound => '未找到频道';
 
   @override
-  String get messagesWillBeSentToPublicChannel => '消息将发送到公共频道';
+  String get messagesWillBeSentToPublicChannel => '消息将被发送到公共频道';
 
   @override
   String get newMessage => '新消息';
@@ -1711,7 +1716,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sampleMedicCharlie => '医护人员';
 
   @override
-  String get sampleCommandDelta => '指挥员';
+  String get sampleCommandDelta => '指挥部';
 
   @override
   String get sampleFireEngine => '消防车';
@@ -1747,79 +1752,79 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sampleObjectBackpack => ' 发现背包 - 蓝色';
 
   @override
-  String get sampleObjectVehicle => ' 发现废弃车辆 - 检查车主';
+  String get sampleObjectVehicle => ' 废弃车辆 - 检查车主';
 
   @override
   String get sampleObjectCamping => ' 发现露营装备';
 
   @override
-  String get sampleObjectTrailMarker => ' 发现偏离路径的轨迹标记';
+  String get sampleObjectTrailMarker => ' 在小径旁发现路径标记';
 
   @override
   String get sampleMsgAllTeamsCheckIn => '所有队伍签到';
 
   @override
-  String get sampleMsgWeatherUpdate => '天气更新：晴朗，气温18°C';
+  String get sampleMsgWeatherUpdate => '天气更新：晴朗，气温 18°C';
 
   @override
-  String get sampleMsgBaseCamp => '基地营已在集结区建立';
+  String get sampleMsgBaseCamp => '大本营已在集结点建立';
 
   @override
-  String get sampleMsgTeamAlpha => 'A队正在向2号区域移动';
+  String get sampleMsgTeamAlpha => '队伍正在向第二区移动';
 
   @override
   String get sampleMsgRadioCheck => '无线电检查 - 所有电台回应';
 
   @override
-  String get sampleMsgWaterSupply => '3号检查点有水源';
+  String get sampleMsgWaterSupply => '3 号检查点有水源';
 
   @override
-  String get sampleMsgTeamBravo => 'B队报告：1号区域已搜索完毕';
+  String get sampleMsgTeamBravo => '队伍报告：第一区已搜索完毕';
 
   @override
-  String get sampleMsgEtaRallyPoint => '预计到达集合点时间：15分钟';
+  String get sampleMsgEtaRallyPoint => '预计到达集合点时间：15 分钟';
 
   @override
-  String get sampleMsgSupplyDrop => '物资空投已确认于14:00进行';
+  String get sampleMsgSupplyDrop => '已确认 14：00 空投物资';
 
   @override
   String get sampleMsgDroneSurvey => '无人机勘察完成 - 无发现';
 
   @override
-  String get sampleMsgTeamCharlie => 'C队请求支援';
+  String get sampleMsgTeamCharlie => '队伍请求支援';
 
   @override
   String get sampleMsgRadioDiscipline => '所有单位：保持无线电纪律';
 
   @override
-  String get sampleMsgUrgentMedical => '紧急：4号区域需要医疗援助';
+  String get sampleMsgUrgentMedical => '紧急：第四区需要医疗援助';
 
   @override
   String get sampleMsgAdultMale => ' 成年男性，意识清醒';
 
   @override
-  String get sampleMsgFireSpotted => '发现火点 - 坐标即将发送';
+  String get sampleMsgFireSpotted => '发现火情 - 坐标稍后';
 
   @override
   String get sampleMsgSpreadingRapidly => ' 正在快速蔓延！';
 
   @override
-  String get sampleMsgPriorityHelicopter => '优先：需要直升机支援';
+  String get sampleMsgPriorityHelicopter => '优先级：需要直升机支援';
 
   @override
   String get sampleMsgMedicalTeamEnRoute => '医疗队正在前往您的位置';
 
   @override
-  String get sampleMsgEvacHelicopter => '救援直升机预计10分钟到达';
+  String get sampleMsgEvacHelicopter => '疏散直升机预计 10 分钟到达';
 
   @override
-  String get sampleMsgEmergencyResolved => '紧急情况解除 - 警报解除';
+  String get sampleMsgEmergencyResolved => '紧急情况已解决 - 解除警报';
 
   @override
-  String get sampleMsgEmergencyStagingArea => ' 紧急集结区';
+  String get sampleMsgEmergencyStagingArea => ' 紧急集结点';
 
   @override
-  String get sampleMsgEmergencyServices => '已通知应急服务，正在响应';
+  String get sampleMsgEmergencyServices => '已通知急救服务，正在响应';
 
   @override
   String get sampleAlphaTeamLead => '队长';
@@ -1834,10 +1839,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sampleDeltaNavigator => '导航员';
 
   @override
-  String get sampleEchoSupport => '支援人员';
+  String get sampleEchoSupport => '支援';
 
   @override
-  String get sampleBaseCommand => '基地指挥';
+  String get sampleBaseCommand => '基地指挥部';
 
   @override
   String get sampleFieldCoordinator => '现场协调员';
@@ -1849,7 +1854,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mapDrawing => '地图绘图';
 
   @override
-  String get navigateToDrawing => '导航至绘图';
+  String get navigateToDrawing => '导航到绘图';
 
   @override
   String get copyCoordinates => '复制坐标';
@@ -1879,13 +1884,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get longitudeLabel => '经度';
 
   @override
-  String get invalidLatitude => '无效纬度（-90 到 90）';
+  String get invalidLatitude => '无效的纬度（-90 到 90）';
 
   @override
-  String get invalidLongitude => '无效经度（-180 到 180）';
+  String get invalidLongitude => '无效的经度（-180 到 180）';
 
   @override
-  String get exampleCoordinates => '示例: 46.0569, 14.5058';
+  String get exampleCoordinates => '例如：46.0569, 14.5058';
 
   @override
   String get drawingShared => '地图绘图';
@@ -1898,25 +1903,25 @@ class AppLocalizationsZh extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count 个已分享过',
-      one: '1 个已分享过',
+      other: '$count 个已共享',
+      one: '1 个已共享',
     );
     return '$_temp0';
   }
 
   @override
   String newDrawingsShared(int count, String plural) {
-    return '已分享 $count 个新绘图$plural';
+    return '已共享 $count 个新绘图';
   }
 
   @override
-  String get shareDrawing => '分享绘图';
+  String get shareDrawing => '共享绘图';
 
   @override
-  String get shareWithAllNearbyDevices => '与附近所有设备分享';
+  String get shareWithAllNearbyDevices => '与所有附近设备共享';
 
   @override
-  String get shareToRoom => '分享到房间';
+  String get shareToRoom => '共享到房间';
 
   @override
   String get sendToPersistentStorage => '发送到持久房间存储';
@@ -1933,7 +1938,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get shared => '已分享';
+  String get shared => '已共享';
 
   @override
   String get line => '线条';
@@ -1945,10 +1950,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateAvailable => '有可用更新';
 
   @override
-  String get currentVersion => '当前';
+  String get currentVersion => '当前版本';
 
   @override
-  String get latestVersion => '最新';
+  String get latestVersion => '最新版本';
 
   @override
   String get downloadUpdate => '下载';
@@ -1957,13 +1962,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateLater => '稍后';
 
   @override
-  String get cadastralParcels => '地籍地块';
+  String get cadastralParcels => '地籍宗地';
 
   @override
   String get forestRoads => '森林道路';
 
   @override
-  String get showCadastralParcels => '显示地籍地块';
+  String get showCadastralParcels => '显示地籍宗地';
 
   @override
   String get showForestRoads => '显示森林道路';
@@ -1972,7 +1977,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get wmsOverlays => 'WMS 叠加层';
 
   @override
-  String get hikingTrails => '徒步路线';
+  String get hikingTrails => '徒步小径';
 
   @override
   String get mainRoads => '主要道路';
@@ -1984,19 +1989,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get fireHazardZones => '火灾危险区';
 
   @override
-  String get historicalFires => '历史火灾点';
+  String get historicalFires => '历史火灾';
 
   @override
   String get firebreaks => '防火隔离带';
 
   @override
-  String get krasFireZones => 'Kras 火灾区域';
+  String get krasFireZones => '喀斯特火灾区';
 
   @override
   String get placeNames => '地名';
 
   @override
-  String get municipalityBorders => '市政边界';
+  String get municipalityBorders => '市镇边界';
 
   @override
   String get topographicMap => '地形图 1:25000';
@@ -2011,7 +2016,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get channelName => '频道名称';
 
   @override
-  String get channelNameHint => '例如: 救援队阿尔法';
+  String get channelNameHint => '例如：救援队阿尔法';
 
   @override
   String get channelSecret => '频道密钥';
@@ -2023,32 +2028,33 @@ class AppLocalizationsZh extends AppLocalizations {
   String get channelSecretHelp => '此密钥必须与需要访问此频道的所有团队成员共享';
 
   @override
-  String get channelTypesInfo => '哈希频道（#team）：密钥根据名称自动生成。相同的名称 = 跨设备相同的频道。\n\n私有频道：使用显式密钥。只有知道密钥的人才能加入。';
+  String get channelTypesInfo =>
+      '哈希频道（#团队）：密钥根据名称自动生成。相同名称 = 跨设备相同频道。\n\n私有频道：使用明确的密钥。只有拥有密钥的人才能加入。';
 
   @override
-  String get hashChannelInfo => '哈希频道：密钥将根据频道名称自动生成。任何使用相同名称的人都会加入同一个频道。';
+  String get hashChannelInfo => '哈希频道：密钥将从频道名称自动生成。任何使用相同名称的人都会加入同一个频道。';
 
   @override
-  String get channelNameRequired => '需要频道名称';
+  String get channelNameRequired => '频道名称是必填项';
 
   @override
-  String get channelNameTooLong => '频道名称不得超过31个字符';
+  String get channelNameTooLong => '频道名称不能超过 31 个字符';
 
   @override
-  String get channelSecretRequired => '需要频道密钥';
+  String get channelSecretRequired => '频道密钥是必填项';
 
   @override
-  String get channelSecretTooLong => '频道密钥不得超过32个字符';
+  String get channelSecretTooLong => '频道密钥不能超过 32 个字符';
 
   @override
-  String get invalidAsciiCharacters => '只允许使用ASCII字符';
+  String get invalidAsciiCharacters => '只允许使用 ASCII 字符';
 
   @override
   String get channelCreatedSuccessfully => '频道创建成功';
 
   @override
   String channelCreationFailed(String error) {
-    return '创建频道失败: $error';
+    return '创建频道失败：$error';
   }
 
   @override
@@ -2056,7 +2062,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String deleteChannelConfirmation(String channelName) {
-    return '确定要删除频道 \"$channelName\" 吗？此操作无法撤销。';
+    return '确定要删除频道“$channelName”吗？此操作无法撤销。';
   }
 
   @override
@@ -2064,11 +2070,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String channelDeletionFailed(String error) {
-    return '删除频道失败: $error';
+    return '删除频道失败：$error';
   }
 
   @override
-  String get allChannelSlotsInUse => '所有频道槽位都已在使用中（最多39个自定义频道）';
+  String get allChannelSlotsInUse => '所有频道槽位已满（最多 39 个自定义频道）';
 
   @override
   String get createChannel => '创建频道';
@@ -2089,13 +2095,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get wizardWelcomeTitle => '欢迎使用 MeshCore 搜救';
 
   @override
-  String get wizardWelcomeDescription => '一款用于搜救行动的强大离网通信工具。当传统网络不可用时，使用网状无线电技术与您的团队连接。';
+  String get wizardWelcomeDescription =>
+      '一个强大的离网通信工具，专为搜索和救援行动设计。当传统网络不可用时，使用网状无线电技术与您的团队连接。';
 
   @override
   String get wizardConnectingTitle => '连接到您的无线电';
 
   @override
-  String get wizardConnectingDescription => '通过蓝牙将您的智能手机连接到 MeshCore 无线电设备，开始离网通信。';
+  String get wizardConnectingDescription =>
+      '通过蓝牙将您的智能手机连接到 MeshCore 无线电设备，开始离网通信。';
 
   @override
   String get wizardConnectingFeature1 => '扫描附近的 MeshCore 设备';
@@ -2110,61 +2118,62 @@ class AppLocalizationsZh extends AppLocalizations {
   String get wizardSimpleModeTitle => '简洁模式';
 
   @override
-  String get wizardSimpleModeDescription => '初次接触网状网络？启用简洁模式，界面仅包含基本功能，更易于上手。';
+  String get wizardSimpleModeDescription => '刚接触网状网络？启用简洁模式以获得仅包含基本功能的简化界面。';
 
   @override
-  String get wizardSimpleModeFeature1 => '面向初学者的界面，包含核心功能';
+  String get wizardSimpleModeFeature1 => '初学者友好的界面，包含核心功能';
 
   @override
-  String get wizardSimpleModeFeature2 => '可随时在设置中切换回高级模式';
+  String get wizardSimpleModeFeature2 => '随时在设置中切换到高级模式';
 
   @override
   String get wizardChannelTitle => '频道';
 
   @override
-  String get wizardChannelDescription => '向频道内的所有人广播消息，非常适合团队通告和协调。';
+  String get wizardChannelDescription => '向频道上的所有人广播消息，非常适合团队范围内的公告和协调。';
 
   @override
-  String get wizardChannelFeature1 => '用于团队通用通信的公共频道';
+  String get wizardChannelFeature1 => '用于一般团队沟通的公共频道';
 
   @override
-  String get wizardChannelFeature2 => '为特定小组创建自定义频道';
+  String get wizardChannelFeature2 => '为特定群组创建自定义频道';
 
   @override
-  String get wizardChannelFeature3 => '消息由网状网络自动转发';
+  String get wizardChannelFeature3 => '消息由网格自动转发';
 
   @override
   String get wizardContactsTitle => '联系人';
 
   @override
-  String get wizardContactsDescription => '当您的团队成员加入网状网络时，他们会自动出现。您可以向他们发送私信或查看他们的位置。';
+  String get wizardContactsDescription =>
+      '您的团队成员在加入网格网络时会自动出现。向他们发送直连消息或查看他们的位置。';
 
   @override
-  String get wizardContactsFeature1 => '联系人自动被发现';
+  String get wizardContactsFeature1 => '联系人自动发现';
 
   @override
-  String get wizardContactsFeature2 => '发送私信';
+  String get wizardContactsFeature2 => '发送私人直连消息';
 
   @override
-  String get wizardContactsFeature3 => '查看电量和最后在线时间';
+  String get wizardContactsFeature3 => '查看电池电量和最后在线时间';
 
   @override
   String get wizardMapTitle => '地图与位置';
 
   @override
-  String get wizardMapDescription => '实时跟踪您的团队，并为搜救行动标记重要位置。';
+  String get wizardMapDescription => '实时跟踪您的团队，并为搜索和救援行动标记重要位置。';
 
   @override
-  String get wizardMapFeature1 => '用于发现受困者、火点和集结区的搜救标记';
+  String get wizardMapFeature1 => '用于找到人员、火情和集结点的搜救标记';
 
   @override
   String get wizardMapFeature2 => '团队成员的实时 GPS 跟踪';
 
   @override
-  String get wizardMapFeature3 => '为偏远地区下载离线地图';
+  String get wizardMapFeature3 => '下载偏远地区的离线地图';
 
   @override
-  String get wizardMapFeature4 => '绘制形状并分享战术信息';
+  String get wizardMapFeature4 => '绘制形状并共享战术信息';
 
   @override
   String get viewWelcomeTutorial => '查看欢迎教程';
@@ -2174,7 +2183,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String directMessagesInfo(int count) {
-    return '带确认的私信。发送给 $count 名团队成员。';
+    return '带有确认的直连消息。发送给 $count 个团队成员。';
   }
 
   @override
@@ -2207,10 +2216,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get expectedAckTag => '预期确认标签';
 
   @override
-  String get roundTrip => '往返时间';
+  String get roundTrip => '往返';
 
   @override
-  String get retryAttempt => '重试次数';
+  String get retryAttempt => '重试尝试';
 
   @override
   String get floodFallback => '泛洪回退';
@@ -2219,25 +2228,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get identity => '身份';
 
   @override
-  String get messageId => '消息ID';
+  String get messageId => '消息 ID';
 
   @override
-  String get sender => '发送者';
+  String get sender => '发件人';
 
   @override
-  String get senderKey => '发送者密钥';
+  String get senderKey => '发件人密钥';
 
   @override
-  String get recipient => '接收者';
+  String get recipient => '收件人';
 
   @override
-  String get recipientKey => '接收者密钥';
+  String get recipientKey => '收件人密钥';
 
   @override
   String get voice => '语音';
 
   @override
-  String get voiceId => '语音ID';
+  String get voiceId => '语音 ID';
 
   @override
   String get envelope => '信封';
@@ -2249,13 +2258,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get complete => '完成';
 
   @override
-  String get rawDump => '原始数据';
+  String get rawDump => '原始数据转储';
 
   @override
-  String get cannotRetryMissingRecipient => '无法重试：缺少接收者信息';
+  String get cannotRetryMissingRecipient => '无法重试：缺少收件人信息';
 
   @override
-  String get voiceUnavailable => '当前语音功能不可用';
+  String get voiceUnavailable => '语音目前不可用';
 
   @override
   String get requestingVoice => '正在请求语音';

@@ -535,10 +535,12 @@ class _MessagesTabState extends State<MessagesTab> {
       final isChannel =
           _destinationType ==
           MessageDestinationPreferences.destinationTypeChannel;
+      final channelIdx = isChannel ? (_selectedRecipient?.publicKey[1] ?? 0) : null;
+      final recipient = _selectedRecipient;
       final placeholder = Message(
         id: msgId,
         messageType: isChannel ? MessageType.channel : MessageType.contact,
-        channelIdx: isChannel ? 0 : null,
+        channelIdx: channelIdx,
         senderPublicKeyPrefix: deviceKey.sublist(0, 6),
         pathLen: 0,
         textType: MessageTextType.plain,
@@ -546,30 +548,37 @@ class _MessagesTabState extends State<MessagesTab> {
         text: envelope.encode(),
         receivedAt: DateTime.now(),
         deliveryStatus: MessageDeliveryStatus.sending,
+        recipientPublicKey: isChannel ? null : recipient?.publicKey,
       );
       messagesProvider.addSentMessage(placeholder);
 
       // Send IE1 envelope via normal message path.
       final envelopeText = envelope.encode();
-      if (_destinationType ==
-          MessageDestinationPreferences.destinationTypeChannel) {
+
+      if (isChannel) {
         await connectionProvider.sendChannelMessage(
-          channelIdx: 0,
+          channelIdx: channelIdx ?? 0,
           text: envelopeText,
           messageId: msgId,
         );
-      } else if (_selectedRecipient != null) {
+      } else if (recipient != null) {
         final sent = await connectionProvider.sendTextMessage(
-          contactPublicKey: _selectedRecipient!.publicKey,
+          contactPublicKey: recipient.publicKey,
           text: envelopeText,
           messageId: msgId,
-          contact: _selectedRecipient!,
+          contact: recipient,
         );
         if (!sent) {
           messagesProvider.markMessageFailed(msgId);
           if (!mounted) return;
           ToastLogger.error(context, 'Failed to announce image');
+          return;
         }
+      } else {
+        messagesProvider.markMessageFailed(msgId);
+        if (!mounted) return;
+        ToastLogger.error(context, 'No recipient selected');
+        return;
       }
 
       debugPrint(
@@ -577,6 +586,22 @@ class _MessagesTabState extends State<MessagesTab> {
         '${fragments.length} fragments, ${compressed.length}B, '
         'chunk=${imageDataBytesPerFragment}B',
       );
+
+      // Push all fragments immediately for direct contacts.
+      // For channels, fragments are served on demand via IR1 fetch requests.
+      if (!isChannel && recipient != null) {
+        // Small delay so the IE1 envelope can propagate before fragments arrive.
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+        final served = await imageProvider.serveSessionTo(
+          sessionId: sessionId,
+          requester: recipient,
+        );
+        debugPrint(
+          '📷 [Image] Pushed ${ served ? fragments.length : 0} '
+          'fragments to ${recipient.advName}',
+        );
+      }
     } catch (e, st) {
       debugPrint('❌ [Image] _pickAndSendImage: $e\n$st');
       if (!mounted) return;
@@ -755,9 +780,11 @@ class _MessagesTabState extends State<MessagesTab> {
     final isChannel =
         _destinationType ==
         MessageDestinationPreferences.destinationTypeChannel;
+    final recipient = _selectedRecipient;
+    final channelIdx = isChannel ? (recipient?.publicKey[1] ?? 0) : null;
     final sentMsg = Message(
       id: msgId,
-      messageType: (!isChannel && _selectedRecipient != null)
+      messageType: (!isChannel && recipient != null)
           ? MessageType.contact
           : MessageType.channel,
       senderPublicKeyPrefix: senderPublicKeyPrefix,
@@ -769,8 +796,8 @@ class _MessagesTabState extends State<MessagesTab> {
       deliveryStatus: MessageDeliveryStatus.sent,
       isVoice: true,
       voiceId: sessionId,
-      channelIdx: isChannel ? (_selectedRecipient?.publicKey[1] ?? 0) : null,
-      recipientPublicKey: _selectedRecipient?.publicKey,
+      channelIdx: channelIdx,
+      recipientPublicKey: isChannel ? null : recipient?.publicKey,
     );
     messagesProvider.addSentMessage(sentMsg);
 
@@ -834,30 +861,27 @@ class _MessagesTabState extends State<MessagesTab> {
 
     try {
       if (isChannel) {
-        final channelIdx = _selectedRecipient?.publicKey[1] ?? 0;
         await connectionProvider.sendChannelMessage(
-          channelIdx: channelIdx,
+          channelIdx: channelIdx ?? 0,
           text: envelopeText,
           messageId: msgId,
         );
-      } else if (_selectedRecipient != null) {
+      } else if (recipient != null) {
         final sentSuccessfully = await connectionProvider.sendTextMessage(
-          contactPublicKey: _selectedRecipient!.publicKey,
+          contactPublicKey: recipient.publicKey,
           text: envelopeText,
           messageId: msgId,
-          contact: _selectedRecipient,
+          contact: recipient,
         );
         if (!sentSuccessfully) {
           messagesProvider.markMessageFailed(msgId);
           return;
         }
       } else {
-        // Fallback to public channel if destination cannot be resolved.
-        await connectionProvider.sendChannelMessage(
-          channelIdx: 0,
-          text: envelopeText,
-          messageId: msgId,
-        );
+        messagesProvider.markMessageFailed(msgId);
+        if (!mounted) return;
+        ToastLogger.error(context, 'No recipient selected');
+        return;
       }
     } catch (e, st) {
       debugPrint('❌ [Voice] envelope send error: $e\n$st');
