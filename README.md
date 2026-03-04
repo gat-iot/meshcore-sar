@@ -26,14 +26,7 @@ It uses the MeshCore protocol over LoRa for long-range, infrastructure-free comm
 
 ## Demo Video
 
-<<<<<<< Updated upstream
-[<img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/13ccacee-7306-4976-a408-f31f3336828a" />](https://youtu.be/rLsKeLJBpFg)
-
-
-Watch on YouTube: https://youtu.be/rLsKeLJBpFg
-=======
-[Watch the MeshCore SAR demo on YouTube](https://youtu.be/rLsKeLJBpFg)
->>>>>>> Stashed changes
+[<img width="1280" height="720" alt="MeshCore SAR demo preview" src="https://github.com/user-attachments/assets/13ccacee-7306-4976-a408-f31f3336828a" />](https://youtu.be/rLsKeLJBpFg)
 
 ## Screenshots
 
