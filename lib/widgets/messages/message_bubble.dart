@@ -58,10 +58,17 @@ class MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<MessageBubble> {
   bool _isExpanded = false;
+  bool _showReceivedStats = false;
 
   @override
   void didUpdateWidget(MessageBubble oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.id != widget.message.id) {
+      _isExpanded = false;
+      _showReceivedStats = false;
+      return;
+    }
+
     // Force rebuild when message properties change (especially recipient statuses)
     if (oldWidget.message.id == widget.message.id) {
       // Same message, but properties might have changed
@@ -75,6 +82,15 @@ class _MessageBubbleState extends State<MessageBubble> {
     setState(() {
       _isExpanded = !_isExpanded;
     });
+  }
+
+  void _handleBubbleTap({required bool isSarMarker, required bool isDrawing}) {
+    if (!widget.isCompact && !isSarMarker && !isDrawing) {
+      setState(() {
+        _showReceivedStats = !_showReceivedStats;
+      });
+    }
+    widget.onTap?.call();
   }
 
   Future<void> _retryFailedMessage(
@@ -437,8 +453,8 @@ class _MessageBubbleState extends State<MessageBubble> {
     final snrDb =
         matchedRxLog?.logRxDataInfo?.snrDb ??
         (widget.message.lastEchoSnrRaw != null
-        ? (widget.message.lastEchoSnrRaw!.toSigned(8) / 4.0)
-        : null);
+            ? (widget.message.lastEchoSnrRaw!.toSigned(8) / 4.0)
+            : null);
     final rssiDbm =
         matchedRxLog?.logRxDataInfo?.rssiDbm ?? widget.message.lastEchoRssiDbm;
 
@@ -604,291 +620,305 @@ class _MessageBubbleState extends State<MessageBubble> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _techBadge(
-                      context,
-                      icon: Icons.message,
-                      label: widget.message.messageType.name.toUpperCase(),
-                    ),
-                    _techBadge(
-                      context,
-                      icon: Icons.route,
-                      label:
-                          '${widget.message.pathLen} hop${widget.message.pathLen == 1 ? '' : 's'}',
-                    ),
-                    _techBadge(
-                      context,
-                      icon: Icons.account_tree_outlined,
-                      label:
-                          '${widget.message.echoCount} node${widget.message.echoCount == 1 ? '' : 's'}',
-                    ),
-                    if (widget.message.channelIdx != null)
-                      _techBadge(
-                        context,
-                        icon: Icons.group_work,
-                        label: 'CH ${widget.message.channelIdx}',
-                      ),
-                  ],
-                ),
-                if (widget.message.lastEchoRssiDbm != null ||
-                    snrDb != null ||
-                    rssiDbm != null) ...[
-                  const SizedBox(height: 12),
-                  _techSection(
-                    context,
-                    icon: Icons.network_check,
-                    title: l10n.linkQuality,
-                    child: Column(
-                      children: [
-                        if (rssiDbm != null)
-                          _signalRow(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _techBadge(
                             context,
-                            label: 'RSSI',
-                            valueLabel: '$rssiDbm dBm',
-                            normalized:
-                                ((rssiDbm.toDouble() +
-                                            120.0) /
-                                        70.0)
-                                    .clamp(0.0, 1.0),
-                            color: rssiDbm >= -80
-                                ? Colors.green
-                                : rssiDbm >= -95
-                                ? Colors.amber
-                                : Colors.redAccent,
+                            icon: Icons.message,
+                            label: widget.message.messageType.name
+                                .toUpperCase(),
                           ),
-                        if (snrDb != null) ...[
-                          const SizedBox(height: 8),
-                          _signalRow(
+                          _techBadge(
                             context,
-                            label: 'SNR',
-                            valueLabel: '${snrDb.toStringAsFixed(1)} dB',
-                            normalized: ((snrDb + 20.0) / 40.0).clamp(0.0, 1.0),
-                            color: snrDb >= 10
-                                ? Colors.green
-                                : snrDb >= 0
-                                ? Colors.amber
-                                : Colors.redAccent,
+                            icon: Icons.route,
+                            label:
+                                '${widget.message.pathLen} hop${widget.message.pathLen == 1 ? '' : 's'}',
+                          ),
+                          _techBadge(
+                            context,
+                            icon: Icons.account_tree_outlined,
+                            label:
+                                '${widget.message.echoCount} node${widget.message.echoCount == 1 ? '' : 's'}',
+                          ),
+                          if (widget.message.channelIdx != null)
+                            _techBadge(
+                              context,
+                              icon: Icons.group_work,
+                              label: 'CH ${widget.message.channelIdx}',
+                            ),
+                        ],
+                      ),
+                      if (widget.message.lastEchoRssiDbm != null ||
+                          snrDb != null ||
+                          rssiDbm != null) ...[
+                        const SizedBox(height: 12),
+                        _techSection(
+                          context,
+                          icon: Icons.network_check,
+                          title: l10n.linkQuality,
+                          child: Column(
+                            children: [
+                              if (rssiDbm != null)
+                                _signalRow(
+                                  context,
+                                  label: 'RSSI',
+                                  valueLabel: '$rssiDbm dBm',
+                                  normalized:
+                                      ((rssiDbm.toDouble() + 120.0) / 70.0)
+                                          .clamp(0.0, 1.0),
+                                  color: rssiDbm >= -80
+                                      ? Colors.green
+                                      : rssiDbm >= -95
+                                      ? Colors.amber
+                                      : Colors.redAccent,
+                                ),
+                              if (snrDb != null) ...[
+                                const SizedBox(height: 8),
+                                _signalRow(
+                                  context,
+                                  label: 'SNR',
+                                  valueLabel: '${snrDb.toStringAsFixed(1)} dB',
+                                  normalized: ((snrDb + 20.0) / 40.0).clamp(
+                                    0.0,
+                                    1.0,
+                                  ),
+                                  color: snrDb >= 10
+                                      ? Colors.green
+                                      : snrDb >= 0
+                                      ? Colors.amber
+                                      : Colors.redAccent,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      _techSection(
+                        context,
+                        icon: Icons.tune,
+                        title: l10n.delivery,
+                        child: Column(
+                          children: [
+                            _detailRow(
+                              context,
+                              label: l10n.status,
+                              value: widget.message.deliveryStatus.name,
+                            ),
+                            if (widget.message.expectedAckTag != null)
+                              _detailRow(
+                                context,
+                                label: l10n.expectedAckTag,
+                                value: widget.message.expectedAckTag!
+                                    .toString(),
+                              ),
+                            if (widget.message.roundTripTimeMs != null)
+                              _detailRow(
+                                context,
+                                label: l10n.roundTrip,
+                                value: '${widget.message.roundTripTimeMs} ms',
+                              ),
+                            if (widget.message.retryAttempt > 0)
+                              _detailRow(
+                                context,
+                                label: l10n.retryAttempt,
+                                value: widget.message.retryAttempt.toString(),
+                              ),
+                            if (widget.message.usedFloodFallback)
+                              _detailRow(
+                                context,
+                                label: l10n.floodFallback,
+                                value: l10n.yes,
+                              ),
+                            if (packetPathHex != null)
+                              _detailRow(
+                                context,
+                                label: 'Path bytes',
+                                value: packetPathHex,
+                                onCopy: () => copyField(packetPathHex),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _techSection(
+                        context,
+                        icon: Icons.badge,
+                        title: l10n.identity,
+                        child: Column(
+                          children: [
+                            _detailRow(
+                              context,
+                              label: l10n.messageId,
+                              value: widget.message.id,
+                              onCopy: () => copyField(widget.message.id),
+                            ),
+                            _detailRow(
+                              context,
+                              label: l10n.sender,
+                              value:
+                                  senderName ??
+                                  widget.message.senderName ??
+                                  'Unknown',
+                            ),
+                            if (senderPrefixHex != null)
+                              _detailRow(
+                                context,
+                                label: l10n.senderKey,
+                                value: senderPrefixHex,
+                                onCopy: () => copyField(senderPrefixHex),
+                              ),
+                            if (recipientName != null)
+                              _detailRow(
+                                context,
+                                label: l10n.recipient,
+                                value: recipientName,
+                              ),
+                            if (recipientPrefixHex != null)
+                              _detailRow(
+                                context,
+                                label: l10n.recipientKey,
+                                value: recipientPrefixHex,
+                                onCopy: () => copyField(recipientPrefixHex),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (widget.message.isVoice) ...[
+                        const SizedBox(height: 12),
+                        _techSection(
+                          context,
+                          icon: Icons.graphic_eq,
+                          title: l10n.voice,
+                          child: Column(
+                            children: [
+                              _detailRow(
+                                context,
+                                label: l10n.voiceId,
+                                value: widget.message.voiceId ?? '-',
+                              ),
+                              _detailRow(
+                                context,
+                                label: l10n.envelope,
+                                value: envelope != null
+                                    ? 'VE1 compact'
+                                    : legacyVoicePacket != null
+                                    ? 'Legacy V packet'
+                                    : l10n.unknown,
+                              ),
+                              if (voiceSession != null)
+                                _detailRow(
+                                  context,
+                                  label: l10n.sessionProgress,
+                                  value:
+                                      '${voiceSession.receivedCount}/${voiceSession.total} segments',
+                                ),
+                              if (voiceSession != null)
+                                _detailRow(
+                                  context,
+                                  label: l10n.complete,
+                                  value: voiceSession.isComplete
+                                      ? l10n.yes
+                                      : l10n.no,
+                                ),
+                              if (voiceTxEstimate > Duration.zero)
+                                _detailRow(
+                                  context,
+                                  label: 'Estimated tx',
+                                  value: voiceTxEstimate.inSeconds < 60
+                                      ? '~${voiceTxEstimate.inSeconds}s'
+                                      : '~${voiceTxEstimate.inMinutes}m ${voiceTxEstimate.inSeconds % 60}s',
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      if (imageEnvelope != null) ...[
+                        const SizedBox(height: 12),
+                        _techSection(
+                          context,
+                          icon: Icons.image_outlined,
+                          title: 'Image',
+                          child: Column(
+                            children: [
+                              _detailRow(
+                                context,
+                                label: l10n.envelope,
+                                value: 'IE1',
+                              ),
+                              _detailRow(
+                                context,
+                                label: 'Format',
+                                value: imageEnvelope.format.label,
+                              ),
+                              _detailRow(
+                                context,
+                                label: 'Dimensions',
+                                value:
+                                    '${imageEnvelope.width}×${imageEnvelope.height}',
+                              ),
+                              _detailRow(
+                                context,
+                                label: 'Segments',
+                                value: imageSession != null
+                                    ? '${imageSession.receivedCount}/${imageSession.total}'
+                                    : '${imageEnvelope.total}',
+                              ),
+                              if (imageSession != null)
+                                _detailRow(
+                                  context,
+                                  label: l10n.complete,
+                                  value: imageSession.isComplete
+                                      ? l10n.yes
+                                      : l10n.no,
+                                ),
+                              if (imageTxEstimate > Duration.zero)
+                                _detailRow(
+                                  context,
+                                  label: 'Estimated tx',
+                                  value: imageTxEstimate.inSeconds < 60
+                                      ? '~${imageTxEstimate.inSeconds}s'
+                                      : '~${imageTxEstimate.inMinutes}m ${imageTxEstimate.inSeconds % 60}s',
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        title: Text(
+                          l10n.rawDump,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: SelectableText(
+                              rawLines.join('\n'),
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 12,
+                              ),
+                            ),
                           ),
                         ],
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                _techSection(
-                  context,
-                  icon: Icons.tune,
-                  title: l10n.delivery,
-                  child: Column(
-                    children: [
-                      _detailRow(
-                        context,
-                        label: l10n.status,
-                        value: widget.message.deliveryStatus.name,
                       ),
-                      if (widget.message.expectedAckTag != null)
-                        _detailRow(
-                          context,
-                          label: l10n.expectedAckTag,
-                          value: widget.message.expectedAckTag!.toString(),
-                        ),
-                      if (widget.message.roundTripTimeMs != null)
-                        _detailRow(
-                          context,
-                          label: l10n.roundTrip,
-                          value: '${widget.message.roundTripTimeMs} ms',
-                        ),
-                      if (widget.message.retryAttempt > 0)
-                        _detailRow(
-                          context,
-                          label: l10n.retryAttempt,
-                          value: widget.message.retryAttempt.toString(),
-                        ),
-                      if (widget.message.usedFloodFallback)
-                        _detailRow(
-                          context,
-                          label: l10n.floodFallback,
-                          value: l10n.yes,
-                        ),
-                      if (packetPathHex != null)
-                        _detailRow(
-                          context,
-                          label: 'Path bytes',
-                          value: packetPathHex,
-                          onCopy: () => copyField(packetPathHex),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _techSection(
-                  context,
-                  icon: Icons.badge,
-                  title: l10n.identity,
-                  child: Column(
-                    children: [
-                      _detailRow(
-                        context,
-                        label: l10n.messageId,
-                        value: widget.message.id,
-                        onCopy: () => copyField(widget.message.id),
-                      ),
-                      _detailRow(
-                        context,
-                        label: l10n.sender,
-                        value: senderName ?? widget.message.senderName ?? 'Unknown',
-                      ),
-                      if (senderPrefixHex != null)
-                        _detailRow(
-                          context,
-                          label: l10n.senderKey,
-                          value: senderPrefixHex,
-                          onCopy: () => copyField(senderPrefixHex),
-                        ),
-                      if (recipientName != null)
-                        _detailRow(
-                          context,
-                          label: l10n.recipient,
-                          value: recipientName,
-                        ),
-                      if (recipientPrefixHex != null)
-                        _detailRow(
-                          context,
-                          label: l10n.recipientKey,
-                          value: recipientPrefixHex,
-                          onCopy: () => copyField(recipientPrefixHex),
-                        ),
-                    ],
-                  ),
-                ),
-                if (widget.message.isVoice) ...[
-                  const SizedBox(height: 12),
-                  _techSection(
-                    context,
-                    icon: Icons.graphic_eq,
-                    title: l10n.voice,
-                    child: Column(
-                      children: [
-                        _detailRow(
-                          context,
-                          label: l10n.voiceId,
-                          value: widget.message.voiceId ?? '-',
-                        ),
-                        _detailRow(
-                          context,
-                          label: l10n.envelope,
-                          value: envelope != null
-                              ? 'VE1 compact'
-                              : legacyVoicePacket != null
-                              ? 'Legacy V packet'
-                              : l10n.unknown,
-                        ),
-                        if (voiceSession != null)
-                          _detailRow(
-                            context,
-                            label: l10n.sessionProgress,
-                            value:
-                                '${voiceSession.receivedCount}/${voiceSession.total} segments',
-                          ),
-                        if (voiceSession != null)
-                          _detailRow(
-                            context,
-                            label: l10n.complete,
-                            value: voiceSession.isComplete ? l10n.yes : l10n.no,
-                          ),
-                        if (voiceTxEstimate > Duration.zero)
-                          _detailRow(
-                            context,
-                            label: 'Estimated tx',
-                            value: voiceTxEstimate.inSeconds < 60
-                                ? '~${voiceTxEstimate.inSeconds}s'
-                                : '~${voiceTxEstimate.inMinutes}m ${voiceTxEstimate.inSeconds % 60}s',
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-                if (imageEnvelope != null) ...[
-                  const SizedBox(height: 12),
-                  _techSection(
-                    context,
-                    icon: Icons.image_outlined,
-                    title: 'Image',
-                    child: Column(
-                      children: [
-                        _detailRow(context, label: l10n.envelope, value: 'IE1'),
-                        _detailRow(
-                          context,
-                          label: 'Format',
-                          value: imageEnvelope.format.label,
-                        ),
-                        _detailRow(
-                          context,
-                          label: 'Dimensions',
-                          value:
-                              '${imageEnvelope.width}×${imageEnvelope.height}',
-                        ),
-                        _detailRow(
-                          context,
-                          label: 'Segments',
-                          value: imageSession != null
-                              ? '${imageSession.receivedCount}/${imageSession.total}'
-                              : '${imageEnvelope.total}',
-                        ),
-                        if (imageSession != null)
-                          _detailRow(
-                            context,
-                            label: l10n.complete,
-                            value: imageSession.isComplete ? l10n.yes : l10n.no,
-                          ),
-                        if (imageTxEstimate > Duration.zero)
-                          _detailRow(
-                            context,
-                            label: 'Estimated tx',
-                            value: imageTxEstimate.inSeconds < 60
-                                ? '~${imageTxEstimate.inSeconds}s'
-                                : '~${imageTxEstimate.inMinutes}m ${imageTxEstimate.inSeconds % 60}s',
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                ExpansionTile(
-                  tilePadding: EdgeInsets.zero,
-                  dense: true,
-                  visualDensity: VisualDensity.compact,
-                  title: Text(
-                    l10n.rawDump,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest
-                            .withValues(alpha: 0.35),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: SelectableText(
-                        rawLines.join('\n'),
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
                     ],
                   ),
                 ),
@@ -1043,7 +1073,10 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
-  BlePacketLog? _findBestMatchingRxLog(List<BlePacketLog> logs, Message message) {
+  BlePacketLog? _findBestMatchingRxLog(
+    List<BlePacketLog> logs,
+    Message message,
+  ) {
     if (message.pathLen < 0 || message.pathLen >= 255) return null;
     final expectedPayloadType = message.messageType == MessageType.channel
         ? 0x05
@@ -1465,6 +1498,55 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
+  Widget _buildReceivedSignalStatus(
+    BuildContext context,
+    Message message, {
+    required int? rssiDbm,
+    required double? snrDb,
+  }) {
+    final hopLabel = message.pathLen == 0
+        ? 'Direct'
+        : '${message.pathLen} hop${message.pathLen == 1 ? '' : 's'}';
+
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _techChip(
+          context,
+          icon: Icons.alt_route,
+          label: hopLabel,
+          color: Colors.indigo,
+        ),
+        if (rssiDbm != null || snrDb != null) ...[
+          _techChip(
+            context,
+            icon: Icons.bolt,
+            label: _linkQualityLabel(rssiDbm, snrDb),
+            color: _linkQualityColor(_linkQualityLabel(rssiDbm, snrDb)),
+          ),
+          if (rssiDbm != null)
+            _signalCapsule(
+              context,
+              icon: Icons.network_cell,
+              label: '$rssiDbm',
+              filled: _rssiScore(rssiDbm),
+              color: Colors.blueGrey,
+            ),
+          if (snrDb != null)
+            _signalCapsule(
+              context,
+              icon: Icons.graphic_eq,
+              label: snrDb.toStringAsFixed(1),
+              filled: _snrScore(snrDb),
+              color: Colors.teal,
+            ),
+        ],
+      ],
+    );
+  }
+
   Widget _techChip(
     BuildContext context, {
     required IconData icon,
@@ -1585,6 +1667,19 @@ class _MessageBubbleState extends State<MessageBubble> {
     final selfPublicKey = connectionProvider.deviceInfo.publicKey;
     final isOwnMessage =
         message.isSentMessage || message.isFromSelf(selfPublicKey);
+    final matchedRxLog = !isOwnMessage
+        ? _findBestMatchingRxLog(
+            connectionProvider.bleService.packetLogs,
+            message,
+          )
+        : null;
+    final snrDb =
+        matchedRxLog?.logRxDataInfo?.snrDb ??
+        (message.lastEchoSnrRaw != null
+            ? (message.lastEchoSnrRaw!.toSigned(8) / 4.0)
+            : null);
+    final rssiDbm =
+        matchedRxLog?.logRxDataInfo?.rssiDbm ?? message.lastEchoRssiDbm;
 
     // Look up contact information for rich display name
     final contactsProvider = context.read<ContactsProvider>();
@@ -1660,7 +1755,10 @@ class _MessageBubbleState extends State<MessageBubble> {
         : recipientDisplayName;
 
     return GestureDetector(
-      onTap: widget.onTap,
+      onTap: () => _handleBubbleTap(
+        isSarMarker: isSarMarker,
+        isDrawing: message.isDrawing,
+      ),
       onLongPress: widget.isCompact ? null : () => _showMessageOptions(context),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
@@ -2064,6 +2162,19 @@ class _MessageBubbleState extends State<MessageBubble> {
             // Regular message content
             else if (!message.isDrawing || widget.isCompact)
               Text(message.text, style: Theme.of(context).textTheme.bodyMedium),
+
+            if (!widget.isCompact &&
+                !isSarMarker &&
+                !message.isDrawing &&
+                _showReceivedStats) ...[
+              const SizedBox(height: 6),
+              _buildReceivedSignalStatus(
+                context,
+                message,
+                rssiDbm: rssiDbm,
+                snrDb: snrDb,
+              ),
+            ],
 
             // Delivery status for sent messages (skip in compact mode)
             if (message.isSentMessage && !widget.isCompact) ...[
