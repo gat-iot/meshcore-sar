@@ -47,12 +47,16 @@ class _ConnectionDialogState extends State<ConnectionDialog>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
 
-    // Start BLE scan by default
-    final connectionProvider = Provider.of<ConnectionProvider>(
-      context,
-      listen: false,
-    );
-    connectionProvider.startScan();
+    // Defer scan startup until after the first frame so Provider listeners
+    // are not notified while this dialog is still being built.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final connectionProvider = Provider.of<ConnectionProvider>(
+        context,
+        listen: false,
+      );
+      connectionProvider.startScan();
+    });
 
     // Set up network scanner callbacks
     _networkScanner.onServerDiscovered = (server) {
