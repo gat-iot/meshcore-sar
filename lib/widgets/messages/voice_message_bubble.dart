@@ -102,6 +102,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
           radioCr: radioCr,
         );
         final txEstimateLabel = _formatTransmitEstimate(txEstimate);
+        final eta = voiceProvider.estimateRemainingTransferTime(voiceId);
 
         return Row(
           mainAxisSize: MainAxisSize.min,
@@ -175,6 +176,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                     requestingLabel: AppLocalizations.of(
                       context,
                     )!.requestingVoice,
+                    eta: eta,
                   ),
                   style: TextStyle(
                     fontSize: 11,
@@ -378,11 +380,12 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     required bool isRequesting,
     required String? errorText,
     required String requestingLabel,
+    required Duration? eta,
   }) {
     if (errorText != null) return errorText;
     final progress = total > 0 ? ' ($received/$total)' : '';
     if (isRequesting) {
-      return '$requestingLabel$progress · $txEstimateLabel';
+      return '$requestingLabel$progress · ${_formatEta(eta)} · $txEstimateLabel';
     }
     if (!isComplete && total > 0) {
       return '🎙️ $durationLabel · $modeLabel$progress · $txEstimateLabel';
@@ -461,6 +464,14 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     final minutes = value.inMinutes;
     final seconds = value.inSeconds % 60;
     return '~${minutes}m ${seconds}s tx';
+  }
+
+  static String _formatEta(Duration? eta) {
+    if (eta == null || eta <= Duration.zero) return 'ETA --';
+    if (eta.inSeconds < 60) return 'ETA ~${eta.inSeconds}s';
+    final minutes = eta.inMinutes;
+    final seconds = eta.inSeconds % 60;
+    return 'ETA ~${minutes}m ${seconds}s';
   }
 }
 

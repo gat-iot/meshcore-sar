@@ -13,6 +13,8 @@ class VoiceSession {
   final VoicePacketMode mode;
   final int total;
   final List<VoicePacket?> packets; // indexed by packet.index
+  DateTime? firstPacketAt;
+  DateTime? lastPacketAt;
 
   VoiceSession({
     required this.sessionId,
@@ -22,6 +24,19 @@ class VoiceSession {
 
   int get receivedCount => packets.where((p) => p != null).length;
   bool get isComplete => receivedCount == total;
+
+  Duration? estimateRemaining() {
+    if (isComplete) return Duration.zero;
+    if (firstPacketAt == null || lastPacketAt == null) return null;
+    if (receivedCount < 2) return null;
+
+    final elapsedMs = lastPacketAt!.difference(firstPacketAt!).inMilliseconds;
+    if (elapsedMs <= 0) return null;
+    final avgMsPerPacket = elapsedMs / (receivedCount - 1);
+    final remaining = total - receivedCount;
+    if (remaining <= 0) return Duration.zero;
+    return Duration(milliseconds: (avgMsPerPacket * remaining).round());
+  }
 
   /// Total estimated audio duration in seconds (sum of all received packets).
   double get estimatedDurationSeconds {
@@ -93,6 +108,8 @@ class VoiceProvider with ChangeNotifier {
 
   bool hasOutgoingSession(String sessionId) =>
       _outgoingSessions.containsKey(sessionId);
+  Duration? estimateRemainingTransferTime(String sessionId) =>
+      _sessions[sessionId]?.estimateRemaining();
 
   List<int> missingPacketIndices(String sessionId) {
     final session = _sessions[sessionId];
@@ -120,7 +137,13 @@ class VoiceProvider with ChangeNotifier {
 
     final session = _sessions[packet.sessionId]!;
     if (packet.index < session.total) {
+      final wasMissing = session.packets[packet.index] == null;
       session.packets[packet.index] = packet;
+      if (wasMissing) {
+        final now = DateTime.now();
+        session.firstPacketAt ??= now;
+        session.lastPacketAt = now;
+      }
     }
 
     final justComplete = session.isComplete;

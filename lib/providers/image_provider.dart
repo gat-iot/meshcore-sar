@@ -13,6 +13,8 @@ class ImageSession {
   final int width;
   final int height;
   final List<ImagePacket?> fragments; // indexed by fragment.index
+  DateTime? firstFragmentAt;
+  DateTime? lastFragmentAt;
 
   ImageSession({
     required this.sessionId,
@@ -24,6 +26,21 @@ class ImageSession {
 
   int get receivedCount => fragments.where((f) => f != null).length;
   bool get isComplete => receivedCount == total;
+
+  Duration? estimateRemaining() {
+    if (isComplete) return Duration.zero;
+    if (firstFragmentAt == null || lastFragmentAt == null) return null;
+    if (receivedCount < 2) return null;
+
+    final elapsedMs = lastFragmentAt!
+        .difference(firstFragmentAt!)
+        .inMilliseconds;
+    if (elapsedMs <= 0) return null;
+    final avgMsPerFragment = elapsedMs / (receivedCount - 1);
+    final remaining = total - receivedCount;
+    if (remaining <= 0) return Duration.zero;
+    return Duration(milliseconds: (avgMsPerFragment * remaining).round());
+  }
 
   /// Reassemble the complete image bytes, or null if any fragment is missing.
   Uint8List? get imageBytes => reassembleImage(fragments);
@@ -62,6 +79,8 @@ class ImageProvider with ChangeNotifier {
   bool isComplete(String sessionId) =>
       _sessions[sessionId]?.isComplete ?? false;
   bool hasOutgoing(String sessionId) => _outgoing.containsKey(sessionId);
+  Duration? estimateRemainingTransferTime(String sessionId) =>
+      _sessions[sessionId]?.estimateRemaining();
 
   List<int> missingFragmentIndices(String sessionId) {
     final session = _sessions[sessionId];
@@ -94,7 +113,13 @@ class ImageProvider with ChangeNotifier {
 
     final session = _sessions[fragment.sessionId]!;
     if (fragment.index < session.total) {
+      final wasMissing = session.fragments[fragment.index] == null;
       session.fragments[fragment.index] = fragment;
+      if (wasMissing) {
+        final now = DateTime.now();
+        session.firstFragmentAt ??= now;
+        session.lastFragmentAt = now;
+      }
     }
 
     final justComplete = session.isComplete;

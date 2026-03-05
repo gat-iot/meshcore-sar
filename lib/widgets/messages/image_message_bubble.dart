@@ -60,6 +60,9 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
       builder: (context, imageProvider, _) {
         final session = imageProvider.session(envelope.sessionId);
         final isComplete = imageProvider.isComplete(envelope.sessionId);
+        final eta = imageProvider.estimateRemainingTransferTime(
+          envelope.sessionId,
+        );
 
         if (_isRequesting && isComplete) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -112,6 +115,7 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
                     radioCr: radioCr,
                     error: _errorText,
                     isSentByMe: widget.isSentByMe,
+                    eta: eta,
                   ),
                   style: TextStyle(
                     fontSize: 11,
@@ -374,6 +378,7 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
     required int? radioCr,
     required String? error,
     required bool isSentByMe,
+    required Duration? eta,
   }) {
     final txEstimate = estimateImageTransmitDuration(
       fragmentCount: envelope.total,
@@ -386,7 +391,10 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
     final txEstimateLabel = _formatTransmitEstimate(txEstimate);
 
     if (error != null) return error;
-    if (isRequesting) return '📥 Loading… $received/$total · $txEstimateLabel';
+    if (isRequesting) {
+      final etaLabel = _formatEta(eta);
+      return '📥 Loading… $received/$total · $etaLabel · $txEstimateLabel';
+    }
     if (isComplete) {
       final base =
           '🖼️ ${envelope.width}×${envelope.height} ${envelope.format.label}';
@@ -402,6 +410,14 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
     final minutes = value.inMinutes;
     final seconds = value.inSeconds % 60;
     return '~${minutes}m ${seconds}s tx';
+  }
+
+  static String _formatEta(Duration? eta) {
+    if (eta == null || eta <= Duration.zero) return 'ETA --';
+    if (eta.inSeconds < 60) return 'ETA ~${eta.inSeconds}s';
+    final minutes = eta.inMinutes;
+    final seconds = eta.inSeconds % 60;
+    return 'ETA ~${minutes}m ${seconds}s';
   }
 
   void _showFullScreen(BuildContext context, Uint8List imageBytes) {
