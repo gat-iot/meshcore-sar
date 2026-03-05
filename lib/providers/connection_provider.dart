@@ -65,8 +65,8 @@ class ConnectionProvider with ChangeNotifier {
   /// Active service — BLE or TCP depending on current mode
   MeshCoreServiceBase get _activeService =>
       (_connectionMode == ConnectionMode.tcp && _tcpService != null)
-          ? _tcpService!
-          : _bleService;
+      ? _tcpService!
+      : _bleService;
 
   /// Current connection mode
   ConnectionMode _connectionMode = ConnectionMode.ble;
@@ -117,6 +117,8 @@ class ConnectionProvider with ChangeNotifier {
   bool _noMoreMessages = false;
   // Prevent overlapping/too-frequent sync requests
   bool _isSyncingMessages = false;
+  // If MSG_WAITING arrives while a sync loop is active, queue one more pass.
+  bool _syncRequestedWhileBusy = false;
   DateTime? _lastSyncNextRequestedAt;
   static const Duration _minSyncNextInterval = Duration(milliseconds: 150);
 
@@ -310,7 +312,14 @@ class ConnectionProvider with ChangeNotifier {
 
     service.onMessageWaiting = () {
       debugPrint('📥 [Provider] MSG_WAITING - auto-syncing');
-      syncAllMessages();
+      if (_isSyncingMessages) {
+        _syncRequestedWhileBusy = true;
+        debugPrint(
+          '  ↪️ [Provider] Sync already running; queued follow-up sync',
+        );
+        return;
+      }
+      unawaited(syncAllMessages());
     };
 
     service.onLoginSuccess =
@@ -558,7 +567,9 @@ class ConnectionProvider with ChangeNotifier {
 
     final success = await _tcpService!.connect(host, port);
     if (!success) {
-      _deviceInfo = _deviceInfo.copyWith(connectionState: ConnectionState.error);
+      _deviceInfo = _deviceInfo.copyWith(
+        connectionState: ConnectionState.error,
+      );
       notifyListeners();
     }
     return success;
@@ -1169,7 +1180,10 @@ class ConnectionProvider with ChangeNotifier {
       debugPrint('  Text: $text');
       debugPrint('  MessageID: $messageId');
 
-      await _activeService.sendChannelMessage(channelIdx: channelIdx, text: text);
+      await _activeService.sendChannelMessage(
+        channelIdx: channelIdx,
+        text: text,
+      );
 
       debugPrint('✅ [ConnectionProvider] BLE send completed');
       debugPrint(
@@ -1655,6 +1669,7 @@ class ConnectionProvider with ChangeNotifier {
   Future<int> syncAllMessages() async {
     if (_isSyncingMessages) {
       // Already syncing; avoid overlapping loops
+      _syncRequestedWhileBusy = true;
       return 0;
     }
 
@@ -1664,83 +1679,94 @@ class ConnectionProvider with ChangeNotifier {
       return 0;
     }
 
-    int count = 0;
-    _noMoreMessages = false; // Reset flag
+    int totalCount = 0;
 
     try {
       _isSyncingMessages = true;
-      debugPrint('🔄 [Provider] Starting message sync loop...');
-      debugPrint('  Initial _noMoreMessages state: $_noMoreMessages');
+      do {
+        _syncRequestedWhileBusy = false;
+        _noMoreMessages = false; // Reset flag per pass
+        int passCount = 0;
+        debugPrint('🔄 [Provider] Starting message sync loop...');
+        debugPrint('  Initial _noMoreMessages state: $_noMoreMessages');
 
-      // Keep syncing until we get NoMoreMessages response
-      // The device will send ContactMsgRecv or ChannelMsgRecv responses
-      // until it sends NoMoreMessages
-      for (int i = 0; i < 100; i++) {
-        // Safety limit
-        // Check flag BEFORE sending (not after)
-        if (_noMoreMessages) {
+        // Keep syncing until we get NoMoreMessages response
+        // The device will send ContactMsgRecv or ChannelMsgRecv responses
+        // until it sends NoMoreMessages
+        for (int i = 0; i < 100; i++) {
+          // Safety limit
+          // Check flag BEFORE sending (not after)
+          if (_noMoreMessages) {
+            debugPrint(
+              '✅ [Provider] Message sync complete - NoMoreMessages flag set after $passCount requests',
+            );
+            break;
+          }
+
           debugPrint(
-            '✅ [Provider] Message sync complete - NoMoreMessages flag set after $count requests',
+            '📤 [Provider] Sync iteration ${i + 1}: Sending CMD_SYNC_NEXT_MESSAGE',
           );
-          break;
-        }
 
-        debugPrint(
-          '📤 [Provider] Sync iteration ${i + 1}: Sending CMD_SYNC_NEXT_MESSAGE',
-        );
+          // Create new completer for this request
+          _syncResponseCompleter = Completer<bool>();
 
-        // Create new completer for this request
-        _syncResponseCompleter = Completer<bool>();
+          // Respect the minimum interval between requests
+          final now = DateTime.now();
+          if (_lastSyncNextRequestedAt != null) {
+            final elapsed = now.difference(_lastSyncNextRequestedAt!);
+            if (elapsed < _minSyncNextInterval) {
+              final remaining = _minSyncNextInterval - elapsed;
+              await Future.delayed(remaining);
+            }
+          }
 
-        // Respect the minimum interval between requests
-        final now = DateTime.now();
-        if (_lastSyncNextRequestedAt != null) {
-          final elapsed = now.difference(_lastSyncNextRequestedAt!);
-          if (elapsed < _minSyncNextInterval) {
-            final remaining = _minSyncNextInterval - elapsed;
-            await Future.delayed(remaining);
+          await _activeService.syncNextMessage();
+          _lastSyncNextRequestedAt = DateTime.now();
+          passCount++;
+          totalCount++;
+
+          // Wait for response (true = message received, false = no more messages)
+          // Timeout after 2 seconds to prevent hanging
+          final hasMore = await _syncResponseCompleter!.future.timeout(
+            const Duration(seconds: 2),
+            onTimeout: () {
+              debugPrint('⚠️ [Provider] Sync timeout - no response after 2s');
+              return false;
+            },
+          );
+
+          debugPrint(
+            '  After iteration ${i + 1}: hasMore=$hasMore, _noMoreMessages=$_noMoreMessages',
+          );
+
+          if (!hasMore) {
+            debugPrint('  ✅ No more messages available, stopping sync');
+            break;
           }
         }
 
-        await _activeService.syncNextMessage();
-        _lastSyncNextRequestedAt = DateTime.now();
-        count++;
-
-        // Wait for response (true = message received, false = no more messages)
-        // Timeout after 2 seconds to prevent hanging
-        final hasMore = await _syncResponseCompleter!.future.timeout(
-          const Duration(seconds: 2),
-          onTimeout: () {
-            debugPrint('⚠️ [Provider] Sync timeout - no response after 2s');
-            return false;
-          },
-        );
-
-        debugPrint(
-          '  After iteration ${i + 1}: hasMore=$hasMore, _noMoreMessages=$_noMoreMessages',
-        );
-
-        if (!hasMore) {
-          debugPrint('  ✅ No more messages available, stopping sync');
-          break;
+        if (!_noMoreMessages && passCount >= 100) {
+          debugPrint(
+            '⚠️ [Provider] Message sync stopped - reached safety limit of 100 requests without NoMoreMessages',
+          );
         }
-      }
 
-      if (!_noMoreMessages && count >= 100) {
-        debugPrint(
-          '⚠️ [Provider] Message sync stopped - reached safety limit of 100 requests without NoMoreMessages',
-        );
-      }
+        if (_syncRequestedWhileBusy) {
+          debugPrint(
+            '↻ [Provider] MSG_WAITING received during sync; running another pass',
+          );
+        }
+      } while (_syncRequestedWhileBusy && _activeService.isConnected);
 
       debugPrint(
-        '🏁 [Provider] Message sync finished: sent $count sync requests, _noMoreMessages=$_noMoreMessages',
+        '🏁 [Provider] Message sync finished: sent $totalCount sync requests, _noMoreMessages=$_noMoreMessages',
       );
-      return count;
+      return totalCount;
     } catch (e) {
       debugPrint('❌ [Provider] Failed to sync messages: $e');
       _error = 'Failed to sync messages: $e';
       notifyListeners();
-      return count;
+      return totalCount;
     } finally {
       _isSyncingMessages = false;
       _syncResponseCompleter = null;

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/contact.dart';
+import 'helpers/raw_session_retransmit.dart';
 import '../utils/voice_message_parser.dart';
 import '../services/voice_codec_service.dart';
 import '../services/voice_player_service.dart';
@@ -181,56 +182,18 @@ class VoiceProvider with ChangeNotifier {
       );
       return false;
     }
-    if (sendRawPacketCallback == null) {
-      debugPrint('⚠️ [VoiceProvider] sendRawPacketCallback is not set');
-      return false;
-    }
-    if (requester.outPathLen < 0) {
-      debugPrint(
-        '⚠️ [VoiceProvider] Requester ${requester.advName} has no direct path',
-      );
-      return false;
-    }
-    if (requester.outPathLen > maxDirectPayloadHops) {
-      debugPrint(
-        '⚠️ [VoiceProvider] Requester ${requester.advName} is too far: ${requester.outPathLen} hops (max $maxDirectPayloadHops)',
-      );
-      return false;
-    }
-
-    for (final packet in cached.packets) {
-      if (requestedIndices != null &&
-          !requestedIndices.contains(packet.index)) {
-        continue;
-      }
-      try {
-        final ackFuture = waitForFragmentAckCallback?.call(
-          sessionId: sessionId,
-          index: packet.index,
-          timeout: const Duration(seconds: 8),
-        );
-        await sendRawPacketCallback!(
-          contactPath: requester.outPath,
-          contactPathLen: requester.outPathLen,
-          payload: packet.encodeBinary(),
-        );
-        if (ackFuture != null) {
-          final acked = await ackFuture;
-          if (!acked) {
-            debugPrint(
-              '⚠️ [VoiceProvider] ACK timeout for $sessionId#${packet.index}',
-            );
-            return false;
-          }
-        }
-      } catch (e, st) {
-        debugPrint(
-          '❌ [VoiceProvider] Failed serving packet for $sessionId: $e\n$st',
-        );
-        return false;
-      }
-    }
-    return true;
+    return serveCachedSessionFragments<VoicePacket>(
+      providerLabel: 'VoiceProvider',
+      sessionId: sessionId,
+      requester: requester,
+      fragments: cached.packets,
+      maxDirectPayloadHops: maxDirectPayloadHops,
+      indexOf: (packet) => packet.index,
+      encodeBinary: (packet) => packet.encodeBinary(),
+      sendRawPacket: sendRawPacketCallback,
+      waitForFragmentAck: waitForFragmentAckCallback,
+      requestedIndices: requestedIndices,
+    );
   }
 
   // ── Playback ─────────────────────────────────────────────────────────────

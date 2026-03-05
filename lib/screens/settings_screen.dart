@@ -727,6 +727,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
           ),
+          Consumer<AppProvider>(
+            builder: (context, appProvider, child) => SwitchListTile(
+              secondary: const Icon(Icons.contacts_outlined),
+              title: const Text('Disable Contacts'),
+              subtitle: const Text(
+                'Hide the contacts tab to simplify navigation',
+              ),
+              value: !appProvider.isContactsEnabled,
+              onChanged: (value) async {
+                await appProvider.toggleContactsEnabled(!value);
+              },
+            ),
+          ),
           ListTile(
             leading: const Icon(Icons.language),
             title: Text(AppLocalizations.of(context)!.language),

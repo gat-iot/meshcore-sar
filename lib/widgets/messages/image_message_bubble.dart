@@ -59,6 +59,11 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
     return Consumer<ip.ImageProvider>(
       builder: (context, imageProvider, _) {
         final session = imageProvider.session(envelope.sessionId);
+        final sender = _resolveSender(envelope);
+        final effectivePathLen =
+            sender != null && sender.outPathLen >= 0
+            ? sender.outPathLen
+            : widget.message.pathLen;
         final isComplete = imageProvider.isComplete(envelope.sessionId);
         final eta = imageProvider.estimateRemainingTransferTime(
           envelope.sessionId,
@@ -98,6 +103,7 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
                     radioBw: radioBw,
                     radioSf: radioSf,
                     radioCr: radioCr,
+                    pathLen: effectivePathLen,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -109,13 +115,13 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
                     received: received,
                     total: total,
                     envelope: envelope,
-                    pathLen: widget.message.pathLen,
                     radioBw: radioBw,
                     radioSf: radioSf,
                     radioCr: radioCr,
                     error: _errorText,
                     isSentByMe: widget.isSentByMe,
                     eta: eta,
+                    pathLen: effectivePathLen,
                   ),
                   style: TextStyle(
                     fontSize: 11,
@@ -143,6 +149,7 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
     required int? radioBw,
     required int? radioSf,
     required int? radioCr,
+    required int pathLen,
   }) {
     if (isComplete && imageBytes != null) {
       return AspectRatio(
@@ -184,7 +191,7 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
                   radioBw: radioBw,
                   radioSf: radioSf,
                   radioCr: radioCr,
-                  pathLen: widget.message.pathLen,
+                  pathLen: pathLen,
                 ),
                 icon: const Icon(Icons.download_rounded, size: 40),
                 color: Colors.white70,
@@ -298,12 +305,13 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
     if (!mounted) return;
 
     // Timeout = 2× estimated LoRa airtime (min 30s).
+    final effectivePathLen = sender.outPathLen >= 0 ? sender.outPathLen : pathLen;
     final txEstimate = estimateImageTransmitDuration(
       fragmentCount: missing.isEmpty ? envelope.total : missing.length,
       sizeBytes: missing.isEmpty
           ? envelope.sizeBytes
           : (envelope.sizeBytes * missing.length / envelope.total).round(),
-      pathLen: pathLen,
+      pathLen: effectivePathLen,
       radioBw: radioBw,
       radioSf: radioSf,
       radioCr: radioCr,
@@ -334,6 +342,19 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
       envelope.senderKey6,
     );
     if (contact != null) return contact;
+
+    // For sent direct messages, fetch must target the recipient peer.
+    final recipientKey = widget.message.recipientPublicKey;
+    if (widget.isSentByMe && recipientKey != null && recipientKey.isNotEmpty) {
+      final byKey = contactsProvider.findContactByKey(recipientKey);
+      if (byKey != null) return byKey;
+      if (recipientKey.length >= 6) {
+        final byPrefix = contactsProvider.findContactByPrefix(
+          Uint8List.fromList(recipientKey.sublist(0, 6)),
+        );
+        if (byPrefix != null) return byPrefix;
+      }
+    }
 
     final senderName = widget.message.senderName?.trim();
     if (senderName != null && senderName.isNotEmpty) {

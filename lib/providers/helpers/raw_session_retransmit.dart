@@ -1,0 +1,102 @@
+import 'package:flutter/foundation.dart';
+
+import '../../models/contact.dart';
+
+typedef RawPacketSender =
+    Future<void> Function({
+      required Uint8List contactPath,
+      required int contactPathLen,
+      required Uint8List payload,
+    });
+
+typedef FragmentAckWaiter =
+    Future<bool> Function({
+      required String sessionId,
+      required int index,
+      Duration timeout,
+    });
+
+Future<bool> serveCachedSessionFragments<T>({
+  required String providerLabel,
+  required String sessionId,
+  required Contact requester,
+  required List<T> fragments,
+  required int maxDirectPayloadHops,
+  required int Function(T fragment) indexOf,
+  required Uint8List Function(T fragment) encodeBinary,
+  required RawPacketSender? sendRawPacket,
+  FragmentAckWaiter? waitForFragmentAck,
+  Set<int>? requestedIndices,
+  Duration ackTimeout = const Duration(seconds: 8),
+}) async {
+  if (fragments.isEmpty) {
+    debugPrint('⚠️ [$providerLabel] No cached fragments for $sessionId');
+    return false;
+  }
+  if (sendRawPacket == null) {
+    debugPrint('⚠️ [$providerLabel] sendRawPacketCallback not set');
+    return false;
+  }
+  if (requester.outPathLen < 0) {
+    debugPrint('⚠️ [$providerLabel] ${requester.advName} has no direct path');
+    return false;
+  }
+  if (requester.outPathLen > maxDirectPayloadHops) {
+    debugPrint(
+      '⚠️ [$providerLabel] ${requester.advName} is too far: ${requester.outPathLen} hops (max $maxDirectPayloadHops)',
+    );
+    return false;
+  }
+  if (requester.outPath.isEmpty) {
+    debugPrint(
+      '⚠️ [$providerLabel] ${requester.advName} has empty outPath payload',
+    );
+    return false;
+  }
+
+  var servedCount = 0;
+  for (final fragment in fragments) {
+    final index = indexOf(fragment);
+    if (index < 0) {
+      debugPrint('⚠️ [$providerLabel] Invalid fragment index $index');
+      continue;
+    }
+    if (requestedIndices != null && !requestedIndices.contains(index)) {
+      continue;
+    }
+    try {
+      final ackFuture = waitForFragmentAck?.call(
+        sessionId: sessionId,
+        index: index,
+        timeout: ackTimeout,
+      );
+      await sendRawPacket(
+        contactPath: requester.outPath,
+        contactPathLen: requester.outPathLen,
+        payload: encodeBinary(fragment),
+      );
+      servedCount++;
+      if (ackFuture != null) {
+        final acked = await ackFuture;
+        if (!acked) {
+          debugPrint('⚠️ [$providerLabel] ACK timeout for $sessionId#$index');
+          return false;
+        }
+      }
+    } catch (e, st) {
+      debugPrint(
+        '❌ [$providerLabel] Serve error for $sessionId#$index: $e\n$st',
+      );
+      return false;
+    }
+  }
+
+  if (servedCount == 0) {
+    debugPrint(
+      '⚠️ [$providerLabel] No fragments matched request for $sessionId',
+    );
+    return false;
+  }
+  debugPrint('✅ [$providerLabel] Served $servedCount fragments for $sessionId');
+  return true;
+}

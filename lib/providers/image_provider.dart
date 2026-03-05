@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/contact.dart';
+import 'helpers/raw_session_retransmit.dart';
 import '../utils/image_message_parser.dart';
 
 /// Reassembly state for one incoming image session.
@@ -137,19 +138,8 @@ class ImageProvider with ChangeNotifier {
   /// Register envelope metadata for a session (called when IE1 is received
   /// before any binary fragments arrive).
   void registerEnvelope(ImageEnvelope envelope) {
-    _sessions.putIfAbsent(
-      envelope.sessionId,
-      () => ImageSession(
-        sessionId: envelope.sessionId,
-        format: envelope.format,
-        total: envelope.total,
-        width: envelope.width,
-        height: envelope.height,
-      ),
-    );
-    // Update dimensions if we created the session from a fragment (w/h = 0).
-    final session = _sessions[envelope.sessionId]!;
-    if (session.width == 0 || session.height == 0) {
+    final existing = _sessions[envelope.sessionId];
+    if (existing == null) {
       _sessions[envelope.sessionId] = ImageSession(
         sessionId: envelope.sessionId,
         format: envelope.format,
@@ -157,12 +147,38 @@ class ImageProvider with ChangeNotifier {
         width: envelope.width,
         height: envelope.height,
       );
-      // Copy existing fragments into the new session.
-      final old = _sessions[envelope.sessionId]!;
-      for (var i = 0; i < session.fragments.length && i < old.total; i++) {
-        old.fragments[i] = session.fragments[i];
+      unawaited(_persist());
+      notifyListeners();
+      return;
+    }
+
+    final needsMerge =
+        existing.width == 0 ||
+        existing.height == 0 ||
+        existing.total != envelope.total ||
+        existing.format != envelope.format;
+    if (!needsMerge) {
+      notifyListeners();
+      return;
+    }
+
+    final merged = ImageSession(
+      sessionId: envelope.sessionId,
+      format: envelope.format,
+      total: envelope.total,
+      width: envelope.width,
+      height: envelope.height,
+    );
+    merged.firstFragmentAt = existing.firstFragmentAt;
+    merged.lastFragmentAt = existing.lastFragmentAt;
+    for (final fragment in existing.fragments) {
+      if (fragment == null) continue;
+      if (fragment.index < merged.total) {
+        merged.fragments[fragment.index] = fragment;
       }
     }
+    _sessions[envelope.sessionId] = merged;
+    unawaited(_persist());
     notifyListeners();
   }
 
@@ -214,55 +230,18 @@ class ImageProvider with ChangeNotifier {
       debugPrint('⚠️ [ImageProvider] No cached session for $sessionId');
       return false;
     }
-    if (sendRawPacketCallback == null) {
-      debugPrint('⚠️ [ImageProvider] sendRawPacketCallback not set');
-      return false;
-    }
-    if (requester.outPathLen < 0) {
-      debugPrint('⚠️ [ImageProvider] ${requester.advName} has no direct path');
-      return false;
-    }
-    if (requester.outPathLen > maxDirectPayloadHops) {
-      debugPrint(
-        '⚠️ [ImageProvider] ${requester.advName} is too far: ${requester.outPathLen} hops (max $maxDirectPayloadHops)',
-      );
-      return false;
-    }
-
-    for (final fragment in cached.fragments) {
-      if (requestedIndices != null &&
-          !requestedIndices.contains(fragment.index)) {
-        continue;
-      }
-      try {
-        final ackFuture = waitForFragmentAckCallback?.call(
-          sessionId: sessionId,
-          index: fragment.index,
-          timeout: const Duration(seconds: 8),
-        );
-        await sendRawPacketCallback!(
-          contactPath: requester.outPath,
-          contactPathLen: requester.outPathLen,
-          payload: fragment.encodeBinary(),
-        );
-        if (ackFuture != null) {
-          final acked = await ackFuture;
-          if (!acked) {
-            debugPrint(
-              '⚠️ [ImageProvider] ACK timeout for $sessionId#${fragment.index}',
-            );
-            return false;
-          }
-        }
-      } catch (e, st) {
-        debugPrint('❌ [ImageProvider] Serve error for $sessionId: $e\n$st');
-        return false;
-      }
-    }
-    debugPrint(
-      '📷 [ImageProvider] Served ${cached.fragments.length} fragments of $sessionId',
+    return serveCachedSessionFragments<ImagePacket>(
+      providerLabel: 'ImageProvider',
+      sessionId: sessionId,
+      requester: requester,
+      fragments: cached.fragments,
+      maxDirectPayloadHops: maxDirectPayloadHops,
+      indexOf: (fragment) => fragment.index,
+      encodeBinary: (fragment) => fragment.encodeBinary(),
+      sendRawPacket: sendRawPacketCallback,
+      waitForFragmentAck: waitForFragmentAckCallback,
+      requestedIndices: requestedIndices,
     );
-    return true;
   }
 
   // ── Persistence ──────────────────────────────────────────────────────────

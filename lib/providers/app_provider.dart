@@ -42,6 +42,8 @@ class AppProvider with ChangeNotifier {
 
   bool _isMapEnabled = true;
   bool get isMapEnabled => _isMapEnabled;
+  bool _isContactsEnabled = true;
+  bool get isContactsEnabled => _isContactsEnabled;
 
   bool _isVoiceSilenceTrimmingEnabled = true;
   bool get isVoiceSilenceTrimmingEnabled => _isVoiceSilenceTrimmingEnabled;
@@ -81,6 +83,7 @@ class AppProvider with ChangeNotifier {
     _initializeLocationTracking();
     _loadSimpleMode();
     _loadMapEnabled();
+    _loadContactsEnabled();
     _loadVoiceSilenceTrimmingEnabled();
     _loadVoiceBandPassFilterEnabled();
     _loadVoiceCompressorEnabled();
@@ -211,6 +214,29 @@ class AppProvider with ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Error saving map enabled setting: $e');
+    }
+  }
+
+  /// Load contacts enabled setting from shared preferences
+  Future<void> _loadContactsEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _isContactsEnabled = prefs.getBool('contacts_enabled') ?? true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading contacts enabled setting: $e');
+    }
+  }
+
+  /// Toggle contacts tab on/off
+  Future<void> toggleContactsEnabled(bool enabled) async {
+    try {
+      _isContactsEnabled = enabled;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('contacts_enabled', enabled);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error saving contacts enabled setting: $e');
     }
   }
 
@@ -407,24 +433,26 @@ class AppProvider with ChangeNotifier {
             payload: payload,
           );
         };
-    voiceProvider.waitForFragmentAckCallback = ({
-      required sessionId,
-      required index,
-      timeout = const Duration(seconds: 8),
-    }) => _waitForVoiceFragmentAck(
-      sessionId: sessionId,
-      index: index,
-      timeout: timeout,
-    );
-    imageProvider.waitForFragmentAckCallback = ({
-      required sessionId,
-      required index,
-      timeout = const Duration(seconds: 8),
-    }) => _waitForImageFragmentAck(
-      sessionId: sessionId,
-      index: index,
-      timeout: timeout,
-    );
+    voiceProvider.waitForFragmentAckCallback =
+        ({
+          required sessionId,
+          required index,
+          timeout = const Duration(seconds: 8),
+        }) => _waitForVoiceFragmentAck(
+          sessionId: sessionId,
+          index: index,
+          timeout: timeout,
+        );
+    imageProvider.waitForFragmentAckCallback =
+        ({
+          required sessionId,
+          required index,
+          timeout = const Duration(seconds: 8),
+        }) => _waitForImageFragmentAck(
+          sessionId: sessionId,
+          index: index,
+          timeout: timeout,
+        );
 
     // When a contact is received from BLE
     connectionProvider.onContactReceived = (contact) {

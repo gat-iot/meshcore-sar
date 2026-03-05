@@ -57,6 +57,11 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       builder: (context, voiceProvider, _) {
         final session = voiceProvider.session(voiceId);
         final envelope = VoiceEnvelope.tryParseText(widget.message.text);
+        final sender = _resolveSenderContact();
+        final effectivePathLen =
+            sender != null && sender.outPathLen >= 0
+            ? sender.outPathLen
+            : widget.message.pathLen;
         final isPlaying = voiceProvider.isPlaying(voiceId);
         final isComplete = voiceProvider.isComplete(voiceId);
 
@@ -96,7 +101,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
           session: session,
           envelope: envelope,
           messageText: widget.message.text,
-          pathLen: widget.message.pathLen,
+          pathLen: effectivePathLen,
           radioBw: radioBw,
           radioSf: radioSf,
           radioCr: radioCr,
@@ -123,7 +128,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                   radioBw: radioBw,
                   radioSf: radioSf,
                   radioCr: radioCr,
-                  pathLen: widget.message.pathLen,
+                  pathLen: effectivePathLen,
                 );
               },
               borderRadius: BorderRadius.circular(24),
@@ -280,12 +285,13 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     }
 
     // Timeout = 2× estimated LoRa airtime (min 30s).
+    final effectivePathLen = sender.outPathLen >= 0 ? sender.outPathLen : pathLen;
     final txEstimate = envelope != null
         ? estimateVoiceTransmitDuration(
             packetCount: envelope.total,
             mode: envelope.mode,
             durationMs: envelope.durationMs,
-            pathLen: pathLen,
+            pathLen: effectivePathLen,
             radioBw: radioBw,
             radioSf: radioSf,
             radioCr: radioCr,
@@ -327,6 +333,19 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
         envelope.senderKey6,
       );
       if (contact != null) return contact;
+    }
+
+    // For sent direct messages, fetch must target the recipient peer.
+    final recipientKey = widget.message.recipientPublicKey;
+    if (widget.isSentByMe && recipientKey != null && recipientKey.isNotEmpty) {
+      final byKey = contactsProvider.findContactByKey(recipientKey);
+      if (byKey != null) return byKey;
+      if (recipientKey.length >= 6) {
+        final byPrefix = contactsProvider.findContactByPrefix(
+          Uint8List.fromList(recipientKey.sublist(0, 6)),
+        );
+        if (byPrefix != null) return byPrefix;
+      }
     }
 
     final senderName = widget.message.senderName?.trim();

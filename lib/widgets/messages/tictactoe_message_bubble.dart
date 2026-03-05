@@ -22,6 +22,7 @@ class TicTacToeMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final event = TicTacToeMessageParser.tryParse(message.text);
     if (event == null) {
       return const SizedBox.shrink();
@@ -82,6 +83,12 @@ class TicTacToeMessageBubble extends StatelessWidget {
 
     final mySymbol = selfKey6 == state.xPlayerKey6 ? 'X' : 'O';
     final isMyTurn = !state.isFinished && state.nextSymbol == mySymbol;
+    final titleColor = isSentByMe
+        ? colorScheme.onPrimaryContainer
+        : colorScheme.onSurface;
+    final statusColor = isSentByMe
+        ? colorScheme.onPrimaryContainer.withValues(alpha: 0.85)
+        : colorScheme.onSurface.withValues(alpha: 0.85);
 
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 230),
@@ -92,12 +99,16 @@ class TicTacToeMessageBubble extends StatelessWidget {
             'Tic-Tac-Toe · Game ${state.gameId}',
             style: Theme.of(
               context,
-            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
+            ).textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: titleColor,
+            ),
           ),
           const SizedBox(height: 8),
           _BoardGrid(
             board: state.board,
             enabled: isMyTurn,
+            isSentByMe: isSentByMe,
             onTapCell: (idx) => _onCellTap(
               context: context,
               idx: idx,
@@ -110,7 +121,9 @@ class TicTacToeMessageBubble extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             _statusText(state: state, mySymbol: mySymbol),
-            style: Theme.of(context).textTheme.labelSmall,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: statusColor),
           ),
         ],
       ),
@@ -221,16 +234,26 @@ class TicTacToeMessageBubble extends StatelessWidget {
 class _BoardGrid extends StatelessWidget {
   final List<String?> board;
   final bool enabled;
+  final bool isSentByMe;
   final ValueChanged<int> onTapCell;
 
   const _BoardGrid({
     required this.board,
     required this.enabled,
+    required this.isSentByMe,
     required this.onTapCell,
   });
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final cellBackground = isSentByMe
+        ? colorScheme.primaryContainer.withValues(alpha: 0.35)
+        : colorScheme.surface;
+    final cellBorder = isSentByMe
+        ? colorScheme.primary.withValues(alpha: 0.45)
+        : colorScheme.outline.withValues(alpha: 0.35);
+
     return SizedBox(
       width: 180,
       height: 180,
@@ -251,12 +274,18 @@ class _BoardGrid extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                color: cellBackground,
+                border: Border.all(color: cellBorder),
               ),
               child: Text(
                 value ?? '',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w900,
+                  color: value == 'X'
+                      ? colorScheme.primary
+                      : value == 'O'
+                      ? colorScheme.tertiary
+                      : null,
                 ),
               ),
             ),
