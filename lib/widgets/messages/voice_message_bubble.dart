@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../l10n/app_localizations.dart';
-import '../../models/contact.dart';
 import '../../models/message.dart';
 import '../../providers/connection_provider.dart';
 import '../../providers/contacts_provider.dart';
 import '../../providers/voice_provider.dart';
+import '../../utils/transmission_target_resolver.dart';
 import '../../utils/voice_message_parser.dart';
 import 'transfer_timeout.dart';
 
@@ -55,9 +54,17 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
 
     return Consumer<VoiceProvider>(
       builder: (context, voiceProvider, _) {
+        final contactsProvider = context.read<ContactsProvider>();
         final session = voiceProvider.session(voiceId);
         final envelope = VoiceEnvelope.tryParseText(widget.message.text);
-        final sender = _resolveSenderContact();
+        final sender = TransmissionTargetResolver.resolveLocalTarget(
+          contactsProvider: contactsProvider,
+          isSentByMe: widget.isSentByMe,
+          recipientPublicKey: widget.message.recipientPublicKey,
+          senderPublicKeyPrefix: widget.message.senderPublicKeyPrefix,
+          senderKey6FromEnvelope: envelope?.senderKey6,
+          senderName: widget.message.senderName,
+        );
         final effectivePathLen =
             sender != null && sender.outPathLen >= 0
             ? sender.outPathLen
@@ -208,35 +215,42 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   }) async {
     if (_isRequesting) return;
     final connectionProvider = context.read<ConnectionProvider>();
-    var sender = _resolveSenderContact();
-    if (sender == null ||
-        sender.outPathLen < 0 ||
-        sender.outPathLen > _maxFetchHops) {
-      await connectionProvider.getContacts();
-      if (!mounted) return;
-      sender = _resolveSenderContact();
-    }
-    if (sender == null) {
+    final contactsProvider = context.read<ContactsProvider>();
+    final resolution = await TransmissionTargetResolver.resolveFetchTarget(
+      contactsProvider: contactsProvider,
+      refreshContacts: connectionProvider.getContacts,
+      isSentByMe: widget.isSentByMe,
+      recipientPublicKey: widget.message.recipientPublicKey,
+      senderPublicKeyPrefix: widget.message.senderPublicKeyPrefix,
+      senderKey6FromEnvelope: envelope?.senderKey6,
+      senderName: widget.message.senderName,
+      maxFetchHops: _maxFetchHops,
+    );
+    if (!mounted) return;
+
+    if (resolution.failure == TransmissionTargetFailure.unknownContact) {
       await _showBlockingAlert(
         'Cannot fetch voice',
         'Sender contact is unknown. Sync contacts first.',
       );
       return;
     }
-    if (sender.outPathLen < 0) {
+    if (resolution.failure == TransmissionTargetFailure.unknownRoute) {
       await _showBlockingAlert(
         'Cannot fetch voice',
         'Sender route is unknown. Sync contacts/path first.',
       );
       return;
     }
-    if (sender.outPathLen > _maxFetchHops) {
+    if (resolution.failure == TransmissionTargetFailure.tooFar) {
       await _showBlockingAlert(
         'Cannot fetch voice',
-        'Message is too far (${sender.outPathLen} hops, max $_maxFetchHops).',
+        'Message is too far (${resolution.hops} hops, max ${resolution.maxHops}).',
       );
       return;
     }
+
+    final sender = resolution.target!;
     if (sender.outPathLen >= 2) {
       _showToast(
         'Voice fetch over ${sender.outPathLen} hops may take a while.',
@@ -317,50 +331,6 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       _autoPlayWhenReady = false;
       _errorText = AppLocalizations.of(context)!.voiceUnavailable;
     });
-  }
-
-  Contact? _resolveSenderContact() {
-    final contactsProvider = context.read<ContactsProvider>();
-
-    // For sent direct messages, fetch must target the recipient peer first.
-    final recipientKey = widget.message.recipientPublicKey;
-    if (widget.isSentByMe && recipientKey != null && recipientKey.isNotEmpty) {
-      final byKey = contactsProvider.findContactByKey(recipientKey);
-      if (byKey != null) return byKey;
-      if (recipientKey.length >= 6) {
-        final byPrefix = contactsProvider.findContactByPrefix(
-          Uint8List.fromList(recipientKey.sublist(0, 6)),
-        );
-        if (byPrefix != null) return byPrefix;
-      }
-    }
-
-    final senderPrefix = widget.message.senderPublicKeyPrefix;
-    if (senderPrefix != null && senderPrefix.length >= 6) {
-      final contact = contactsProvider.findContactByPrefix(
-        Uint8List.fromList(senderPrefix.sublist(0, 6)),
-      );
-      if (contact != null) return contact;
-    }
-
-    final envelope = VoiceEnvelope.tryParseText(widget.message.text);
-    if (envelope != null) {
-      final contact = contactsProvider.findContactByPrefixHex(
-        envelope.senderKey6,
-      );
-      if (contact != null) return contact;
-    }
-
-    final senderName = widget.message.senderName?.trim();
-    if (senderName != null && senderName.isNotEmpty) {
-      for (final contact in contactsProvider.contacts) {
-        if (contact.advName.trim().toLowerCase() == senderName.toLowerCase()) {
-          return contact;
-        }
-      }
-    }
-
-    return null;
   }
 
   void _showToast(String message) {

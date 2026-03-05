@@ -3,12 +3,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_avif/flutter_avif.dart';
 import 'package:provider/provider.dart';
-import '../../models/contact.dart';
 import '../../models/message.dart';
 import '../../providers/connection_provider.dart';
 import '../../providers/contacts_provider.dart';
 import '../../providers/image_provider.dart' as ip;
 import '../../utils/image_message_parser.dart';
+import '../../utils/transmission_target_resolver.dart';
 import 'transfer_timeout.dart';
 
 /// A message bubble that shows a received or sent image.
@@ -58,8 +58,16 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
 
     return Consumer<ip.ImageProvider>(
       builder: (context, imageProvider, _) {
+        final contactsProvider = context.read<ContactsProvider>();
         final session = imageProvider.session(envelope.sessionId);
-        final sender = _resolveSender(envelope);
+        final sender = TransmissionTargetResolver.resolveLocalTarget(
+          contactsProvider: contactsProvider,
+          isSentByMe: widget.isSentByMe,
+          recipientPublicKey: widget.message.recipientPublicKey,
+          senderPublicKeyPrefix: widget.message.senderPublicKeyPrefix,
+          senderKey6FromEnvelope: envelope.senderKey6,
+          senderName: widget.message.senderName,
+        );
         final effectivePathLen =
             sender != null && sender.outPathLen >= 0
             ? sender.outPathLen
@@ -213,35 +221,42 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
   }) async {
     if (_isRequesting) return;
     final conn = context.read<ConnectionProvider>();
-    var sender = _resolveSender(envelope);
-    if (sender == null ||
-        sender.outPathLen < 0 ||
-        sender.outPathLen > _maxFetchHops) {
-      await conn.getContacts();
-      if (!mounted) return;
-      sender = _resolveSender(envelope);
-    }
-    if (sender == null) {
+    final contactsProvider = context.read<ContactsProvider>();
+    final resolution = await TransmissionTargetResolver.resolveFetchTarget(
+      contactsProvider: contactsProvider,
+      refreshContacts: conn.getContacts,
+      isSentByMe: widget.isSentByMe,
+      recipientPublicKey: widget.message.recipientPublicKey,
+      senderPublicKeyPrefix: widget.message.senderPublicKeyPrefix,
+      senderKey6FromEnvelope: envelope.senderKey6,
+      senderName: widget.message.senderName,
+      maxFetchHops: _maxFetchHops,
+    );
+    if (!mounted) return;
+
+    if (resolution.failure == TransmissionTargetFailure.unknownContact) {
       await _showBlockingAlert(
         'Cannot fetch image',
         'Sender contact is unknown. Sync contacts first.',
       );
       return;
     }
-    if (sender.outPathLen < 0) {
+    if (resolution.failure == TransmissionTargetFailure.unknownRoute) {
       await _showBlockingAlert(
         'Cannot fetch image',
         'Sender route is unknown. Sync contacts/path first.',
       );
       return;
     }
-    if (sender.outPathLen > _maxFetchHops) {
+    if (resolution.failure == TransmissionTargetFailure.tooFar) {
       await _showBlockingAlert(
         'Cannot fetch image',
-        'Message is too far (${sender.outPathLen} hops, max $_maxFetchHops).',
+        'Message is too far (${resolution.hops} hops, max ${resolution.maxHops}).',
       );
       return;
     }
+
+    final sender = resolution.target!;
     if (sender.outPathLen >= 2) {
       _showToast(
         'Image fetch over ${sender.outPathLen} hops may take a while.',
@@ -333,47 +348,6 @@ class _ImageMessageBubbleState extends State<ImageMessageBubble> {
         }
       },
     );
-  }
-
-  Contact? _resolveSender(ImageEnvelope envelope) {
-    final contactsProvider = context.read<ContactsProvider>();
-
-    // For sent direct messages, fetch must target the recipient peer first.
-    final recipientKey = widget.message.recipientPublicKey;
-    if (widget.isSentByMe && recipientKey != null && recipientKey.isNotEmpty) {
-      final byKey = contactsProvider.findContactByKey(recipientKey);
-      if (byKey != null) return byKey;
-      if (recipientKey.length >= 6) {
-        final byPrefix = contactsProvider.findContactByPrefix(
-          Uint8List.fromList(recipientKey.sublist(0, 6)),
-        );
-        if (byPrefix != null) return byPrefix;
-      }
-    }
-
-    final contact = contactsProvider.findContactByPrefixHex(
-      envelope.senderKey6,
-    );
-    if (contact != null) return contact;
-
-    final senderPrefix = widget.message.senderPublicKeyPrefix;
-    if (senderPrefix != null && senderPrefix.length >= 6) {
-      final c = contactsProvider.findContactByPrefix(
-        Uint8List.fromList(senderPrefix.sublist(0, 6)),
-      );
-      if (c != null) return c;
-    }
-
-    final senderName = widget.message.senderName?.trim();
-    if (senderName != null && senderName.isNotEmpty) {
-      for (final c in contactsProvider.contacts) {
-        if (c.advName.trim().toLowerCase() == senderName.toLowerCase()) {
-          return c;
-        }
-      }
-    }
-
-    return null;
   }
 
   void _showToast(String message) {
