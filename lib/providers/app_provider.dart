@@ -10,8 +10,10 @@ import 'voice_provider.dart';
 import 'image_provider.dart' as ip;
 import '../services/tile_cache_service.dart';
 import '../services/location_tracking_service.dart';
+import '../services/packet_capture_storage_service.dart';
 import '../models/contact.dart';
 import '../models/message.dart';
+import '../models/ble_packet_log.dart';
 import '../utils/drawing_message_parser.dart';
 import '../utils/voice_message_parser.dart';
 import '../utils/image_message_parser.dart';
@@ -28,6 +30,8 @@ class AppProvider with ChangeNotifier {
   final TileCacheService tileCacheService;
   final LocationTrackingService locationTrackingService =
       LocationTrackingService();
+  final PacketCaptureStorageService packetCaptureStorageService =
+      PacketCaptureStorageService();
 
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
@@ -52,6 +56,9 @@ class AppProvider with ChangeNotifier {
   final Map<String, String> _voiceSessionSenderKey6 = {};
   final Map<String, Timer> _voiceMissingRetryTimers = {};
   final Map<String, int> _voiceMissingRetryAttempts = {};
+  Timer? _packetCaptureFlushTimer;
+  String? _lastPersistedPacketSignature;
+  bool _isPersistingPacketCapture = false;
 
   AppProvider({
     required this.connectionProvider,
@@ -72,8 +79,65 @@ class AppProvider with ChangeNotifier {
     _loadVoiceBandPassFilterEnabled();
     _loadVoiceCompressorEnabled();
     _loadVoiceLimiterEnabled();
+    _startPacketCapturePersistence();
     _syncDrawingsOnStartup(); // Sync drawings immediately after providers load
     _isInitialized = true;
+  }
+
+  void _startPacketCapturePersistence() {
+    _packetCaptureFlushTimer?.cancel();
+    _packetCaptureFlushTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(_flushPacketCaptureLogs());
+    });
+    unawaited(_flushPacketCaptureLogs());
+  }
+
+  String _packetLogSignature(BlePacketLog log) {
+    final prefix = log.rawData.length <= 12
+        ? log.rawData
+        : log.rawData.sublist(0, 12);
+    final prefixHex = prefix.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${log.timestamp.microsecondsSinceEpoch}|'
+        '${log.direction.name}|${log.responseCode ?? -1}|'
+        '${log.rawData.length}|$prefixHex';
+  }
+
+  Future<void> _flushPacketCaptureLogs() async {
+    if (_isPersistingPacketCapture) return;
+    _isPersistingPacketCapture = true;
+    try {
+      final logs = connectionProvider.bleService.packetLogs;
+      if (logs.isEmpty) return;
+
+      List<BlePacketLog> toPersist = const [];
+      if (_lastPersistedPacketSignature == null) {
+        toPersist = logs;
+      } else {
+        final lastSig = _lastPersistedPacketSignature!;
+        var lastIndex = -1;
+        for (var i = logs.length - 1; i >= 0; i--) {
+          if (_packetLogSignature(logs[i]) == lastSig) {
+            lastIndex = i;
+            break;
+          }
+        }
+        if (lastIndex == -1) {
+          // In-memory log rotated or cleared; persist current window to avoid gaps.
+          toPersist = logs;
+        } else if (lastIndex < logs.length - 1) {
+          toPersist = logs.sublist(lastIndex + 1);
+        }
+      }
+
+      if (toPersist.isNotEmpty) {
+        await packetCaptureStorageService.appendLogs(toPersist);
+      }
+      _lastPersistedPacketSignature = _packetLogSignature(logs.last);
+    } catch (e) {
+      debugPrint('❌ [AppProvider] Packet capture flush failed: $e');
+    } finally {
+      _isPersistingPacketCapture = false;
+    }
   }
 
   /// Sync drawings from messages on app startup (before BLE connection)
@@ -1243,6 +1307,8 @@ class AppProvider with ChangeNotifier {
 
   @override
   void dispose() {
+    _packetCaptureFlushTimer?.cancel();
+    unawaited(_flushPacketCaptureLogs());
     // Remove connection state listener
     connectionProvider.removeListener(_handleConnectionStateChange);
     // Clear location service callbacks
