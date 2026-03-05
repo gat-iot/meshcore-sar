@@ -16,6 +16,7 @@ class ConnectionDialog extends StatefulWidget {
 class _ConnectionDialogState extends State<ConnectionDialog>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late final ConnectionProvider _connectionProvider;
   final NetworkScannerService _networkScanner = NetworkScannerService();
   final List<DiscoveredServer> _discoveredServers = [];
   int _scannedCount = 0;
@@ -46,16 +47,13 @@ class _ConnectionDialogState extends State<ConnectionDialog>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _connectionProvider = Provider.of<ConnectionProvider>(context, listen: false);
 
     // Defer scan startup until after the first frame so Provider listeners
     // are not notified while this dialog is still being built.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final connectionProvider = Provider.of<ConnectionProvider>(
-        context,
-        listen: false,
-      );
-      connectionProvider.startScan();
+      _connectionProvider.startScan();
     });
 
     // Set up network scanner callbacks
@@ -85,11 +83,7 @@ class _ConnectionDialogState extends State<ConnectionDialog>
 
   @override
   void dispose() {
-    final connectionProvider = Provider.of<ConnectionProvider>(
-      context,
-      listen: false,
-    );
-    connectionProvider.stopScan();
+    _connectionProvider.stopScan();
     _networkScanner.stopScan();
     // Remove listener before disposing to prevent memory leaks
     _tabController.removeListener(_onTabChanged);

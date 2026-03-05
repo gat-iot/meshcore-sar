@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:crypto/crypto.dart';
 import '../models/device_info.dart';
@@ -461,7 +462,7 @@ class ConnectionProvider with ChangeNotifier {
     _isScanning = true;
     _scannedDevices.clear();
     _error = null;
-    notifyListeners();
+    _notifyListenersSafely();
     debugPrint('✅ [Provider] Scan state initialized, notifying listeners');
 
     try {
@@ -477,7 +478,7 @@ class ConnectionProvider with ChangeNotifier {
           debugPrint(
             '✅ [Provider] Added device to list: ${device.platformName} (RSSI: $rssi dBm), total: ${_scannedDevices.length}',
           );
-          notifyListeners();
+          _notifyListenersSafely();
         } else {
           // Update RSSI if device already exists
           final index = _scannedDevices.indexWhere(
@@ -488,7 +489,7 @@ class ConnectionProvider with ChangeNotifier {
             debugPrint(
               '  🔄 [Provider] Updated RSSI for ${device.platformName}: $rssi dBm',
             );
-            notifyListeners();
+            _notifyListenersSafely();
           } else {
             debugPrint(
               '  ⏭️ [Provider] Device already in list with same RSSI, skipping',
@@ -502,7 +503,7 @@ class ConnectionProvider with ChangeNotifier {
     } finally {
       debugPrint('🏁 [Provider] Scan completed');
       _isScanning = false;
-      notifyListeners();
+      _notifyListenersSafely();
     }
   }
 
@@ -510,6 +511,18 @@ class ConnectionProvider with ChangeNotifier {
   Future<void> stopScan() async {
     await FlutterBluePlus.stopScan();
     _isScanning = false;
+    _notifyListenersSafely();
+  }
+
+  void _notifyListenersSafely() {
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.transientCallbacks ||
+        phase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        notifyListeners();
+      });
+      return;
+    }
     notifyListeners();
   }
 
