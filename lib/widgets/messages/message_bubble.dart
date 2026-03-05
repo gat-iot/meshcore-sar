@@ -468,7 +468,7 @@ class _MessageBubbleState extends State<MessageBubble> {
       'Status: ${widget.message.deliveryStatus.name}',
       'Path length (nodes/hops): ${widget.message.pathLen}',
       'Sender timestamp: ${widget.message.senderTimestamp} (${widget.message.sentAt.toIso8601String()})',
-      'Received at: ${widget.message.receivedAt.toIso8601String()}',
+      'Received at (RFC3339): ${_formatRfc3339(widget.message.receivedAt)}',
       'Channel index: ${widget.message.channelIdx ?? '-'}',
       'Echo count: ${widget.message.echoCount}',
       'Last echo RSSI: ${widget.message.lastEchoRssiDbm ?? '-'}',
@@ -706,6 +706,14 @@ class _MessageBubbleState extends State<MessageBubble> {
                               context,
                               label: l10n.status,
                               value: widget.message.deliveryStatus.name,
+                            ),
+                            _detailRow(
+                              context,
+                              label: 'Received (RFC3339)',
+                              value: _formatRfc3339(widget.message.receivedAt),
+                              onCopy: () => copyField(
+                                _formatRfc3339(widget.message.receivedAt),
+                              ),
                             ),
                             if (widget.message.expectedAckTag != null)
                               _detailRow(
@@ -1071,6 +1079,19 @@ class _MessageBubbleState extends State<MessageBubble> {
         ),
       ],
     );
+  }
+
+  String _formatRfc3339(DateTime dateTime) {
+    final utc = dateTime.toUtc();
+    String two(int v) => v.toString().padLeft(2, '0');
+    String four(int v) => v.toString().padLeft(4, '0');
+    final fraction = utc.millisecond == 0
+        ? ''
+        : '.${utc.millisecond.toString().padLeft(3, '0')}';
+
+    return '${four(utc.year)}-${two(utc.month)}-${two(utc.day)}'
+        'T${two(utc.hour)}:${two(utc.minute)}:${two(utc.second)}'
+        '${fraction}Z';
   }
 
   BlePacketLog? _findBestMatchingRxLog(
