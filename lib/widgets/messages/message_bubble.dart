@@ -2035,60 +2035,118 @@ class _MessageBubbleState extends State<MessageBubble> {
                     const Icon(Icons.person, size: 16),
                   const SizedBox(width: 4),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          displayName,
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: isOwnMessage
-                                    ? Theme.of(context).colorScheme.primary
-                                    : null,
-                              ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        Flexible(
+                          child: Text(
+                            displayName,
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: isOwnMessage
+                                      ? Theme.of(context).colorScheme.primary
+                                      : null,
+                                ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        // Show destination/source context on a separate line.
                         if (!widget.isCompact &&
                             (recipientSubtitle != null ||
                                 receivedChannelSubtitle != null)) ...[
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              Icon(
-                                isOwnMessage
-                                    ? Icons.arrow_forward
-                                    : Icons.arrow_back,
-                                size: 12,
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.color
-                                    ?.withValues(alpha: 0.7),
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  isOwnMessage
-                                      ? recipientSubtitle!
-                                      : receivedChannelSubtitle!,
-                                  style: Theme.of(context).textTheme.labelSmall
-                                      ?.copyWith(
-                                        color: Theme.of(context)
+                          const SizedBox(width: 8),
+                          if (message.isChannelMessage)
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withValues(alpha: 0.65),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      isOwnMessage
+                                          ? Icons.campaign_outlined
+                                          : Icons.tag,
+                                      size: 11,
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.color
+                                          ?.withValues(alpha: 0.7),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Flexible(
+                                      child: Text(
+                                        isOwnMessage
+                                            ? recipientDisplayName!
+                                            : channelDisplayName!,
+                                        style: Theme.of(context)
                                             .textTheme
                                             .labelSmall
-                                            ?.color
-                                            ?.withValues(alpha: 0.75),
-                                        fontStyle: FontStyle.italic,
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .labelSmall
+                                                  ?.color
+                                                  ?.withValues(alpha: 0.82),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
+                            )
+                          else
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isOwnMessage
+                                        ? Icons.arrow_forward
+                                        : Icons.arrow_back,
+                                    size: 12,
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.color
+                                        ?.withValues(alpha: 0.7),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      isOwnMessage
+                                          ? recipientSubtitle!
+                                          : receivedChannelSubtitle!,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .labelSmall
+                                                ?.color
+                                                ?.withValues(alpha: 0.75),
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                         ],
                       ],
                     ),
