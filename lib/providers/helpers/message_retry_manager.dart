@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:math' as math;
+
 import '../../models/message.dart';
 import '../../models/contact.dart';
 
@@ -22,6 +25,12 @@ class MessageRetryManager {
   // These are app-level timeouts, separate from firmware's suggested timeout
   // Firmware timeout is for ACK arrival, these are for retry attempts
   static const List<int> _timeouts = [4000, 8000, 12000];
+  static const int _defaultLoRaSf = 10;
+  static const int _defaultLoRaCr = 5;
+  static const int _defaultLoRaBwHz = 250000;
+  static const int _defaultLoRaPreambleSymbols = 8;
+  static const int _defaultLoRaCrcEnabled = 1;
+  static const int _defaultLoRaExplicitHeader = 1;
 
   /// Get timeout for a specific retry attempt (0-2)
   /// Returns: 4000ms for attempt 0, 8000ms for attempt 1, 12000ms for attempt 2
@@ -30,6 +39,30 @@ class MessageRetryManager {
       return _timeouts.last; // Default to last timeout if out of range
     }
     return _timeouts[attempt];
+  }
+
+  /// Calculate a conservative delivery-ACK timeout when firmware doesn't
+  /// provide one or returns an invalid value.
+  int calculateAckTimeoutMs({
+    required String text,
+    required Contact? contact,
+    int? suggestedTimeoutMs,
+  }) {
+    if (suggestedTimeoutMs != null && suggestedTimeoutMs > 0) {
+      return suggestedTimeoutMs;
+    }
+
+    final payloadBytes = utf8.encode(text).length;
+    final airtimeMs = _estimateLoRaAirtimeMs(payloadBytes);
+    final hopCount = contact?.hasPath == true
+        ? math.max(contact!.outPathLen, 0)
+        : -1;
+
+    if (hopCount < 0) {
+      return ((airtimeMs * 10) + 4000).clamp(10000, 30000);
+    }
+
+    return ((airtimeMs * (hopCount + 1) * 2) + 1500).clamp(4000, 20000);
   }
 
   /// Check if a message is eligible for retry
@@ -67,8 +100,8 @@ class MessageRetryManager {
   /// Contacts without paths already use flood mode automatically.
   bool shouldUseFloodFallback(Message message, Contact contact) {
     return message.retryAttempt >= 3 &&
-           contact.hasPath &&  // ✅ FIXED: Flood fallback for failed direct paths
-           !message.usedFloodFallback;
+        contact.hasPath && // ✅ FIXED: Flood fallback for failed direct paths
+        !message.usedFloodFallback;
   }
 
   /// Track a retry attempt for a message
@@ -97,5 +130,30 @@ class MessageRetryManager {
   /// Get last retry time for a message (for debugging)
   DateTime? getLastRetryTime(String messageId) {
     return _lastRetryTimes[messageId];
+  }
+
+  int _estimateLoRaAirtimeMs(int payloadLenBytes) {
+    final sf = _defaultLoRaSf;
+    final bw = _defaultLoRaBwHz.toDouble();
+    final cr = (_defaultLoRaCr - 4).clamp(1, 4);
+    final ih = _defaultLoRaExplicitHeader == 1 ? 0 : 1;
+    final de = (sf >= 11 && _defaultLoRaBwHz <= 125000) ? 1 : 0;
+
+    final symbolMs = ((1 << sf) / bw) * 1000.0;
+    final preambleMs = (_defaultLoRaPreambleSymbols + 4.25) * symbolMs;
+
+    final num =
+        (8 * payloadLenBytes) -
+        (4 * sf) +
+        28 +
+        (16 * _defaultLoRaCrcEnabled) -
+        (20 * ih);
+    final den = 4 * (sf - (2 * de));
+    final payloadSymCoeff = den <= 0 ? 0 : (num / den).ceil();
+    final payloadSymbols =
+        8 + (payloadSymCoeff < 0 ? 0 : payloadSymCoeff) * (cr + 4);
+    final payloadMs = payloadSymbols * symbolMs;
+
+    return (preambleMs + payloadMs).ceil();
   }
 }

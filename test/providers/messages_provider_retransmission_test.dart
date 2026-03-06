@@ -127,5 +127,39 @@ void main() {
         expect(retryCalls, 1);
       });
     });
+
+    test('uses calculated timeout when radio timeout is missing', () {
+      final provider = MessagesProvider();
+      provider.addSentMessage(
+        _buildDirectMessage('m3'),
+        contact: _buildContact(),
+      );
+
+      provider.markMessageSent('m3', 99, 0);
+
+      expect(provider.messages.single.suggestedTimeoutMs, isNotNull);
+      expect(
+        provider.messages.single.suggestedTimeoutMs!,
+        greaterThanOrEqualTo(4000),
+      );
+    });
+
+    test('older retry ack still marks message delivered', () {
+      final provider = MessagesProvider();
+      provider.addSentMessage(
+        _buildDirectMessage('m4'),
+        contact: _buildContact(),
+      );
+
+      provider.markMessageSent('m4', 111, 10);
+      provider.markMessageSent('m4', 112, 10);
+      provider.markMessageDelivered(111, 220);
+
+      expect(
+        provider.messages.single.deliveryStatus,
+        MessageDeliveryStatus.delivered,
+      );
+      expect(provider.messages.single.roundTripTimeMs, 220);
+    });
   });
 }

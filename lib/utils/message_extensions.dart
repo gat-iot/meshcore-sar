@@ -25,17 +25,29 @@ extension MessageLocalization on Message {
     switch (deliveryStatus) {
       case MessageDeliveryStatus.sending:
         if (isContactMessage) {
+          if (retryAttempt > 0) {
+            return '${l10n.pending} • ${l10n.retryAttempt} $retryAttempt/3';
+          }
           return l10n.pending;
         }
         return l10n.sending;
       case MessageDeliveryStatus.sent:
         return l10n.sent;
       case MessageDeliveryStatus.delivered:
+        if (retryAttempt > 0 && roundTripTimeMs != null) {
+          return '${l10n.deliveredWithTime(roundTripTimeMs!)} • ${l10n.retryAttempt} $retryAttempt/3';
+        }
+        if (retryAttempt > 0) {
+          return '${l10n.delivered} • ${l10n.retryAttempt} $retryAttempt/3';
+        }
         if (roundTripTimeMs != null) {
           return l10n.deliveredWithTime(roundTripTimeMs!);
         }
         return l10n.delivered;
       case MessageDeliveryStatus.failed:
+        if (retryAttempt > 0) {
+          return '${l10n.failed} • ${l10n.retryAttempt} $retryAttempt/3';
+        }
         return l10n.failed;
       case MessageDeliveryStatus.received:
         return '';

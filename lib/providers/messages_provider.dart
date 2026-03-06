@@ -31,6 +31,10 @@ class MessagesProvider with ChangeNotifier {
   // Recently completed ACKs are kept briefly to ignore duplicate confirms.
   final Map<int, DateTime> _completedAckHistory = {};
 
+  // Preserve ACK tags assigned to a message across retries.
+  final Map<String, Set<int>> _messageAckHistory = {};
+  final Map<int, (String, DateTime)> _ackHistoryLookup = {};
+
   // Retry management
   final MessageRetryManager _retryManager = MessageRetryManager();
 
@@ -1020,6 +1024,12 @@ class MessagesProvider with ChangeNotifier {
 
     if (index != -1) {
       final message = _messages[index];
+      final contact = _messageContactMap[messageId];
+      final effectiveTimeout = _retryManager.calculateAckTimeoutMs(
+        text: message.text,
+        contact: contact,
+        suggestedTimeoutMs: suggestedTimeoutMs > 0 ? suggestedTimeoutMs : null,
+      );
       debugPrint('  Current status: ${message.deliveryStatus}');
       debugPrint('  Message type: ${message.messageType}');
       debugPrint(
@@ -1031,14 +1041,18 @@ class MessagesProvider with ChangeNotifier {
             ? MessageDeliveryStatus.sending
             : MessageDeliveryStatus.sent,
         expectedAckTag: expectedAckTag > 0 ? expectedAckTag : null,
-        suggestedTimeoutMs: suggestedTimeoutMs > 0 ? suggestedTimeoutMs : null,
+        suggestedTimeoutMs: expectedAckTag > 0 ? effectiveTimeout : null,
       );
       _messages[index] = updatedMessage;
 
       // Only track and set timeout for direct messages (channel messages have expectedAckTag=0)
-      if (expectedAckTag > 0 && suggestedTimeoutMs > 0) {
+      if (expectedAckTag > 0) {
         // Track by ACK tag for matching with delivery confirmation
         _pendingSentMessages[expectedAckTag] = updatedMessage;
+        _messageAckHistory
+            .putIfAbsent(messageId, () => <int>{})
+            .add(expectedAckTag);
+        _ackHistoryLookup[expectedAckTag] = (messageId, DateTime.now());
         debugPrint(
           '  ✅ Added to pending messages map with ACK: $expectedAckTag',
         );
@@ -1049,7 +1063,7 @@ class MessagesProvider with ChangeNotifier {
 
         // Start timeout timer using message ID as key
         _timeoutTimers[messageId] = Timer(
-          Duration(milliseconds: suggestedTimeoutMs),
+          Duration(milliseconds: effectiveTimeout),
           () {
             debugPrint(
               '⏱️ [MessagesProvider] Timeout for message $messageId (ACK $expectedAckTag)',
@@ -1061,7 +1075,7 @@ class MessagesProvider with ChangeNotifier {
         );
 
         debugPrint(
-          '⏱️ [MessagesProvider] Started ${suggestedTimeoutMs}ms timeout timer for message $messageId (ACK $expectedAckTag)',
+          '⏱️ [MessagesProvider] Started ${effectiveTimeout}ms timeout timer for message $messageId (ACK $expectedAckTag)',
         );
       } else {
         debugPrint(
@@ -1253,6 +1267,7 @@ class MessagesProvider with ChangeNotifier {
   /// Update message status to delivered with RTT
   void markMessageDelivered(int ackCode, int roundTripTimeMs) {
     _cleanupCompletedAckHistory();
+    _cleanupAckHistoryLookup();
     debugPrint(
       '🔍 [MessagesProvider] markMessageDelivered called with ACK: $ackCode, RTT: ${roundTripTimeMs}ms',
     );
@@ -1349,6 +1364,7 @@ class MessagesProvider with ChangeNotifier {
         // Remove from pending
         _pendingSentMessages.remove(ackCode);
         _rememberCompletedAck(ackCode);
+        _clearAckHistoryForMessage(message.id);
 
         // Clear retry tracking on successful delivery
         _retryManager.clearRetry(message.id);
@@ -1372,6 +1388,33 @@ class MessagesProvider with ChangeNotifier {
         );
       }
     } else {
+      final historicalMatch = _ackHistoryLookup[ackCode];
+      if (historicalMatch != null) {
+        final historicalMessageId = historicalMatch.$1;
+        final historicalIndex = _messages.indexWhere(
+          (m) => m.id == historicalMessageId,
+        );
+        if (historicalIndex != -1 &&
+            _messages[historicalIndex].deliveryStatus !=
+                MessageDeliveryStatus.delivered) {
+          _messages[historicalIndex] = _messages[historicalIndex].copyWith(
+            deliveryStatus: MessageDeliveryStatus.delivered,
+            roundTripTimeMs: roundTripTimeMs,
+            deliveredAt: DateTime.now(),
+          );
+          _timeoutTimers[historicalMessageId]?.cancel();
+          _timeoutTimers.remove(historicalMessageId);
+          _rememberCompletedAck(ackCode);
+          _clearAckHistoryForMessage(historicalMessageId);
+          _retryManager.clearRetry(historicalMessageId);
+          _persistMessages();
+          notifyListeners();
+          debugPrint(
+            '✅ [MessagesProvider] Historical ACK $ackCode matched message $historicalMessageId',
+          );
+          return;
+        }
+      }
       if (_completedAckHistory.containsKey(ackCode)) {
         debugPrint(
           'ℹ️ [MessagesProvider] Duplicate/late ACK $ackCode ignored (already completed)',
@@ -1595,6 +1638,7 @@ class MessagesProvider with ChangeNotifier {
       if (message.expectedAckTag != null) {
         _pendingSentMessages.remove(message.expectedAckTag);
       }
+      _clearAckHistoryForMessage(messageId);
 
       // Clear retry tracking
       _retryManager.clearRetry(messageId);
@@ -1669,6 +1713,8 @@ class MessagesProvider with ChangeNotifier {
     }
     _timeoutTimers.clear();
     _completedAckHistory.clear();
+    _messageAckHistory.clear();
+    _ackHistoryLookup.clear();
 
     // Clear retry manager
     _retryManager.clearAll();
@@ -1691,6 +1737,37 @@ class MessagesProvider with ChangeNotifier {
         .toList();
     for (final ack in staleAcks) {
       _completedAckHistory.remove(ack);
+    }
+  }
+
+  void _clearAckHistoryForMessage(String messageId) {
+    final ackTags = _messageAckHistory.remove(messageId);
+    if (ackTags == null) {
+      return;
+    }
+    for (final ack in ackTags) {
+      _ackHistoryLookup.remove(ack);
+    }
+  }
+
+  void _cleanupAckHistoryLookup({
+    Duration maxAge = const Duration(minutes: 15),
+  }) {
+    final cutoff = DateTime.now().subtract(maxAge);
+    final staleAcks = _ackHistoryLookup.entries
+        .where((entry) => entry.value.$2.isBefore(cutoff))
+        .map((entry) => entry.key)
+        .toList();
+    for (final ack in staleAcks) {
+      final messageId = _ackHistoryLookup.remove(ack)?.$1;
+      if (messageId == null) {
+        continue;
+      }
+      final history = _messageAckHistory[messageId];
+      history?.remove(ack);
+      if (history != null && history.isEmpty) {
+        _messageAckHistory.remove(messageId);
+      }
     }
   }
 }

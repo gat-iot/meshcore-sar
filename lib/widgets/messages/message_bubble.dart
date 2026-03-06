@@ -734,6 +734,13 @@ class _MessageBubbleState extends State<MessageBubble> {
                                 value: widget.message.expectedAckTag!
                                     .toString(),
                               ),
+                            if (widget.message.suggestedTimeoutMs != null)
+                              _detailRow(
+                                context,
+                                label: 'ACK timeout',
+                                value:
+                                    '${widget.message.suggestedTimeoutMs} ms',
+                              ),
                             if (widget.message.roundTripTimeMs != null)
                               _detailRow(
                                 context,
@@ -744,7 +751,18 @@ class _MessageBubbleState extends State<MessageBubble> {
                               _detailRow(
                                 context,
                                 label: l10n.retryAttempt,
-                                value: widget.message.retryAttempt.toString(),
+                                value: '${widget.message.retryAttempt}/3',
+                              ),
+                            if (widget.message.lastRetryAt != null)
+                              _detailRow(
+                                context,
+                                label: 'Last retry',
+                                value: _formatRfc3339(
+                                  widget.message.lastRetryAt!,
+                                ),
+                                onCopy: () => copyField(
+                                  _formatRfc3339(widget.message.lastRetryAt!),
+                                ),
                               ),
                             if (widget.message.usedFloodFallback)
                               _detailRow(
