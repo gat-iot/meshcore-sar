@@ -89,6 +89,8 @@ class ConnectionProvider with ChangeNotifier {
 
   bool _isScanning = false;
   bool get isScanning => _isScanning;
+  bool _isSpectrumScanActive = false;
+  bool get isSpectrumScanActive => _isSpectrumScanActive;
 
   String? _error;
   String? get error => _error;
@@ -312,6 +314,10 @@ class ConnectionProvider with ChangeNotifier {
     };
 
     service.onMessageWaiting = () {
+      if (_isSpectrumScanActive) {
+        debugPrint('📥 [Provider] MSG_WAITING ignored during spectrum scan');
+        return;
+      }
       debugPrint('📥 [Provider] MSG_WAITING - auto-syncing');
       if (_isSyncingMessages) {
         _syncRequestedWhileBusy = true;
@@ -379,6 +385,9 @@ class ConnectionProvider with ChangeNotifier {
         manufacturerModel: deviceInfo['manufacturerModel'] as String?,
         semanticVersion: deviceInfo['semanticVersion'] as String?,
         clientRepeat: deviceInfo['clientRepeat'] as bool?,
+        supportsSpectrumScan: deviceInfo['supportsSpectrumScan'] as bool?,
+        spectrumScanMinKhz: deviceInfo['spectrumScanMinKhz'] as int?,
+        spectrumScanMaxKhz: deviceInfo['spectrumScanMaxKhz'] as int?,
       );
       notifyListeners();
       if (_sseServer.isRunning) {
@@ -1555,6 +1564,43 @@ class ConnectionProvider with ChangeNotifier {
     }
   }
 
+  Future<SpectrumScanResult?> scanSpectrum({
+    required int startFrequencyKhz,
+    required int stopFrequencyKhz,
+    required int bandwidthKhz,
+    required int stepKhz,
+    required int dwellMs,
+    required int thresholdDb,
+  }) async {
+    if (!_activeService.isConnected) {
+      _error = 'Not connected to device';
+      notifyListeners();
+      return null;
+    }
+
+    try {
+      _isSpectrumScanActive = true;
+      _activeService.setSpectrumScanActive(true);
+      notifyListeners();
+      return await _activeService.scanSpectrum(
+        startFrequencyKhz: startFrequencyKhz,
+        stopFrequencyKhz: stopFrequencyKhz,
+        bandwidthKhz: bandwidthKhz,
+        stepKhz: stepKhz,
+        dwellMs: dwellMs,
+        thresholdDb: thresholdDb,
+      );
+    } catch (e) {
+      _error = 'Failed to scan spectrum: $e';
+      notifyListeners();
+      return null;
+    } finally {
+      _isSpectrumScanActive = false;
+      _activeService.setSpectrumScanActive(false);
+      notifyListeners();
+    }
+  }
+
   /// Set transmit power
   Future<void> setTxPower(int powerDbm) async {
     if (!_activeService.isConnected) {
@@ -1599,6 +1645,7 @@ class ConnectionProvider with ChangeNotifier {
 
   /// Request fresh device info (triggers SelfInfo response)
   Future<void> refreshDeviceInfo() async {
+    if (_isSpectrumScanActive) return;
     if (!_activeService.isConnected) {
       _error = 'Not connected to device';
       notifyListeners();
@@ -1642,6 +1689,7 @@ class ConnectionProvider with ChangeNotifier {
   /// Sync messages from device queue
   /// Call this repeatedly until no more messages are available
   Future<bool> syncNextMessage() async {
+    if (_isSpectrumScanActive) return false;
     // Prevent re-entrancy and too-fast triggers
     if (_isSyncingMessages) {
       // Another sync (single or loop) is in progress
@@ -1680,6 +1728,10 @@ class ConnectionProvider with ChangeNotifier {
 
   /// Sync all waiting messages from device
   Future<int> syncAllMessages() async {
+    if (_isSpectrumScanActive) {
+      debugPrint('⏸️ [Provider] Message sync skipped during spectrum scan');
+      return 0;
+    }
     if (_isSyncingMessages) {
       // Already syncing; avoid overlapping loops
       _syncRequestedWhileBusy = true;

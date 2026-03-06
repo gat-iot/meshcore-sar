@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:provider/provider.dart';
 import '../providers/connection_provider.dart';
 import '../services/validation_service.dart';
 import '../l10n/app_localizations.dart';
@@ -722,7 +722,8 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Client Repeat Mode'),
-                      subtitle: deviceInfo.allowedRepeatFreqRanges != null &&
+                      subtitle:
+                          deviceInfo.allowedRepeatFreqRanges != null &&
                               deviceInfo.allowedRepeatFreqRanges!.isNotEmpty
                           ? Text(
                               'Allowed: ${deviceInfo.allowedRepeatFreqRanges!.map((r) => r.lower == r.upper ? '${(r.lower / 1000).toStringAsFixed(3)} MHz' : '${(r.lower / 1000).toStringAsFixed(3)}–${(r.upper / 1000).toStringAsFixed(3)} MHz').join(', ')}',

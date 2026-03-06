@@ -73,12 +73,14 @@ class DeviceInfo {
   final String? selfName;
 
   // Additional device capabilities (from RESP_CODE_DEVICE_INFO)
-  final int? maxContacts;        // Max contacts device supports
-  final int? maxChannels;        // Max channels device supports
-  final int? telemetryModes;     // Telemetry permission modes (bits 0-1: Base, bits 2-3: Location)
-  final int? blePin;             // BLE PIN code
-  final int? multiAcks;          // Extra ACK mode (0=no, 1=yes)
-  final int? advertLocPolicy;    // Location sharing policy (0=don't share, 1=share)
+  final int? maxContacts; // Max contacts device supports
+  final int? maxChannels; // Max channels device supports
+  final int?
+  telemetryModes; // Telemetry permission modes (bits 0-1: Base, bits 2-3: Location)
+  final int? blePin; // BLE PIN code
+  final int? multiAcks; // Extra ACK mode (0=no, 1=yes)
+  final int?
+  advertLocPolicy; // Location sharing policy (0=don't share, 1=share)
 
   // Firmware info
   final int? firmwareVersion;
@@ -88,6 +90,9 @@ class DeviceInfo {
 
   // Repeat mode (firmware v9+)
   final bool? clientRepeat;
+  final bool? supportsSpectrumScan;
+  final int? spectrumScanMinKhz;
+  final int? spectrumScanMaxKhz;
   final List<({int lower, int upper})>? allowedRepeatFreqRanges;
 
   DeviceInfo({
@@ -124,6 +129,9 @@ class DeviceInfo {
     this.manufacturerModel,
     this.semanticVersion,
     this.clientRepeat,
+    this.supportsSpectrumScan,
+    this.spectrumScanMinKhz,
+    this.spectrumScanMaxKhz,
     this.allowedRepeatFreqRanges,
   });
 
@@ -160,7 +168,9 @@ class DeviceInfo {
 
   /// Get storage usage percentage (0-100)
   double? get storageUsedPercent {
-    if (storageUsedKb == null || storageTotalKb == null || storageTotalKb == 0) {
+    if (storageUsedKb == null ||
+        storageTotalKb == null ||
+        storageTotalKb == 0) {
       return null;
     }
     return (storageUsedKb! / storageTotalKb!) * 100.0;
@@ -245,6 +255,9 @@ class DeviceInfo {
     String? manufacturerModel,
     String? semanticVersion,
     bool? clientRepeat,
+    bool? supportsSpectrumScan,
+    int? spectrumScanMinKhz,
+    int? spectrumScanMaxKhz,
     List<({int lower, int upper})>? allowedRepeatFreqRanges,
   }) {
     return DeviceInfo(
@@ -281,7 +294,11 @@ class DeviceInfo {
       manufacturerModel: manufacturerModel ?? this.manufacturerModel,
       semanticVersion: semanticVersion ?? this.semanticVersion,
       clientRepeat: clientRepeat ?? this.clientRepeat,
-      allowedRepeatFreqRanges: allowedRepeatFreqRanges ?? this.allowedRepeatFreqRanges,
+      supportsSpectrumScan: supportsSpectrumScan ?? this.supportsSpectrumScan,
+      spectrumScanMinKhz: spectrumScanMinKhz ?? this.spectrumScanMinKhz,
+      spectrumScanMaxKhz: spectrumScanMaxKhz ?? this.spectrumScanMaxKhz,
+      allowedRepeatFreqRanges:
+          allowedRepeatFreqRanges ?? this.allowedRepeatFreqRanges,
     );
   }
 

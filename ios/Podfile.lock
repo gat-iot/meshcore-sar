@@ -65,6 +65,9 @@ PODS:
     - ObjectBox (= 4.4.1)
   - package_info_plus (0.4.5):
     - Flutter
+  - path_provider_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
   - permission_handler_apple (9.3.0):
     - Flutter
   - record_ios (1.2.0):
@@ -102,6 +105,7 @@ DEPENDENCIES:
   - nsd_ios (from `.symlinks/plugins/nsd_ios/ios`)
   - objectbox_flutter_libs (from `.symlinks/plugins/objectbox_flutter_libs/ios`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
+  - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
   - record_ios (from `.symlinks/plugins/record_ios/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
@@ -149,6 +153,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/objectbox_flutter_libs/ios"
   package_info_plus:
     :path: ".symlinks/plugins/package_info_plus/ios"
+  path_provider_foundation:
+    :path: ".symlinks/plugins/path_provider_foundation/darwin"
   permission_handler_apple:
     :path: ".symlinks/plugins/permission_handler_apple/ios"
   record_ios:
@@ -183,6 +189,7 @@ SPEC CHECKSUMS:
   ObjectBox: 7da4aceb5013d041bfafdbc6d744a26918b09757
   objectbox_flutter_libs: 09b1dec1b4cd27bf1a5f9bae7ccaa7e43588bf31
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
+  path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
   permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
   record_ios: 412daca2350b228e698fffcd08f1f94ceb1e3844
   SDWebImage: e9fc87c1aab89a8ab1bbd74eba378c6f53be8abf
@@ -193,6 +200,6 @@ SPEC CHECKSUMS:
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
   vibration: ca8104a8875b9c493e15b21b04e456befd0ff6eb
 
-PODFILE CHECKSUM: 3c63482e143d1b91d2d2560aee9fb04ecc74ac7e
+PODFILE CHECKSUM: 2d56c9747241a29800bf539d978b210bda037878
 
 COCOAPODS: 1.16.2

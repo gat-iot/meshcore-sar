@@ -39,5 +39,13 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    # codec2_flutter uses ARM-specific register asm("sp") in debug_alloc.h that
+    # fails to compile for iOS simulators. Voice codec support is only required
+    # on real iOS devices, so skip the native Codec2 sources for simulator SDKs.
+    if target.name == 'codec2_flutter'
+      target.build_configurations.each do |config|
+        config.build_settings['EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]'] = '*.c *.cpp'
+      end
+    end
   end
 end

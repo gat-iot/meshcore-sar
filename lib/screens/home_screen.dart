@@ -17,6 +17,7 @@ import 'map_management_screen.dart';
 import 'settings_screen.dart';
 import 'device_config_screen.dart';
 import 'packet_log_screen.dart';
+import 'spectrum_scan_screen.dart';
 import '../utils/toast_logger.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/permission_request_dialog.dart';
@@ -376,6 +377,26 @@ class _HomeScreenState extends State<HomeScreen>
                               builder: (context) => MapManagementScreen(
                                 tileCacheService: appProvider.tileCacheService,
                               ),
+                            ),
+                          );
+                        });
+                      },
+                    ),
+                    PopupMenuItem(
+                      child: Row(
+                        children: [
+                          const Icon(Icons.radar),
+                          const SizedBox(width: 8),
+                          const Text('Spectrum Scan'),
+                        ],
+                      ),
+                      onTap: () {
+                        final navigator = Navigator.of(context);
+                        Future.delayed(Duration.zero, () {
+                          if (!mounted) return;
+                          navigator.push(
+                            MaterialPageRoute(
+                              builder: (context) => const SpectrumScanScreen(),
                             ),
                           );
                         });
