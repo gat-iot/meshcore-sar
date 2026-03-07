@@ -303,11 +303,28 @@ class ContactsProvider with ChangeNotifier {
     } else {
       // Existing contact - preserve history and isNew status
       final existingContact = _contacts[contact.publicKeyHex]!;
+      final mergedTelemetry = _mergeTelemetryForContact(
+        existingTelemetry: existingContact.telemetry,
+        incomingTelemetry: contact.telemetry,
+      );
+      final incomingAdvertLocation = contact.advertLocation;
+      final existingAdvertLocation = existingContact.advertLocation;
 
       // Start with existing contact
       updatedContact = contact.copyWith(
         isNew: existingContact.isNew,
         advertHistory: existingContact.advertHistory,
+        telemetry: mergedTelemetry,
+        advLat: incomingAdvertLocation != null
+            ? contact.advLat
+            : existingAdvertLocation != null
+            ? existingContact.advLat
+            : contact.advLat,
+        advLon: incomingAdvertLocation != null
+            ? contact.advLon
+            : existingAdvertLocation != null
+            ? existingContact.advLon
+            : contact.advLon,
       );
 
       // Add new location to history if location has changed
@@ -397,23 +414,21 @@ class ContactsProvider with ChangeNotifier {
         );
       }
 
-      // Keep last valid GPS for router/chat/room contacts when current
-      // telemetry does not provide a valid GPS fix.
-      if (_shouldRetainLastValidGps(contact, telemetry.gpsLocation)) {
+      final previousTelemetry = contact.telemetry;
+
+      // Keep last valid GPS whenever current telemetry does not provide a
+      // valid GPS fix.
+      if (_shouldRetainLastValidGps(previousTelemetry, telemetry.gpsLocation)) {
         debugPrint(
           '  ⚠️ Retaining last valid GPS. Incoming telemetry GPS is invalid/missing: $incomingGps',
         );
-        final previousGps = _getValidGpsOrNull(contact.telemetry?.gpsLocation);
-        telemetry = ContactTelemetry(
-          gpsLocation: previousGps,
-          batteryPercentage: telemetry.batteryPercentage,
-          batteryMilliVolts: telemetry.batteryMilliVolts,
-          temperature: telemetry.temperature,
-          timestamp: telemetry.timestamp,
-          humidity: telemetry.humidity,
-          pressure: telemetry.pressure,
-          extraSensorData: telemetry.extraSensorData,
+        final mergedTelemetry = _mergeTelemetryForContact(
+          existingTelemetry: previousTelemetry,
+          incomingTelemetry: telemetry,
         );
+        if (mergedTelemetry != null) {
+          telemetry = mergedTelemetry;
+        }
       }
 
       // Update contact with new telemetry AND last seen time
@@ -467,20 +482,47 @@ class ContactsProvider with ChangeNotifier {
     return location;
   }
 
-  bool _shouldRetainLastValidGps(Contact contact, LatLng? incomingGps) {
-    final isSupportedType =
-        contact.isChat || contact.isRepeater || contact.isRoom;
-    if (!isSupportedType) {
-      return false;
-    }
-
+  bool _shouldRetainLastValidGps(
+    ContactTelemetry? existingTelemetry,
+    LatLng? incomingGps,
+  ) {
     final hasPreviousValidGps =
-        _getValidGpsOrNull(contact.telemetry?.gpsLocation) != null;
+        _getValidGpsOrNull(existingTelemetry?.gpsLocation) != null;
     if (!hasPreviousValidGps) {
       return false;
     }
 
     return incomingGps == null;
+  }
+
+  ContactTelemetry? _mergeTelemetryForContact({
+    ContactTelemetry? existingTelemetry,
+    ContactTelemetry? incomingTelemetry,
+  }) {
+    if (incomingTelemetry == null) {
+      return existingTelemetry;
+    }
+
+    final incomingGps = _getValidGpsOrNull(incomingTelemetry.gpsLocation);
+    if (incomingGps != null) {
+      return incomingTelemetry;
+    }
+
+    final previousGps = _getValidGpsOrNull(existingTelemetry?.gpsLocation);
+    if (previousGps == null) {
+      return incomingTelemetry;
+    }
+
+    return ContactTelemetry(
+      gpsLocation: previousGps,
+      batteryPercentage: incomingTelemetry.batteryPercentage,
+      batteryMilliVolts: incomingTelemetry.batteryMilliVolts,
+      temperature: incomingTelemetry.temperature,
+      timestamp: incomingTelemetry.timestamp,
+      humidity: incomingTelemetry.humidity,
+      pressure: incomingTelemetry.pressure,
+      extraSensorData: incomingTelemetry.extraSensorData,
+    );
   }
 
   int _coordinateToAdvertMicrodegrees(double coordinate) {

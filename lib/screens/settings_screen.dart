@@ -722,121 +722,131 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(AppLocalizations.of(context)!.settings)),
       body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         children: [
-          // General Settings Section
-          _buildSectionHeader(AppLocalizations.of(context)!.general),
-          ListTile(
-            leading: const Icon(Icons.palette),
-            title: Text(AppLocalizations.of(context)!.theme),
-            subtitle: Text(AppTheme.getThemeDisplayName(_selectedTheme)),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showThemeDialog(),
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.radar),
-            title: Text(AppLocalizations.of(context)!.showRxTxIndicators),
-            subtitle: Text(AppLocalizations.of(context)!.displayPacketActivity),
-            value: _showRxTxIndicators,
-            onChanged: (value) async {
-              setState(() {
-                _showRxTxIndicators = value;
-              });
-              await _saveRxTxPreference(value);
-            },
-          ),
-          Consumer<AppProvider>(
-            builder: (context, appProvider, child) => SwitchListTile(
-              secondary: const Icon(Icons.visibility_off),
-              title: Text(AppLocalizations.of(context)!.simpleMode),
+          _buildSectionHeader('Appearance'),
+          _buildSettingsCard([
+            ListTile(
+              leading: const Icon(Icons.palette),
+              title: Text(AppLocalizations.of(context)!.theme),
+              subtitle: Text(AppTheme.getThemeDisplayName(_selectedTheme)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _showThemeDialog(),
+            ),
+            ListTile(
+              leading: const Icon(Icons.language),
+              title: Text(AppLocalizations.of(context)!.language),
+              subtitle: Text(LocalePreferences.getDisplayName(_selectedLocale)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _showLanguageDialog(),
+            ),
+            SwitchListTile(
+              secondary: const Icon(Icons.radar),
+              title: Text(AppLocalizations.of(context)!.showRxTxIndicators),
               subtitle: Text(
-                AppLocalizations.of(context)!.simpleModeDescription,
+                AppLocalizations.of(context)!.displayPacketActivity,
               ),
-              value: appProvider.isSimpleMode,
+              value: _showRxTxIndicators,
               onChanged: (value) async {
-                await appProvider.toggleSimpleMode(value);
+                setState(() {
+                  _showRxTxIndicators = value;
+                });
+                await _saveRxTxPreference(value);
               },
             ),
-          ),
-          Consumer<AppProvider>(
-            builder: (context, appProvider, child) => SwitchListTile(
-              secondary: const Icon(Icons.person_add_alt_1),
-              title: const Text('Auto-add discovered contacts'),
-              subtitle: const Text(
-                'Automatically fetch and add new contacts when they are discovered',
-              ),
-              value: appProvider.autoAddDiscoveredContacts,
-              onChanged: (value) async {
-                await appProvider.toggleAutoAddDiscoveredContacts(value);
-              },
-            ),
-          ),
-          Consumer<AppProvider>(
-            builder: (context, appProvider, child) => SwitchListTile(
-              secondary: const Icon(Icons.map_outlined),
-              title: Text(AppLocalizations.of(context)!.disableMap),
-              subtitle: Text(
-                AppLocalizations.of(context)!.disableMapDescription,
-              ),
-              value: !appProvider.isMapEnabled,
-              onChanged: (value) async {
-                await appProvider.toggleMapEnabled(!value);
-              },
-            ),
-          ),
-          Consumer<AppProvider>(
-            builder: (context, appProvider, child) => SwitchListTile(
-              secondary: const Icon(Icons.contacts_outlined),
-              title: const Text('Disable Contacts'),
-              subtitle: const Text(
-                'Hide the contacts tab to simplify navigation',
-              ),
-              value: !appProvider.isContactsEnabled,
-              onChanged: (value) async {
-                await appProvider.toggleContactsEnabled(!value);
-              },
-            ),
-          ),
-          Consumer<AppProvider>(
-            builder: (context, appProvider, child) => SwitchListTile(
-              secondary: const Icon(Icons.sensors),
-              title: const Text('Enable Sensors tab'),
-              subtitle: const Text(
-                'Show a dedicated tab for watched relay and node telemetry',
-              ),
-              value: appProvider.isSensorsEnabled,
-              onChanged: (value) async {
-                await appProvider.toggleSensorsEnabled(value);
-              },
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.language),
-            title: Text(AppLocalizations.of(context)!.language),
-            subtitle: Text(LocalePreferences.getDisplayName(_selectedLocale)),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showLanguageDialog(),
-          ),
-          ListTile(
-            leading: const Icon(Icons.alt_route),
-            title: const Text('Route path byte size'),
-            subtitle: Text(
-              '$_routeHashSize byte${_routeHashSize == 1 ? '' : 's'} for manual contact routes',
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _showRouteHashSizeDialog,
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete_sweep, color: Colors.red),
-            title: const Text(
-              'Clear Messages',
-              style: TextStyle(color: Colors.red),
-            ),
-            subtitle: const Text('Delete all stored message history'),
-            onTap: _clearMessages,
-          ),
-          const Divider(),
+          ]),
 
-          // Voice Settings Section
+          _buildSectionHeader('Navigation'),
+          _buildSettingsCard([
+            Consumer<AppProvider>(
+              builder: (context, appProvider, child) => SwitchListTile(
+                secondary: const Icon(Icons.visibility_off),
+                title: Text(AppLocalizations.of(context)!.simpleMode),
+                subtitle: Text(
+                  AppLocalizations.of(context)!.simpleModeDescription,
+                ),
+                value: appProvider.isSimpleMode,
+                onChanged: (value) async {
+                  await appProvider.toggleSimpleMode(value);
+                },
+              ),
+            ),
+            Consumer<AppProvider>(
+              builder: (context, appProvider, child) => SwitchListTile(
+                secondary: const Icon(Icons.map_outlined),
+                title: Text(AppLocalizations.of(context)!.disableMap),
+                subtitle: Text(
+                  AppLocalizations.of(context)!.disableMapDescription,
+                ),
+                value: !appProvider.isMapEnabled,
+                onChanged: (value) async {
+                  await appProvider.toggleMapEnabled(!value);
+                },
+              ),
+            ),
+            Consumer<AppProvider>(
+              builder: (context, appProvider, child) => SwitchListTile(
+                secondary: const Icon(Icons.contacts_outlined),
+                title: const Text('Disable Contacts'),
+                subtitle: const Text(
+                  'Hide the contacts tab to simplify navigation',
+                ),
+                value: !appProvider.isContactsEnabled,
+                onChanged: (value) async {
+                  await appProvider.toggleContactsEnabled(!value);
+                },
+              ),
+            ),
+            Consumer<AppProvider>(
+              builder: (context, appProvider, child) => SwitchListTile(
+                secondary: const Icon(Icons.sensors),
+                title: const Text('Enable Sensors tab'),
+                subtitle: const Text(
+                  'Show a dedicated tab for watched relay and node telemetry',
+                ),
+                value: appProvider.isSensorsEnabled,
+                onChanged: (value) async {
+                  await appProvider.toggleSensorsEnabled(value);
+                },
+              ),
+            ),
+          ]),
+
+          _buildSectionHeader('Messaging'),
+          _buildSettingsCard([
+            Consumer<AppProvider>(
+              builder: (context, appProvider, child) => SwitchListTile(
+                secondary: const Icon(Icons.person_add_alt_1),
+                title: const Text('Auto-add discovered contacts'),
+                subtitle: const Text(
+                  'Automatically fetch and add new contacts when they are discovered',
+                ),
+                value: appProvider.autoAddDiscoveredContacts,
+                onChanged: (value) async {
+                  await appProvider.toggleAutoAddDiscoveredContacts(value);
+                },
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.alt_route),
+              title: const Text('Route path byte size'),
+              subtitle: Text(
+                '$_routeHashSize byte${_routeHashSize == 1 ? '' : 's'} for manual contact routes',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _showRouteHashSizeDialog,
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_sweep, color: Colors.red),
+              title: const Text(
+                'Clear Messages',
+                style: TextStyle(color: Colors.red),
+              ),
+              subtitle: const Text('Delete all stored message history'),
+              onTap: _clearMessages,
+            ),
+          ]),
+
           _buildSectionHeader('Voice'),
           Consumer2<AppProvider, ConnectionProvider>(
             builder: (context, appProvider, connectionProvider, child) =>
@@ -849,232 +859,244 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   silenceTrimEnabled: appProvider.isVoiceSilenceTrimmingEnabled,
                 ),
           ),
-          ListTile(
-            leading: const Icon(Icons.graphic_eq),
-            title: const Text('Voice bitrate'),
-            subtitle: Text(_voiceBitrateSubtitle(_voiceBitrate)),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _showVoiceBitrateDialog,
-          ),
-          Consumer<AppProvider>(
-            builder: (context, appProvider, child) => SwitchListTile(
-              secondary: const Icon(Icons.tune),
-              title: const Text('Band-pass filter voice'),
-              subtitle: const Text(
-                'Keeps speech frequencies and cuts low/high noise',
+          _buildSettingsCard([
+            ListTile(
+              leading: const Icon(Icons.graphic_eq),
+              title: const Text('Voice bitrate'),
+              subtitle: Text(_voiceBitrateSubtitle(_voiceBitrate)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _showVoiceBitrateDialog,
+            ),
+            Consumer<AppProvider>(
+              builder: (context, appProvider, child) => SwitchListTile(
+                secondary: const Icon(Icons.tune),
+                title: const Text('Band-pass filter voice'),
+                subtitle: const Text(
+                  'Keeps speech frequencies and cuts low/high noise',
+                ),
+                value: appProvider.isVoiceBandPassFilterEnabled,
+                onChanged: (value) async {
+                  await appProvider.toggleVoiceBandPassFilterEnabled(value);
+                },
               ),
-              value: appProvider.isVoiceBandPassFilterEnabled,
-              onChanged: (value) async {
-                await appProvider.toggleVoiceBandPassFilterEnabled(value);
-              },
             ),
-          ),
-          Consumer<AppProvider>(
-            builder: (context, appProvider, child) => SwitchListTile(
-              secondary: const Icon(Icons.compress),
-              title: const Text('Voice compressor'),
-              subtitle: const Text('Balances quiet and loud speech levels'),
-              value: appProvider.isVoiceCompressorEnabled,
-              onChanged: (value) async {
-                await appProvider.toggleVoiceCompressorEnabled(value);
-              },
-            ),
-          ),
-          Consumer<AppProvider>(
-            builder: (context, appProvider, child) => SwitchListTile(
-              secondary: const Icon(Icons.speed),
-              title: const Text('Voice limiter'),
-              subtitle: const Text('Prevents clipping peaks before encoding'),
-              value: appProvider.isVoiceLimiterEnabled,
-              onChanged: (value) async {
-                await appProvider.toggleVoiceLimiterEnabled(value);
-              },
-            ),
-          ),
-          Consumer<AppProvider>(
-            builder: (context, appProvider, child) => SwitchListTile(
-              secondary: const Icon(Icons.content_cut),
-              title: const Text('Trim silence in voice messages'),
-              subtitle: const Text(
-                'Removes long silent parts before sending voice',
+            Consumer<AppProvider>(
+              builder: (context, appProvider, child) => SwitchListTile(
+                secondary: const Icon(Icons.compress),
+                title: const Text('Voice compressor'),
+                subtitle: const Text('Balances quiet and loud speech levels'),
+                value: appProvider.isVoiceCompressorEnabled,
+                onChanged: (value) async {
+                  await appProvider.toggleVoiceCompressorEnabled(value);
+                },
               ),
-              value: appProvider.isVoiceSilenceTrimmingEnabled,
-              onChanged: (value) async {
-                await appProvider.toggleVoiceSilenceTrimmingEnabled(value);
-              },
             ),
-          ),
-          const Divider(),
+            Consumer<AppProvider>(
+              builder: (context, appProvider, child) => SwitchListTile(
+                secondary: const Icon(Icons.speed),
+                title: const Text('Voice limiter'),
+                subtitle: const Text('Prevents clipping peaks before encoding'),
+                value: appProvider.isVoiceLimiterEnabled,
+                onChanged: (value) async {
+                  await appProvider.toggleVoiceLimiterEnabled(value);
+                },
+              ),
+            ),
+            Consumer<AppProvider>(
+              builder: (context, appProvider, child) => SwitchListTile(
+                secondary: const Icon(Icons.content_cut),
+                title: const Text('Trim silence in voice messages'),
+                subtitle: const Text(
+                  'Removes long silent parts before sending voice',
+                ),
+                value: appProvider.isVoiceSilenceTrimmingEnabled,
+                onChanged: (value) async {
+                  await appProvider.toggleVoiceSilenceTrimmingEnabled(value);
+                },
+              ),
+            ),
+          ]),
 
-          // Image Settings Section
-          _buildSectionHeader('Image'),
-          ListTile(
-            leading: const Icon(Icons.photo_size_select_large),
-            title: const Text('Max image size'),
-            subtitle: Text('$_imageMaxSize×$_imageMaxSize px'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _showImageMaxSizeDialog,
-          ),
-          ListTile(
-            leading: const Icon(Icons.tune),
-            title: const Text('Image compression'),
-            subtitle: Text('$_imageCompression / 90  (higher = smaller file)'),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Slider(
-              value: _imageCompression.toDouble(),
-              min: 10,
-              max: 90,
-              divisions: 8,
-              label: '$_imageCompression',
-              onChanged: (v) => setState(() => _imageCompression = v.round()),
-              onChangeEnd: (v) => _saveImageCompression(v.round()),
+          _buildSectionHeader('Images'),
+          _buildSettingsCard([
+            ListTile(
+              leading: const Icon(Icons.photo_size_select_large),
+              title: const Text('Max image size'),
+              subtitle: Text('$_imageMaxSize×$_imageMaxSize px'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _showImageMaxSizeDialog,
             ),
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.invert_colors),
-            title: const Text('Grayscale'),
-            subtitle: const Text(
-              'Converts image to grayscale for smaller file size',
+            ListTile(
+              leading: const Icon(Icons.tune),
+              title: const Text('Image compression'),
+              subtitle: Text(
+                '$_imageCompression / 90  (higher = smaller file)',
+              ),
             ),
-            value: _imageGrayscale,
-            onChanged: (value) async {
-              await ImagePreferences.setGrayscale(value);
-              setState(() => _imageGrayscale = value);
-              await _refreshImageModePreview();
-            },
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.compress),
-            title: const Text('Ultra mode'),
-            subtitle: const Text(
-              'Extra-aggressive compression with stronger AVIF settings',
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Slider(
+                value: _imageCompression.toDouble(),
+                min: 10,
+                max: 90,
+                divisions: 8,
+                label: '$_imageCompression',
+                onChanged: (v) => setState(() => _imageCompression = v.round()),
+                onChangeEnd: (v) => _saveImageCompression(v.round()),
+              ),
             ),
-            value: _imageUltraMode,
-            onChanged: (value) async {
-              await ImagePreferences.setUltraMode(value);
-              setState(() {
-                _imageUltraMode = value;
-              });
-              await _refreshImageModePreview();
-            },
-          ),
+            SwitchListTile(
+              secondary: const Icon(Icons.invert_colors),
+              title: const Text('Grayscale'),
+              subtitle: const Text(
+                'Converts image to grayscale for smaller file size',
+              ),
+              value: _imageGrayscale,
+              onChanged: (value) async {
+                await ImagePreferences.setGrayscale(value);
+                setState(() => _imageGrayscale = value);
+                await _refreshImageModePreview();
+              },
+            ),
+            SwitchListTile(
+              secondary: const Icon(Icons.compress),
+              title: const Text('Ultra mode'),
+              subtitle: const Text(
+                'Extra-aggressive compression with stronger AVIF settings',
+              ),
+              value: _imageUltraMode,
+              onChanged: (value) async {
+                await ImagePreferences.setUltraMode(value);
+                setState(() {
+                  _imageUltraMode = value;
+                });
+                await _refreshImageModePreview();
+              },
+            ),
+          ]),
           Consumer<ConnectionProvider>(
             builder: (context, connectionProvider, child) =>
                 _buildImageModePreviewCard(connectionProvider),
           ),
-          const Divider(),
-
-          // Templates Section
-          _buildSectionHeader('Templates'),
-          ListTile(
-            leading: const Icon(Icons.location_searching),
-            title: Text(AppLocalizations.of(context)!.sarTemplates),
-            subtitle: Text(AppLocalizations.of(context)!.manageSarTemplates),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SarTemplateManagementScreen(),
-                ),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.school),
-            title: Text(AppLocalizations.of(context)!.viewWelcomeTutorial),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              // Show wizard without resetting state - just as a modal
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => WelcomeWizardScreen(
-                    onCompleted: () {
-                      // Just pop back to settings when done
-                      Navigator.of(context).pop();
-                    },
+          _buildSectionHeader('Templates & Help'),
+          _buildSettingsCard([
+            ListTile(
+              leading: const Icon(Icons.location_searching),
+              title: Text(AppLocalizations.of(context)!.sarTemplates),
+              subtitle: Text(AppLocalizations.of(context)!.manageSarTemplates),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SarTemplateManagementScreen(),
                   ),
-                ),
-              );
-            },
-          ),
-          const Divider(),
-
-          // Network Sharing Section
-          const ConnectionModeSelector(),
-          const Divider(),
-
-          // Permissions Section
-          _buildSectionHeader(AppLocalizations.of(context)!.permissionsSection),
-          ListTile(
-            leading: const Icon(Icons.location_on),
-            title: Text(AppLocalizations.of(context)!.locationPermission),
-            subtitle: FutureBuilder<LocationPermission>(
-              future: Geolocator.checkPermission(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return Text(AppLocalizations.of(context)!.checking);
-                }
-                final permission = snapshot.data!;
-                String statusText;
-                Color statusColor;
-
-                switch (permission) {
-                  case LocationPermission.always:
-                    statusText = AppLocalizations.of(
-                      context,
-                    )!.locationPermissionGrantedAlways;
-                    statusColor = Colors.green;
-                    break;
-                  case LocationPermission.whileInUse:
-                    statusText = AppLocalizations.of(
-                      context,
-                    )!.locationPermissionGrantedWhileInUse;
-                    statusColor = Colors.green;
-                    break;
-                  case LocationPermission.denied:
-                    statusText = AppLocalizations.of(
-                      context,
-                    )!.locationPermissionDeniedTapToRequest;
-                    statusColor = Colors.orange;
-                    break;
-                  case LocationPermission.deniedForever:
-                    statusText = AppLocalizations.of(
-                      context,
-                    )!.locationPermissionPermanentlyDeniedOpenSettings;
-                    statusColor = Colors.red;
-                    break;
-                  default:
-                    statusText = AppLocalizations.of(context)!.unknown;
-                    statusColor = Colors.grey;
-                }
-
-                return Text(statusText, style: TextStyle(color: statusColor));
+                );
               },
             ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _handleLocationPermissionTap(),
-          ),
-          const Divider(),
-
-          // About Section
-          _buildSectionHeader(AppLocalizations.of(context)!.about),
-          ListTile(
-            leading: const Icon(Icons.info),
-            title: Text(AppLocalizations.of(context)!.appVersion),
-            subtitle: Text(
-              _packageInfo != null
-                  ? '${_packageInfo!.version} (${_packageInfo!.buildNumber})'
-                  : 'Loading...',
+            ListTile(
+              leading: const Icon(Icons.school),
+              title: Text(AppLocalizations.of(context)!.viewWelcomeTutorial),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WelcomeWizardScreen(
+                      onCompleted: () {
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ),
+                );
+              },
             ),
-          ),
-          // Check for Updates button (Android only)
+          ]),
+
+          _buildSectionHeader('Network Sharing'),
+          const ConnectionModeSelector(),
+
+          _buildSectionHeader(AppLocalizations.of(context)!.permissionsSection),
+          _buildSettingsCard([
+            ListTile(
+              leading: const Icon(Icons.location_on),
+              title: Text(AppLocalizations.of(context)!.locationPermission),
+              subtitle: FutureBuilder<LocationPermission>(
+                future: Geolocator.checkPermission(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return Text(AppLocalizations.of(context)!.checking);
+                  }
+                  final permission = snapshot.data!;
+                  String statusText;
+                  Color statusColor;
+
+                  switch (permission) {
+                    case LocationPermission.always:
+                      statusText = AppLocalizations.of(
+                        context,
+                      )!.locationPermissionGrantedAlways;
+                      statusColor = Colors.green;
+                      break;
+                    case LocationPermission.whileInUse:
+                      statusText = AppLocalizations.of(
+                        context,
+                      )!.locationPermissionGrantedWhileInUse;
+                      statusColor = Colors.green;
+                      break;
+                    case LocationPermission.denied:
+                      statusText = AppLocalizations.of(
+                        context,
+                      )!.locationPermissionDeniedTapToRequest;
+                      statusColor = Colors.orange;
+                      break;
+                    case LocationPermission.deniedForever:
+                      statusText = AppLocalizations.of(
+                        context,
+                      )!.locationPermissionPermanentlyDeniedOpenSettings;
+                      statusColor = Colors.red;
+                      break;
+                    default:
+                      statusText = AppLocalizations.of(context)!.unknown;
+                      statusColor = Colors.grey;
+                  }
+
+                  return Text(statusText, style: TextStyle(color: statusColor));
+                },
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _handleLocationPermissionTap(),
+            ),
+          ]),
+
+          _buildSectionHeader(AppLocalizations.of(context)!.about),
+          _buildSettingsCard([
+            ListTile(
+              leading: const Icon(Icons.info),
+              title: Text(AppLocalizations.of(context)!.appVersion),
+              subtitle: Text(
+                _packageInfo != null
+                    ? '${_packageInfo!.version} (${_packageInfo!.buildNumber})'
+                    : 'Loading...',
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.badge),
+              title: Text(AppLocalizations.of(context)!.appName),
+              subtitle: Text(_packageInfo?.appName ?? 'MeshCore SAR'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.description),
+              title: Text(AppLocalizations.of(context)!.aboutMeshCoreSar),
+              subtitle: Text(
+                AppLocalizations.of(context)!.aboutDescription.split('\n\n')[0],
+              ),
+              onTap: () => _showAboutDialog(),
+            ),
+          ]),
           if (Platform.isAndroid)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.only(top: 8),
               child: FilledButton.icon(
                 onPressed: _isCheckingForUpdates ? null : _checkForUpdates,
                 icon: _isCheckingForUpdates
@@ -1095,78 +1117,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
-          ListTile(
-            leading: const Icon(Icons.badge),
-            title: Text(AppLocalizations.of(context)!.appName),
-            subtitle: Text(_packageInfo?.appName ?? 'MeshCore SAR'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.description),
-            title: Text(AppLocalizations.of(context)!.aboutMeshCoreSar),
-            subtitle: Text(
-              AppLocalizations.of(context)!.aboutDescription.split('\n\n')[0],
+          _buildSectionHeader('Developer & Data'),
+          _buildSettingsCard([
+            ListTile(
+              leading: const Icon(Icons.bug_report),
+              title: Text(AppLocalizations.of(context)!.packageName),
+              subtitle: Text(_packageInfo?.packageName ?? 'com.meshcore.sar'),
             ),
-            onTap: () => _showAboutDialog(),
-          ),
-          const Divider(),
-
-          // Developer Section
-          _buildSectionHeader(AppLocalizations.of(context)!.developer),
-          ListTile(
-            leading: const Icon(Icons.bug_report),
-            title: Text(AppLocalizations.of(context)!.packageName),
-            subtitle: Text(_packageInfo?.packageName ?? 'com.meshcore.sar'),
-          ),
-          const Divider(),
-
-          // Sample Data Section
-          _buildSectionHeader(AppLocalizations.of(context)!.sampleData),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              AppLocalizations.of(context)!.sampleDataDescription,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.6),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Text(
+                AppLocalizations.of(context)!.sampleData,
+                style: Theme.of(context).textTheme.titleSmall,
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoadingSampleData ? null : _loadSampleData,
-                    icon: _isLoadingSampleData
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.add_circle_outline),
-                    label: Text(AppLocalizations.of(context)!.loadSampleData),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                AppLocalizations.of(context)!.sampleDataDescription,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _isLoadingSampleData ? null : _clearSampleData,
-                    icon: const Icon(Icons.delete_outline),
-                    label: Text(AppLocalizations.of(context)!.clearAllData),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _isLoadingSampleData ? null : _loadSampleData,
+                      icon: _isLoadingSampleData
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.add_circle_outline),
+                      label: Text(AppLocalizations.of(context)!.loadSampleData),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoadingSampleData ? null : _clearSampleData,
+                      icon: const Icon(Icons.delete_outline),
+                      label: Text(AppLocalizations.of(context)!.clearAllData),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ]),
         ],
       ),
     );
@@ -1174,13 +1185,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
           color: Theme.of(context).colorScheme.primary,
           fontWeight: FontWeight.bold,
         ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsCard(List<Widget> children) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Column(
+        children: ListTile.divideTiles(
+          context: context,
+          tiles: children,
+          color: Theme.of(context).dividerColor.withValues(alpha: 0.4),
+        ).toList(),
       ),
     );
   }

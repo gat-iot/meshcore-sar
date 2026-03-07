@@ -52,8 +52,6 @@ class ContactTile extends StatelessWidget {
         contact.telemetry != null && contact.telemetry!.isRecent;
     final battery = contact.displayBattery;
     final location = contact.displayLocation;
-    final routeHasPath = contact.routeHasPath;
-
     // Calculate distance if both positions are available
     String? distanceText;
     if (location != null &&
@@ -154,44 +152,6 @@ class ContactTile extends StatelessWidget {
                 ),
               ),
             ],
-            // Connection type indicator (direct/flood) - hidden in simple mode
-            if (!isSimpleMode && contact.type != ContactType.channel) ...[
-              const SizedBox(width: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                decoration: BoxDecoration(
-                  color: routeHasPath
-                      ? Colors.green.withValues(alpha: 0.15)
-                      : Colors.orange.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(3),
-                  border: Border.all(
-                    color: routeHasPath ? Colors.green : Colors.orange,
-                    width: 0.5,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      routeHasPath ? Icons.route : Icons.waves,
-                      size: 10,
-                      color: routeHasPath ? Colors.green : Colors.orange,
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
-                      routeHasPath
-                          ? AppLocalizations.of(context)!.direct
-                          : AppLocalizations.of(context)!.flood,
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: routeHasPath ? Colors.green : Colors.orange,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
             if (isPingInProgress) ...[
               const SizedBox(width: 6),
               SizedBox(
@@ -227,7 +187,6 @@ class ContactTile extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
                   // Simple mode: Show location and distance
                   if (location != null) ...[
                     Row(
@@ -247,24 +206,18 @@ class ContactTile extends StatelessWidget {
                         ),
                       ],
                     ),
-                    if (distanceText != null) ...[
-                      const SizedBox(height: 4),
-                      Row(
+                    if (contact.type != ContactType.channel ||
+                        distanceText != null) ...[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          const Icon(
-                            Icons.straighten,
-                            size: 12,
-                            color: Colors.blue,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${AppLocalizations.of(context)!.distance}: $distanceText',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: Colors.blue,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                          ),
+                          if (contact.type != ContactType.channel)
+                            _buildRoutePill(context, contact),
+                          if (distanceText != null)
+                            _buildDistancePill(context, distanceText),
                         ],
                       ),
                     ],
@@ -410,24 +363,18 @@ class ContactTile extends StatelessWidget {
                     ],
                   ),
                   // Distance info (new row)
-                  if (distanceText != null) ...[
-                    const SizedBox(height: 4),
-                    Row(
+                  if (contact.type != ContactType.channel ||
+                      distanceText != null) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        const Icon(
-                          Icons.straighten,
-                          size: 12,
-                          color: Colors.blue,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${AppLocalizations.of(context)!.distance}: $distanceText',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: Colors.blue,
-                                fontWeight: FontWeight.w500,
-                              ),
-                        ),
+                        if (contact.type != ContactType.channel)
+                          _buildRoutePill(context, contact),
+                        if (distanceText != null)
+                          _buildDistancePill(context, distanceText),
                       ],
                     ),
                   ],
@@ -874,10 +821,11 @@ class ContactTile extends StatelessWidget {
                                 : () async {
                                     final connectionProvider = context
                                         .read<ConnectionProvider>();
-                                    final result = await connectionProvider.smartPing(
-                                      contactPublicKey: contact.publicKey,
-                                      hasPath: contact.routeHasPath,
-                                    );
+                                    final result = await connectionProvider
+                                        .smartPing(
+                                          contactPublicKey: contact.publicKey,
+                                          hasPath: contact.routeHasPath,
+                                        );
 
                                     if (!context.mounted || result.success) {
                                       return;
@@ -1383,6 +1331,89 @@ class ContactTile extends StatelessWidget {
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: Text(l10n.delete),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoutePill(BuildContext context, Contact contact) {
+    final hasPath = contact.routeHasPath;
+    final scheme = Theme.of(context).colorScheme;
+    final textColor = Theme.of(
+      context,
+    ).textTheme.labelSmall?.color?.withValues(alpha: 0.82);
+    final iconColor = Theme.of(
+      context,
+    ).textTheme.labelSmall?.color?.withValues(alpha: 0.7);
+    final label = !hasPath
+        ? AppLocalizations.of(context)!.flood
+        : contact.routeHopCount <= 0
+        ? AppLocalizations.of(context)!.direct
+        : contact.routeCanonicalText;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            hasPath ? Icons.alt_route : Icons.waves,
+            size: 11,
+            color: iconColor,
+          ),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: textColor,
+                fontWeight: FontWeight.w600,
+                fontFamily: hasPath && contact.routeHopCount > 0
+                    ? 'monospace'
+                    : null,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDistancePill(BuildContext context, String distanceText) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.straighten,
+            size: 11,
+            color: Theme.of(
+              context,
+            ).textTheme.labelSmall?.color?.withValues(alpha: 0.7),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            '${AppLocalizations.of(context)!.distance}: $distanceText',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(
+                context,
+              ).textTheme.labelSmall?.color?.withValues(alpha: 0.82),
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),

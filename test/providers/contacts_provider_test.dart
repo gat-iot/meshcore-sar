@@ -133,12 +133,13 @@ void main() {
     });
 
     test(
-      'retains last valid gps for chat/repeater/room when telemetry gps is invalid or missing',
+      'retains last valid gps for any contact when telemetry gps is invalid or missing',
       () {
         final contactTypes = <ContactType>[
           ContactType.chat,
           ContactType.repeater,
           ContactType.room,
+          ContactType.channel,
         ];
 
         for (var i = 0; i < contactTypes.length; i++) {
@@ -197,6 +198,49 @@ void main() {
       },
     );
 
+    test(
+      'retains last known gps when a contact refresh arrives without location',
+      () {
+        final firstFix = CayenneLppParser.createGpsData(
+          latitude: 45.1234,
+          longitude: 13.8765,
+        );
+        provider.updateTelemetry(publicKey.sublist(0, 6), firstFix);
+
+        provider.addOrUpdateContact(
+          Contact(
+            publicKey: publicKey,
+            type: ContactType.chat,
+            flags: 0,
+            outPathLen: 0,
+            outPath: Uint8List(64),
+            advName: 'Test Contact',
+            lastAdvert: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            advLat: 0,
+            advLon: 0,
+            lastMod: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          ),
+        );
+
+        final updated = provider.findContactByKey(publicKey)!;
+        expect(updated.telemetry, isNotNull);
+        expect(updated.telemetry!.gpsLocation, isNotNull);
+        expect(
+          updated.telemetry!.gpsLocation!.latitude,
+          closeTo(45.1234, 0.0001),
+        );
+        expect(
+          updated.telemetry!.gpsLocation!.longitude,
+          closeTo(13.8765, 0.0001),
+        );
+        expect(updated.advLat, equals((45.1234 * 1e6).round()));
+        expect(updated.advLon, equals((13.8765 * 1e6).round()));
+        expect(updated.displayLocation, isNotNull);
+        expect(updated.displayLocation!.latitude, closeTo(45.1234, 0.0001));
+        expect(updated.displayLocation!.longitude, closeTo(13.8765, 0.0001));
+      },
+    );
+
     test('builds message snapshot from latest valid telemetry', () {
       final telemetryData = CayenneLppParser.createGpsData(
         latitude: 45.0001,
@@ -235,25 +279,28 @@ void main() {
       expect(snapshot.location.longitude, closeTo(14.5058, 0.000001));
     });
 
-    test('persists last valid telemetry gps on the contact across reloads', () async {
-      final telemetryData = CayenneLppParser.createGpsData(
-        latitude: 45.0001,
-        longitude: 13.9999,
-      );
+    test(
+      'persists last valid telemetry gps on the contact across reloads',
+      () async {
+        final telemetryData = CayenneLppParser.createGpsData(
+          latitude: 45.0001,
+          longitude: 13.9999,
+        );
 
-      provider.updateTelemetry(publicKey.sublist(0, 6), telemetryData);
-      await Future<void>.delayed(Duration.zero);
+        provider.updateTelemetry(publicKey.sublist(0, 6), telemetryData);
+        await Future<void>.delayed(Duration.zero);
 
-      final reloadedProvider = ContactsProvider();
-      await reloadedProvider.initializeEarly();
+        final reloadedProvider = ContactsProvider();
+        await reloadedProvider.initializeEarly();
 
-      final reloaded = reloadedProvider.findContactByKey(publicKey)!;
-      expect(reloaded.advLat, equals((45.0001 * 1e6).round()));
-      expect(reloaded.advLon, equals((13.9999 * 1e6).round()));
-      expect(reloaded.advertLocation, isNotNull);
-      expect(reloaded.advertLocation!.latitude, closeTo(45.0001, 0.0001));
-      expect(reloaded.advertLocation!.longitude, closeTo(13.9999, 0.0001));
-    });
+        final reloaded = reloadedProvider.findContactByKey(publicKey)!;
+        expect(reloaded.advLat, equals((45.0001 * 1e6).round()));
+        expect(reloaded.advLon, equals((13.9999 * 1e6).round()));
+        expect(reloaded.advertLocation, isNotNull);
+        expect(reloaded.advertLocation!.latitude, closeTo(45.0001, 0.0001));
+        expect(reloaded.advertLocation!.longitude, closeTo(13.9999, 0.0001));
+      },
+    );
   });
 
   group('ContactsProvider route updates', () {
