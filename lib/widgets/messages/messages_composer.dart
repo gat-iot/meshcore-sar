@@ -1,0 +1,432 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../l10n/app_localizations.dart';
+
+class MessagesComposer extends StatelessWidget {
+  final TextEditingController textController;
+  final FocusNode focusNode;
+  final TextInputFormatter messageByteLimiter;
+  final int messageByteCount;
+  final int maxMessageBytes;
+  final bool isRecording;
+  final bool isSendingVoice;
+  final bool voiceSupported;
+  final double bottomPadding;
+  final String destinationLabel;
+  final Widget destinationAvatar;
+  final VoidCallback onShowComposerActions;
+  final VoidCallback onShowRecipientSelector;
+  final Future<void> Function() onStartVoiceRecording;
+  final Future<void> Function() onStopAndSendVoice;
+  final Future<void> Function() onSendMessage;
+
+  const MessagesComposer({
+    super.key,
+    required this.textController,
+    required this.focusNode,
+    required this.messageByteLimiter,
+    required this.messageByteCount,
+    required this.maxMessageBytes,
+    required this.isRecording,
+    required this.isSendingVoice,
+    required this.voiceSupported,
+    required this.bottomPadding,
+    required this.destinationLabel,
+    required this.destinationAvatar,
+    required this.onShowComposerActions,
+    required this.onShowRecipientSelector,
+    required this.onStartVoiceRecording,
+    required this.onStopAndSendVoice,
+    required this.onSendMessage,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(10, 10, 10, bottomPadding),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: Theme.of(
+                      context,
+                    ).dividerColor.withValues(alpha: 0.35),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          _ComposerActionButton(
+                            isRecording: isRecording,
+                            onPressed: isRecording
+                                ? onStopAndSendVoice
+                                : onShowComposerActions,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _DestinationSelector(
+                              destinationLabel: destinationLabel,
+                              destinationAvatar: destinationAvatar,
+                              onTap: onShowRecipientSelector,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ListenableBuilder(
+                        listenable: Listenable.merge([
+                          textController,
+                          focusNode,
+                        ]),
+                        builder: (context, _) {
+                          final canSendText =
+                              !isRecording &&
+                              !isSendingVoice &&
+                              textController.text.trim().isNotEmpty;
+                          final semanticsLabel = isRecording
+                              ? 'Recording... release to send voice'
+                              : (isSendingVoice
+                                    ? 'Sending voice...'
+                                    : voiceSupported
+                                    ? 'Send (long press to record voice)'
+                                    : 'Send');
+
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: _MessageInput(
+                                  textController: textController,
+                                  focusNode: focusNode,
+                                  messageByteLimiter: messageByteLimiter,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              _SendButton(
+                                canSendText: canSendText,
+                                isRecording: isRecording,
+                                isSendingVoice: isSendingVoice,
+                                voiceSupported: voiceSupported,
+                                semanticsLabel: semanticsLabel,
+                                messageByteCount: messageByteCount,
+                                maxMessageBytes: maxMessageBytes,
+                                onSendMessage: onSendMessage,
+                                onStartVoiceRecording: onStartVoiceRecording,
+                                onStopAndSendVoice: onStopAndSendVoice,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComposerActionButton extends StatelessWidget {
+  final bool isRecording;
+  final VoidCallback onPressed;
+
+  const _ComposerActionButton({
+    required this.isRecording,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Theme.of(context).dividerColor.withValues(alpha: 0.35),
+        ),
+      ),
+      child: IconButton(
+        icon: Icon(isRecording ? Icons.stop : Icons.add, size: 22),
+        tooltip: isRecording ? 'Stop recording' : 'More actions',
+        onPressed: onPressed,
+        color: isRecording ? Colors.red : Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+}
+
+class _DestinationSelector extends StatelessWidget {
+  final String destinationLabel;
+  final Widget destinationAvatar;
+  final VoidCallback onTap;
+
+  const _DestinationSelector({
+    required this.destinationLabel,
+    required this.destinationAvatar,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Ink(
+          height: 42,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.35),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                destinationAvatar,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    destinationLabel,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.expand_more_rounded,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageInput extends StatelessWidget {
+  final TextEditingController textController;
+  final FocusNode focusNode;
+  final TextInputFormatter messageByteLimiter;
+
+  const _MessageInput({
+    required this.textController,
+    required this.focusNode,
+    required this.messageByteLimiter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      constraints: const BoxConstraints(minHeight: 46, maxHeight: 132),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: focusNode.hasFocus
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).dividerColor.withValues(alpha: 0.35),
+          width: focusNode.hasFocus ? 1.4 : 1,
+        ),
+        boxShadow: focusNode.hasFocus
+            ? [
+                BoxShadow(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.10),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: TextField(
+          controller: textController,
+          focusNode: focusNode,
+          minLines: 1,
+          maxLines: 4,
+          keyboardType: TextInputType.multiline,
+          inputFormatters: [messageByteLimiter],
+          style: const TextStyle(fontSize: 15),
+          textAlignVertical: TextAlignVertical.center,
+          decoration: InputDecoration(
+            hintText: AppLocalizations.of(context)!.typeYourMessage,
+            hintStyle: TextStyle(
+              fontSize: 15,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
+            ),
+            filled: false,
+            fillColor: Colors.transparent,
+            border: InputBorder.none,
+            isCollapsed: true,
+          ),
+          textInputAction: TextInputAction.newline,
+        ),
+      ),
+    );
+  }
+}
+
+class _SendButton extends StatelessWidget {
+  final bool canSendText;
+  final bool isRecording;
+  final bool isSendingVoice;
+  final bool voiceSupported;
+  final String semanticsLabel;
+  final int messageByteCount;
+  final int maxMessageBytes;
+  final Future<void> Function() onSendMessage;
+  final Future<void> Function() onStartVoiceRecording;
+  final Future<void> Function() onStopAndSendVoice;
+
+  const _SendButton({
+    required this.canSendText,
+    required this.isRecording,
+    required this.isSendingVoice,
+    required this.voiceSupported,
+    required this.semanticsLabel,
+    required this.messageByteCount,
+    required this.maxMessageBytes,
+    required this.onSendMessage,
+    required this.onStartVoiceRecording,
+    required this.onStopAndSendVoice,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: canSendText || (voiceSupported && !isSendingVoice),
+      label: semanticsLabel,
+      onTap: canSendText ? onSendMessage : null,
+      onLongPress: (voiceSupported && !isSendingVoice)
+          ? () {
+              if (isRecording) {
+                onStopAndSendVoice();
+                return;
+              }
+              onStartVoiceRecording();
+            }
+          : null,
+      child: Tooltip(
+        message: semanticsLabel,
+        excludeFromSemantics: true,
+        child: GestureDetector(
+          excludeFromSemantics: true,
+          onTap: canSendText ? onSendMessage : null,
+          onLongPressStart: (voiceSupported && !isSendingVoice)
+              ? (_) => onStartVoiceRecording()
+              : null,
+          onLongPressEnd: (voiceSupported && isRecording)
+              ? (_) => onStopAndSendVoice()
+              : null,
+          onLongPressCancel: (voiceSupported && isRecording)
+              ? onStopAndSendVoice
+              : null,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: canSendText || isRecording
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.surface,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: canSendText || isRecording
+                        ? Colors.transparent
+                        : Theme.of(
+                            context,
+                          ).dividerColor.withValues(alpha: 0.35),
+                  ),
+                  boxShadow: canSendText || isRecording
+                      ? [
+                          BoxShadow(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: 0.22),
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: isSendingVoice
+                    ? Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      )
+                    : Icon(
+                        isRecording ? Icons.mic_rounded : Icons.send_rounded,
+                        size: 22,
+                        color: canSendText || isRecording
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$messageByteCount/$maxMessageBytes',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: messageByteCount > maxMessageBytes * 0.9
+                      ? Colors.orange.shade800
+                      : Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.9),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

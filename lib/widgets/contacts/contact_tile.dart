@@ -11,6 +11,7 @@ import '../../providers/map_provider.dart';
 import '../../providers/app_provider.dart';
 import 'direct_message_sheet.dart';
 import 'room_login_sheet.dart';
+import '../../utils/location_formats.dart';
 import '../../utils/toast_logger.dart';
 import '../../utils/battery_display_helper.dart';
 import '../../l10n/app_localizations.dart';
@@ -827,7 +828,7 @@ class ContactTile extends StatelessWidget {
                     _detailRowWithCopy(
                       context,
                       'Plus Code',
-                      _convertToPlusCode(
+                      formatPlusCode(
                         contact.displayLocation!.latitude,
                         contact.displayLocation!.longitude,
                       ),
@@ -1111,34 +1112,6 @@ class ContactTile extends StatelessWidget {
     // Simplified - just show zone designation
     // Full MGRS would require UTM conversion library
     return '$zone$letter (approximate)';
-  }
-
-  /// Convert to Google Plus Code format
-  /// Simplified implementation - returns approximate code
-  String _convertToPlusCode(double lat, double lon) {
-    // This is a simplified version - full Plus Code requires the open_location_code package
-    // For now, return a placeholder that shows it's not fully implemented
-    const base = '23456789CFGHJMPQRVWX';
-
-    // Normalize coordinates
-    lat = (lat + 90) / 180; // 0 to 1
-    lon = (lon + 180) / 360; // 0 to 1
-
-    String code = '';
-    for (int i = 0; i < 8; i++) {
-      if (i == 4) code += '+';
-
-      int latDigit = (lat * 20).floor() % 20;
-      int lonDigit = (lon * 20).floor() % 20;
-
-      code += base[latDigit];
-      code += base[lonDigit];
-
-      lat = (lat * 20) % 1;
-      lon = (lon * 20) % 1;
-    }
-
-    return code;
   }
 
   IconData _getTypeIcon(ContactType type) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart';
 import '../../l10n/app_localizations.dart';
+import '../../utils/location_formats.dart';
 
 /// Reusable location display widget with tap-to-show modal
 /// Shows coordinates in a compact format with ability to view all formats
@@ -35,9 +36,9 @@ class LocationDisplay extends StatelessWidget {
               Text(
                 '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.w600,
-                    ),
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(width: 6),
               Icon(
@@ -54,9 +55,9 @@ class LocationDisplay extends StatelessWidget {
     // Non-compact version (just text)
     return Text(
       '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontFamily: 'monospace',
-          ),
+      style: Theme.of(
+        context,
+      ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
     );
   }
 
@@ -79,10 +80,7 @@ class LocationDisplay extends StatelessWidget {
                 children: [
                   const Text(
                     'Location Formats',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
@@ -121,7 +119,7 @@ class LocationDisplay extends StatelessWidget {
               _buildFormatRow(
                 context,
                 'Plus Code',
-                _convertToPlusCode(location.latitude, location.longitude),
+                formatPlusCode(location.latitude, location.longitude),
               ),
               const SizedBox(height: 8),
             ],
@@ -140,9 +138,9 @@ class LocationDisplay extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Colors.grey,
-                  fontWeight: FontWeight.w500,
-                ),
+              color: Colors.grey,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           const SizedBox(height: 4),
           InkWell(
@@ -150,7 +148,9 @@ class LocationDisplay extends StatelessWidget {
               Clipboard.setData(ClipboardData(text: value));
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(AppLocalizations.of(context)!.copiedToClipboard(label)),
+                  content: Text(
+                    AppLocalizations.of(context)!.copiedToClipboard(label),
+                  ),
                   duration: const Duration(seconds: 2),
                 ),
               );
@@ -168,9 +168,9 @@ class LocationDisplay extends StatelessWidget {
                     child: Text(
                       value,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontFamily: 'monospace',
-                            fontWeight: FontWeight.w500,
-                          ),
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                   Icon(
@@ -241,32 +241,5 @@ class LocationDisplay extends StatelessWidget {
     // Simplified - just show zone designation
     // Full MGRS would require UTM conversion library
     return '$zone$letter (approximate)';
-  }
-
-  /// Convert to Google Plus Code format
-  /// Simplified implementation - returns approximate code
-  String _convertToPlusCode(double lat, double lon) {
-    // This is a simplified version - full Plus Code requires the open_location_code package
-    const base = '23456789CFGHJMPQRVWX';
-
-    // Normalize coordinates
-    lat = (lat + 90) / 180; // 0 to 1
-    lon = (lon + 180) / 360; // 0 to 1
-
-    String code = '';
-    for (int i = 0; i < 8; i++) {
-      if (i == 4) code += '+';
-
-      int latDigit = (lat * 20).floor() % 20;
-      int lonDigit = (lon * 20).floor() % 20;
-
-      code += base[latDigit];
-      code += base[lonDigit];
-
-      lat = (lat * 20) % 1;
-      lon = (lon * 20) % 1;
-    }
-
-    return code;
   }
 }

@@ -19,7 +19,9 @@ import '../models/message.dart';
 import '../models/contact.dart';
 import '../widgets/messages/sar_update_sheet.dart';
 import '../widgets/messages/recipient_selector_sheet.dart';
-import '../widgets/messages/message_bubble.dart';
+import '../widgets/messages/messages_composer.dart';
+import '../widgets/messages/messages_content.dart';
+import '../widgets/common/contact_avatar.dart';
 import '../services/message_destination_preferences.dart';
 import '../services/voice_bitrate_preferences.dart';
 import '../services/voice_recorder_service.dart';
@@ -314,20 +316,6 @@ class _MessagesTabState extends State<MessagesTab> {
     }
   }
 
-  /// Get tooltip for destination button
-  String _getDestinationTooltip() {
-    if (_destinationType ==
-            MessageDestinationPreferences.destinationTypeChannel &&
-        _selectedRecipient != null) {
-      final channelName = _selectedRecipient!.getLocalizedDisplayName(context);
-      return '$channelName (tap to change)';
-    } else if (_selectedRecipient != null) {
-      final recipientName = _selectedRecipient!.displayName;
-      return '$recipientName (tap to change)';
-    }
-    return 'Select recipient';
-  }
-
   String _getDestinationLabel() {
     if (_destinationType ==
             MessageDestinationPreferences.destinationTypeChannel &&
@@ -466,10 +454,7 @@ class _MessagesTabState extends State<MessagesTab> {
     );
 
     // Add to messages list with "sending" status
-    messagesProvider.addSentMessage(
-      sentMessage,
-      contact: _selectedRecipient,
-    );
+    messagesProvider.addSentMessage(sentMessage, contact: _selectedRecipient);
 
     // Send message to selected recipient
     final sentSuccessfully = await connectionProvider.sendTextMessage(
@@ -1115,6 +1100,16 @@ class _MessagesTabState extends State<MessagesTab> {
     );
   }
 
+  Future<void> _runAfterSheetDismissal(
+    BuildContext sheetContext,
+    Future<void> Function() action,
+  ) async {
+    Navigator.pop(sheetContext);
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted) return;
+    await action();
+  }
+
   void _showComposerActions() {
     showModalBottomSheet(
       context: context,
@@ -1126,9 +1121,10 @@ class _MessagesTabState extends State<MessagesTab> {
               ListTile(
                 leading: const Icon(Icons.add_location_alt),
                 title: Text(AppLocalizations.of(context)!.sendSarMarker),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _showSarDialog();
+                onTap: () async {
+                  await _runAfterSheetDismissal(sheetContext, () async {
+                    _showSarDialog();
+                  });
                 },
               ),
               if (_voiceSupported)
@@ -1138,13 +1134,14 @@ class _MessagesTabState extends State<MessagesTab> {
                   title: Text(_isRecording ? 'Stop recording' : 'Record voice'),
                   onTap: _isSendingVoice
                       ? null
-                      : () {
-                          Navigator.pop(sheetContext);
-                          if (_isRecording) {
-                            _stopAndSendVoice();
-                          } else {
-                            _startVoiceRecording();
-                          }
+                      : () async {
+                          await _runAfterSheetDismissal(sheetContext, () async {
+                            if (_isRecording) {
+                              await _stopAndSendVoice();
+                            } else {
+                              await _startVoiceRecording();
+                            }
+                          });
                         },
                 ),
               ListTile(
@@ -1153,9 +1150,10 @@ class _MessagesTabState extends State<MessagesTab> {
                 title: const Text('Send image from gallery'),
                 onTap: _isSendingImage
                     ? null
-                    : () {
-                        Navigator.pop(sheetContext);
-                        _pickAndSendImage(source: ImageSource.gallery);
+                    : () async {
+                        await _runAfterSheetDismissal(sheetContext, () async {
+                          await _pickAndSendImage(source: ImageSource.gallery);
+                        });
                       },
               ),
               ListTile(
@@ -1164,24 +1162,43 @@ class _MessagesTabState extends State<MessagesTab> {
                 title: const Text('Take photo'),
                 onTap: _isSendingImage
                     ? null
-                    : () {
-                        Navigator.pop(sheetContext);
-                        _pickAndSendImage(source: ImageSource.camera);
+                    : () async {
+                        await _runAfterSheetDismissal(sheetContext, () async {
+                          await _pickAndSendImage(source: ImageSource.camera);
+                        });
                       },
               ),
               ListTile(
                 leading: const Icon(Icons.grid_3x3),
                 title: const Text('Start Tic-Tac-Toe'),
                 subtitle: const Text('DM only'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _startTicTacToeGame();
+                onTap: () async {
+                  await _runAfterSheetDismissal(sheetContext, () async {
+                    await _startTicTacToeGame();
+                  });
                 },
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDestinationAvatar(BuildContext context) {
+    final recipient = _selectedRecipient;
+    if (recipient != null) {
+      return ContactAvatar(
+        contact: recipient,
+        radius: 14,
+        displayName: _getDestinationLabel(),
+      );
+    }
+
+    return Icon(
+      _getDestinationIcon(),
+      size: 17,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
     );
   }
 
@@ -1496,6 +1513,28 @@ class _MessagesTabState extends State<MessagesTab> {
     return filteredMessages;
   }
 
+  void _handleMessageTap(Message message) {
+    if (widget.onNavigateToMap == null) return;
+
+    if (message.isSarMarker && message.sarGpsCoordinates != null) {
+      final mapProvider = context.read<MapProvider>();
+      mapProvider.navigateToLocation(
+        location: message.sarGpsCoordinates!,
+        zoom: 15.0,
+      );
+      widget.onNavigateToMap?.call();
+      return;
+    }
+
+    if (message.isDrawing && message.drawingId != null) {
+      debugPrint('🗺️ [MessagesTab] Drawing tapped! ID: ${message.drawingId}');
+      final mapProvider = context.read<MapProvider>();
+      final drawingProvider = context.read<DrawingProvider>();
+      mapProvider.navigateToDrawing(message.drawingId!, drawingProvider);
+      widget.onNavigateToMap?.call();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<MessagesProvider>(
@@ -1509,551 +1548,33 @@ class _MessagesTabState extends State<MessagesTab> {
           onTap: () => FocusScope.of(context).unfocus(),
           child: Column(
             children: [
-              // Messages list with pull-to-refresh
               Expanded(
-                child: RefreshIndicator(
+                child: MessagesContent(
+                  messages: messages,
+                  scrollController: _scrollController,
+                  highlightedMessageId: _highlightedMessageId,
                   onRefresh: _handleRefresh,
-                  child: messages.isEmpty
-                      ? LayoutBuilder(
-                          builder: (context, constraints) =>
-                              SingleChildScrollView(
-                                keyboardDismissBehavior:
-                                    ScrollViewKeyboardDismissBehavior.onDrag,
-                                physics:
-                                    const AlwaysScrollableScrollPhysics(),
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    minHeight: constraints.maxHeight,
-                                  ),
-                                  child: Center(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.message_outlined,
-                                          size: 64,
-                                          color: Theme.of(
-                                            context,
-                                          ).disabledColor,
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          AppLocalizations.of(
-                                            context,
-                                          )!.noMessagesYet,
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.titleLarge,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          AppLocalizations.of(
-                                            context,
-                                          )!.pullDownToSync,
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.bodyMedium,
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                        )
-                      : ListView.builder(
-                          controller: _scrollController,
-                          keyboardDismissBehavior:
-                              ScrollViewKeyboardDismissBehavior.onDrag,
-                          reverse: true,
-                          padding: const EdgeInsets.all(8),
-                          itemCount: messages.length,
-                          itemBuilder: (context, index) {
-                            final message = messages[index];
-                            final isHighlighted =
-                                message.id == _highlightedMessageId;
-
-                            return MessageBubble(
-                              key: ValueKey(message.id),
-                              message: message,
-                              isHighlighted: isHighlighted,
-                              onNavigateToMap: widget.onNavigateToMap,
-                              onTap:
-                                  widget.onNavigateToMap != null &&
-                                      message.isSarMarker &&
-                                      message.sarGpsCoordinates != null
-                                  ? () {
-                                      final mapProvider = context
-                                          .read<MapProvider>();
-                                      mapProvider.navigateToLocation(
-                                        location: message.sarGpsCoordinates!,
-                                        zoom: 15.0,
-                                      );
-                                      widget.onNavigateToMap?.call();
-                                    }
-                                  : widget.onNavigateToMap != null &&
-                                        message.isDrawing &&
-                                        message.drawingId != null
-                                  ? () {
-                                      debugPrint(
-                                        '🗺️ [MessagesTab] Drawing tapped! ID: ${message.drawingId}',
-                                      );
-                                      final mapProvider = context
-                                          .read<MapProvider>();
-                                      final drawingProvider = context
-                                          .read<DrawingProvider>();
-                                      mapProvider.navigateToDrawing(
-                                        message.drawingId!,
-                                        drawingProvider,
-                                      );
-                                      widget.onNavigateToMap?.call();
-                                    }
-                                  : null,
-                            );
-                          },
-                        ),
+                  onNavigateToMap: widget.onNavigateToMap,
+                  onMessageTap: _handleMessageTap,
                 ),
               ),
-
-              // Message input area
-              Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          10,
-                          10,
-                          10,
-                          composerBottomPadding,
-                        ),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(28),
-                            border: Border.all(
-                              color: Theme.of(
-                                context,
-                              ).dividerColor.withValues(alpha: 0.35),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 18,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 42,
-                                    height: 42,
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.surface,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Theme.of(
-                                          context,
-                                        ).dividerColor.withValues(alpha: 0.35),
-                                      ),
-                                    ),
-                                    child: IconButton(
-                                      icon: Icon(
-                                        _isRecording ? Icons.stop : Icons.add,
-                                        size: 22,
-                                      ),
-                                      tooltip: _isRecording
-                                          ? 'Stop recording'
-                                          : 'More actions',
-                                      onPressed: _isRecording
-                                          ? _stopAndSendVoice
-                                          : _showComposerActions,
-                                      color: _isRecording
-                                          ? Colors.red
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.primary,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(20),
-                                        onTap: _showRecipientSelector,
-                                        child: Ink(
-                                          height: 42,
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.surface,
-                                            borderRadius: BorderRadius.circular(
-                                              20,
-                                            ),
-                                            border: Border.all(
-                                              color: Theme.of(context)
-                                                  .dividerColor
-                                                  .withValues(alpha: 0.35),
-                                            ),
-                                          ),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 14,
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  _getDestinationIcon(),
-                                                  size: 17,
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Expanded(
-                                                  child: Text(
-                                                    _getDestinationLabel(),
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: TextStyle(
-                                                      fontSize: 15,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: Theme.of(
-                                                        context,
-                                                      ).colorScheme.onSurface,
-                                                    ),
-                                                  ),
-                                                ),
-                                                Icon(
-                                                  Icons.expand_more_rounded,
-                                                  size: 20,
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Expanded(
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 180,
-                                      ),
-                                      constraints: const BoxConstraints(
-                                        minHeight: 46,
-                                        maxHeight: 132,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.surface,
-                                        borderRadius: BorderRadius.circular(24),
-                                        border: Border.all(
-                                          color: _focusNode.hasFocus
-                                              ? Theme.of(
-                                                  context,
-                                                ).colorScheme.primary
-                                              : Theme.of(context).dividerColor
-                                                    .withValues(alpha: 0.35),
-                                          width: _focusNode.hasFocus ? 1.4 : 1,
-                                        ),
-                                        boxShadow: _focusNode.hasFocus
-                                            ? [
-                                                BoxShadow(
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .primary
-                                                      .withValues(alpha: 0.10),
-                                                  blurRadius: 12,
-                                                  offset: const Offset(0, 4),
-                                                ),
-                                              ]
-                                            : null,
-                                      ),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 12,
-                                        ),
-                                        child: TextField(
-                                          controller: _textController,
-                                          focusNode: _focusNode,
-                                          minLines: 1,
-                                          maxLines: 4,
-                                          keyboardType: TextInputType.multiline,
-                                          inputFormatters: [
-                                            _messageByteLimiter,
-                                          ],
-                                          style: const TextStyle(fontSize: 15),
-                                          textAlignVertical:
-                                              TextAlignVertical.center,
-                                          decoration: InputDecoration(
-                                            hintText: AppLocalizations.of(
-                                              context,
-                                            )!.typeYourMessage,
-                                            hintStyle: TextStyle(
-                                              fontSize: 15,
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurfaceVariant
-                                                  .withValues(alpha: 0.9),
-                                            ),
-                                            filled: false,
-                                            fillColor: Colors.transparent,
-                                            border: InputBorder.none,
-                                            isCollapsed: true,
-                                          ),
-                                          textInputAction:
-                                              TextInputAction.newline,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Builder(
-                                    builder: (context) {
-                                      final canSendText =
-                                          !_isRecording &&
-                                          !_isSendingVoice &&
-                                          _textController.text
-                                              .trim()
-                                              .isNotEmpty;
-                                      final semanticsLabel = _isRecording
-                                          ? 'Recording... release to send voice'
-                                          : (_isSendingVoice
-                                                ? 'Sending voice...'
-                                                : _voiceSupported
-                                                ? 'Send (long press to record voice)'
-                                                : 'Send');
-
-                                      return Semantics(
-                                        button: true,
-                                        enabled:
-                                            canSendText ||
-                                            (_voiceSupported &&
-                                                !_isSendingVoice),
-                                        label: semanticsLabel,
-                                        onTap: canSendText
-                                            ? _sendMessage
-                                            : null,
-                                        onLongPress:
-                                            (_voiceSupported &&
-                                                !_isSendingVoice)
-                                            ? () {
-                                                if (_isRecording) {
-                                                  _stopAndSendVoice();
-                                                  return;
-                                                }
-                                                _startVoiceRecording();
-                                              }
-                                            : null,
-                                        child: Tooltip(
-                                          message: semanticsLabel,
-                                          excludeFromSemantics: true,
-                                          child: GestureDetector(
-                                            excludeFromSemantics: true,
-                                            onTap: canSendText
-                                                ? () {
-                                                    debugPrint(
-                                                      '👆 [MessagesTab] Send button tapped '
-                                                      '(canSendText=$canSendText, '
-                                                      'textLength=${_textController.text.trim().length}, '
-                                                      'recording=$_isRecording, '
-                                                      'sendingVoice=$_isSendingVoice)',
-                                                    );
-                                                    _sendMessage();
-                                                  }
-                                                : null,
-                                            onLongPressStart:
-                                                (_voiceSupported &&
-                                                    !_isSendingVoice)
-                                                ? (_) {
-                                                    debugPrint(
-                                                      '🎙️ [MessagesTab] Send button long-press start '
-                                                      '(voiceSupported=$_voiceSupported, '
-                                                      'sendingVoice=$_isSendingVoice, '
-                                                      'recording=$_isRecording)',
-                                                    );
-                                                    _startVoiceRecording();
-                                                  }
-                                                : null,
-                                            onLongPressEnd:
-                                                (_voiceSupported &&
-                                                    _isRecording)
-                                                ? (_) {
-                                                    debugPrint(
-                                                      '🎙️ [MessagesTab] Send button long-press end '
-                                                      '(recording=$_isRecording)',
-                                                    );
-                                                    _stopAndSendVoice();
-                                                  }
-                                                : null,
-                                            onLongPressCancel:
-                                                (_voiceSupported &&
-                                                    _isRecording)
-                                                ? () {
-                                                    debugPrint(
-                                                      '🎙️ [MessagesTab] Send button long-press cancel '
-                                                      '(recording=$_isRecording)',
-                                                    );
-                                                    _stopAndSendVoice();
-                                                  }
-                                                : null,
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                AnimatedContainer(
-                                                  duration: const Duration(
-                                                    milliseconds: 180,
-                                                  ),
-                                                  width: 46,
-                                                  height: 46,
-                                                  decoration: BoxDecoration(
-                                                    color:
-                                                        canSendText ||
-                                                            _isRecording
-                                                        ? Theme.of(
-                                                            context,
-                                                          ).colorScheme.primary
-                                                        : Theme.of(
-                                                            context,
-                                                          ).colorScheme.surface,
-                                                    shape: BoxShape.circle,
-                                                    border: Border.all(
-                                                      color:
-                                                          canSendText ||
-                                                              _isRecording
-                                                          ? Colors.transparent
-                                                          : Theme.of(context)
-                                                                .dividerColor
-                                                                .withValues(
-                                                                  alpha: 0.35,
-                                                                ),
-                                                    ),
-                                                    boxShadow:
-                                                        canSendText ||
-                                                            _isRecording
-                                                        ? [
-                                                            BoxShadow(
-                                                              color:
-                                                                  Theme.of(
-                                                                        context,
-                                                                      )
-                                                                      .colorScheme
-                                                                      .primary
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            0.22,
-                                                                      ),
-                                                              blurRadius: 14,
-                                                              offset:
-                                                                  const Offset(
-                                                                    0,
-                                                                    6,
-                                                                  ),
-                                                            ),
-                                                          ]
-                                                        : null,
-                                                  ),
-                                                  child: _isSendingVoice
-                                                      ? Center(
-                                                          child: CircularProgressIndicator(
-                                                            strokeWidth: 2,
-                                                            color:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .onPrimary,
-                                                          ),
-                                                        )
-                                                      : Icon(
-                                                          _isRecording
-                                                              ? Icons
-                                                                    .mic_rounded
-                                                              : Icons
-                                                                    .send_rounded,
-                                                          size: 22,
-                                                          color:
-                                                              canSendText ||
-                                                                  _isRecording
-                                                              ? Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .onPrimary
-                                                              : Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .onSurfaceVariant,
-                                                        ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  '$_messageByteCount/$_maxMessageBytes',
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w500,
-                                                    color:
-                                                        _messageByteCount >
-                                                            _maxMessageBytes *
-                                                                0.9
-                                                        ? Colors.orange.shade800
-                                                        : Theme.of(context)
-                                                              .colorScheme
-                                                              .onSurfaceVariant
-                                                              .withValues(
-                                                                alpha: 0.9,
-                                                              ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              MessagesComposer(
+                textController: _textController,
+                focusNode: _focusNode,
+                messageByteLimiter: _messageByteLimiter,
+                messageByteCount: _messageByteCount,
+                maxMessageBytes: _maxMessageBytes,
+                isRecording: _isRecording,
+                isSendingVoice: _isSendingVoice,
+                voiceSupported: _voiceSupported,
+                bottomPadding: composerBottomPadding,
+                destinationLabel: _getDestinationLabel(),
+                destinationAvatar: _buildDestinationAvatar(context),
+                onShowComposerActions: _showComposerActions,
+                onShowRecipientSelector: _showRecipientSelector,
+                onStartVoiceRecording: _startVoiceRecording,
+                onStopAndSendVoice: _stopAndSendVoice,
+                onSendMessage: _sendMessage,
               ),
             ],
           ),
