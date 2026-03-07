@@ -11,6 +11,7 @@ import '../../providers/map_provider.dart';
 import '../../providers/app_provider.dart';
 import 'contact_route_dialog.dart';
 import 'room_login_sheet.dart';
+import '../common/contact_avatar.dart';
 import '../../utils/location_formats.dart';
 import '../../utils/toast_logger.dart';
 import '../../utils/battery_display_helper.dart';
@@ -147,54 +148,28 @@ class ContactTile extends StatelessWidget {
       fontWeight: FontWeight.w800,
       letterSpacing: -0.3,
     );
+    final timeAgoText = _getLocalizedTimeSinceLastSeen(context);
+    final timeAgoStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: contact.isRecentlySeen
+          ? colorScheme.primary
+          : colorScheme.onSurfaceVariant,
+      fontWeight: FontWeight.w600,
+    );
     final subtitleWidget = isSimpleMode
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  Icon(
-                    Icons.access_time,
-                    size: 12,
-                    color: contact.isRecentlySeen ? Colors.green : Colors.grey,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${AppLocalizations.of(context)!.lastSeen}: ${_getLocalizedTimeSinceLastSeen(context)}',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ],
-              ),
               if (location != null) ...[
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.location_on, size: 12, color: Colors.blue),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'GPS: ${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
-                        style: Theme.of(context).textTheme.labelSmall,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 2),
+                _buildLocationLine(
+                  context,
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  distanceText: distanceText,
                 ),
-                if (contact.type != ContactType.channel ||
-                    distanceText != null) ...[
+                if (contact.type != ContactType.channel) ...[
                   const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      if (contact.type != ContactType.channel)
-                        _buildRoutePill(context, contact),
-                      if (distanceText != null)
-                        _buildDistancePill(context, distanceText),
-                    ],
-                  ),
+                  Row(children: [_buildRoutePill(context, contact)]),
                 ],
               ] else
                 Padding(
@@ -285,40 +260,17 @@ class ContactTile extends StatelessWidget {
               ],
               Row(
                 children: [
-                  Icon(
-                    Icons.access_time,
-                    size: 12,
-                    color: contact.isRecentlySeen ? Colors.green : Colors.grey,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _getLocalizedTimeSinceLastSeen(context),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
                   if (location != null) ...[
-                    const SizedBox(width: 8),
-                    const Text('•', style: TextStyle(color: Colors.grey)),
-                    const SizedBox(width: 8),
-                    if (hasTelemetry)
-                      const Icon(Icons.sensors, size: 12, color: Colors.green)
-                    else
-                      const Icon(
-                        Icons.sensors_off,
-                        size: 12,
-                        color: Colors.grey,
-                      ),
-                    const SizedBox(width: 4),
                     Expanded(
-                      child: Text(
-                        'GPS: ${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
-                        style: Theme.of(context).textTheme.labelSmall,
-                        overflow: TextOverflow.ellipsis,
+                      child: _buildLocationLine(
+                        context,
+                        latitude: location.latitude,
+                        longitude: location.longitude,
+                        distanceText: distanceText,
+                        telemetryActive: hasTelemetry,
                       ),
                     ),
                   ] else ...[
-                    const SizedBox(width: 8),
-                    const Text('•', style: TextStyle(color: Colors.grey)),
-                    const SizedBox(width: 8),
                     const Icon(Icons.sensors_off, size: 12, color: Colors.grey),
                     const SizedBox(width: 4),
                     Text(
@@ -328,20 +280,9 @@ class ContactTile extends StatelessWidget {
                   ],
                 ],
               ),
-              if (contact.type != ContactType.channel ||
-                  distanceText != null) ...[
+              if (contact.type != ContactType.channel) ...[
                 const SizedBox(height: 6),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (contact.type != ContactType.channel)
-                      _buildRoutePill(context, contact),
-                    if (distanceText != null)
-                      _buildDistancePill(context, distanceText),
-                  ],
-                ),
+                Row(children: [_buildRoutePill(context, contact)]),
               ],
             ],
           );
@@ -378,51 +319,12 @@ class ContactTile extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            _getTypeColor(contact.type, context),
-                            _getTypeColor(
-                              contact.type,
-                              context,
-                            ).withValues(alpha: 0.72),
-                          ],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _getTypeColor(
-                              contact.type,
-                              context,
-                            ).withValues(alpha: 0.22),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: contact.roleEmoji != null
-                            ? Text(
-                                contact.roleEmoji!,
-                                style: const TextStyle(fontSize: 22),
-                              )
-                            : Icon(
-                                _getTypeIcon(contact.type),
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                      ),
-                    ),
+                    ContactAvatar(contact: contact, radius: 24),
                     if (contact.isNew)
                       Positioned(
                         top: -2,
@@ -480,26 +382,7 @@ class ContactTile extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerHighest
-                                  .withValues(alpha: 0.75),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              contact.type.displayName,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 0.1,
-                                  ),
-                            ),
-                          ),
+                          Text(timeAgoText, style: timeAgoStyle),
                           if (!isSimpleMode && battery != null) ...[
                             const SizedBox(width: 6),
                             _buildBatteryBadge(context, battery),
@@ -656,18 +539,7 @@ class ContactTile extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      backgroundColor: _getTypeColor(contact.type, context),
-                      child: contact.roleEmoji != null
-                          ? Text(
-                              contact.roleEmoji!,
-                              style: const TextStyle(fontSize: 24),
-                            )
-                          : Icon(
-                              _getTypeIcon(contact.type),
-                              color: Colors.white,
-                            ),
-                    ),
+                    ContactAvatar(contact: contact, radius: 20),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -1116,17 +988,42 @@ class ContactTile extends StatelessWidget {
         .where((candidate) => candidate.publicKeyHex != contact.publicKeyHex)
         .toList();
 
-    final parsedRoute = await ContactRouteDialog.show(
+    final routeResult = await ContactRouteDialog.show(
       context,
       contact: contact,
       availableContacts: availableContacts,
     );
-    if (parsedRoute == null || !context.mounted) {
+    if (routeResult == null || !context.mounted) {
       return;
     }
 
     final previousSignedPathLen = contact.routeSignedPathLen;
     final previousPathBytes = Uint8List.fromList(contact.outPath);
+    if (routeResult.shouldClear) {
+      contactsProvider.resetContactRouteLocal(contact.publicKey);
+      await connectionProvider.resetPath(contact.publicKey);
+      final error = connectionProvider.error;
+      if (error != null) {
+        contactsProvider.setContactRouteLocal(
+          contact.publicKey,
+          signedEncodedPathLen: previousSignedPathLen,
+          paddedPathBytes: previousPathBytes,
+        );
+        if (context.mounted) {
+          ToastLogger.error(context, 'Failed to clear route: $error');
+        }
+        return;
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Route cleared')));
+      }
+      return;
+    }
+
+    final parsedRoute = routeResult.route!;
     contactsProvider.setContactRouteLocal(
       contact.publicKey,
       signedEncodedPathLen: parsedRoute.signedEncodedPathLen,
@@ -1217,6 +1114,73 @@ class ContactTile extends StatelessWidget {
     );
   }
 
+  Widget _buildLocationMeta(
+    BuildContext context,
+    double latitude,
+    double longitude, {
+    bool telemetryActive = true,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            color: telemetryActive
+                ? colorScheme.primary.withValues(alpha: 0.12)
+                : colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Icon(
+            telemetryActive
+                ? Icons.navigation_rounded
+                : Icons.location_searching,
+            size: 11,
+            color: telemetryActive
+                ? colorScheme.primary
+                : colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            fontFamily: 'monospace',
+            color: colorScheme.onSurfaceVariant,
+            letterSpacing: 0.1,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLocationLine(
+    BuildContext context, {
+    required double latitude,
+    required double longitude,
+    String? distanceText,
+    bool telemetryActive = true,
+  }) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _buildLocationMeta(
+          context,
+          latitude,
+          longitude,
+          telemetryActive: telemetryActive,
+        ),
+        if (distanceText != null) _buildDistancePill(context, distanceText),
+      ],
+    );
+  }
+
   /// Convert to Degrees Minutes Seconds (DMS) format
   String _convertToDMS(double lat, double lon) {
     String latDir = lat >= 0 ? 'N' : 'S';
@@ -1271,19 +1235,6 @@ class ContactTile extends StatelessWidget {
     // Simplified - just show zone designation
     // Full MGRS would require UTM conversion library
     return '$zone$letter (approximate)';
-  }
-
-  IconData _getTypeIcon(ContactType type) {
-    switch (type) {
-      case ContactType.chat:
-        return Icons.person;
-      case ContactType.repeater:
-        return Icons.router;
-      case ContactType.room:
-        return Icons.tag;
-      default:
-        return Icons.help;
-    }
   }
 
   Color _getTypeColor(ContactType type, BuildContext context) {
@@ -1411,6 +1362,7 @@ class ContactTile extends StatelessWidget {
 
   Widget _buildRoutePill(BuildContext context, Contact contact) {
     final hasPath = contact.routeHasPath;
+    final isDirect = !hasPath || contact.routeHopCount <= 0;
     final scheme = Theme.of(context).colorScheme;
     final textColor = Theme.of(
       context,
@@ -1418,9 +1370,7 @@ class ContactTile extends StatelessWidget {
     final iconColor = Theme.of(
       context,
     ).textTheme.labelSmall?.color?.withValues(alpha: 0.7);
-    final label = !hasPath
-        ? AppLocalizations.of(context)!.flood
-        : contact.routeHopCount <= 0
+    final label = isDirect
         ? AppLocalizations.of(context)!.direct
         : contact.routeCanonicalText;
 
@@ -1434,7 +1384,7 @@ class ContactTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            hasPath ? Icons.alt_route : Icons.waves,
+            isDirect ? Icons.north_east_rounded : Icons.alt_route,
             size: 11,
             color: iconColor,
           ),
@@ -1447,9 +1397,7 @@ class ContactTile extends StatelessWidget {
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: textColor,
                 fontWeight: FontWeight.w600,
-                fontFamily: hasPath && contact.routeHopCount > 0
-                    ? 'monospace'
-                    : null,
+                fontFamily: !isDirect ? 'monospace' : null,
               ),
             ),
           ),
@@ -1479,7 +1427,7 @@ class ContactTile extends StatelessWidget {
           ),
           const SizedBox(width: 5),
           Text(
-            '${AppLocalizations.of(context)!.distance}: $distanceText',
+            distanceText,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: Theme.of(
                 context,

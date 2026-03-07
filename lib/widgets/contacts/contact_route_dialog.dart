@@ -3,6 +3,18 @@ import 'package:flutter/material.dart';
 import '../../models/contact.dart';
 import '../../services/route_hash_preferences.dart';
 
+class ContactRouteDialogResult {
+  final ParsedContactRoute? route;
+  final bool shouldClear;
+
+  const ContactRouteDialogResult._({this.route, required this.shouldClear});
+
+  const ContactRouteDialogResult.set(ParsedContactRoute route)
+    : this._(route: route, shouldClear: false);
+
+  const ContactRouteDialogResult.clear() : this._(shouldClear: true);
+}
+
 class ContactRouteDialog extends StatefulWidget {
   final Contact contact;
   final List<Contact> availableContacts;
@@ -13,12 +25,12 @@ class ContactRouteDialog extends StatefulWidget {
     required this.availableContacts,
   });
 
-  static Future<ParsedContactRoute?> show(
+  static Future<ContactRouteDialogResult?> show(
     BuildContext context, {
     required Contact contact,
     required List<Contact> availableContacts,
   }) {
-    return showModalBottomSheet<ParsedContactRoute>(
+    return showModalBottomSheet<ContactRouteDialogResult>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -212,11 +224,20 @@ class _ContactRouteDialogState extends State<ContactRouteDialog> {
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('Cancel'),
                 ),
+                if (widget.contact.routeHasPath)
+                  TextButton(
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).pop(const ContactRouteDialogResult.clear()),
+                    child: const Text('Clear Route'),
+                  ),
                 const Spacer(),
                 FilledButton(
                   onPressed: _parsedRoute == null
                       ? null
-                      : () => Navigator.of(context).pop(_parsedRoute),
+                      : () => Navigator.of(
+                          context,
+                        ).pop(ContactRouteDialogResult.set(_parsedRoute!)),
                   child: const Text('Set Route'),
                 ),
               ],

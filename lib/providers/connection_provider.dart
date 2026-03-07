@@ -2015,6 +2015,7 @@ class ConnectionProvider with ChangeNotifier {
     }
 
     try {
+      _error = null;
       await _activeService.resetPath(contactPublicKey);
     } catch (e) {
       _error = 'Failed to reset path: $e';
@@ -2034,6 +2035,7 @@ class ConnectionProvider with ChangeNotifier {
     }
 
     try {
+      _error = null;
       final updatedContact = contact.copyWith(
         outPathLen: signedEncodedPathLen,
         outPath: Uint8List.fromList(paddedPathBytes),

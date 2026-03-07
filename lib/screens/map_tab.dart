@@ -59,7 +59,7 @@ class MapTab extends StatefulWidget {
 
 class _MapTabState extends State<MapTab> with AutomaticKeepAliveClientMixin {
   final MapController _mapController = MapController();
-  final TileCacheService _tileCache = TileCacheService();
+  late final TileCacheService _tileCache;
   // DO NOT create a new LocationTrackingService instance here
   // Use the singleton from AppProvider instead via _locationService getter
   final MapMarkerService _markerService = MapMarkerService();
@@ -117,6 +117,7 @@ class _MapTabState extends State<MapTab> with AutomaticKeepAliveClientMixin {
   @override
   void initState() {
     super.initState();
+    _tileCache = context.read<TileCacheService>();
     // Initialize Slovenian WMS layers with CRS
     _slovenianAerialLayer = MapLayer.getSlovenianAerial2024(slovenianCrs);
     _dtk25Layer = MapLayer.getDTK25(slovenianCrs);
@@ -446,7 +447,6 @@ class _MapTabState extends State<MapTab> with AutomaticKeepAliveClientMixin {
     // Restore the original callback instead of setting to null
     _locationService.onPositionUpdate = _originalLocationCallback;
     _mapController.dispose();
-    _tileCache.dispose();
     super.dispose();
   }
 

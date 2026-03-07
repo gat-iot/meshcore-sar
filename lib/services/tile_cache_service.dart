@@ -10,47 +10,66 @@ class TileCacheService {
 
   // Global flag to ensure ObjectBox is only initialized once
   static bool _objectBoxInitialized = false;
-  static final _initLock = <String, Future<void>>{};
+  static Future<void>? _objectBoxInitialization;
 
-  late final FMTCStore _store;
+  Future<void>? _initializeFuture;
+  FMTCStore? _store;
   bool _isInitialized = false;
   bool _isDownloading = false;
 
   Future<void> initialize() async {
     if (_isInitialized) return;
+    _initializeFuture ??= _initializeInternal();
+    await _initializeFuture;
+  }
 
-    // Ensure we only initialize ObjectBox once globally
-    if (!_objectBoxInitialized) {
-      // Use a lock to prevent concurrent initialization attempts
-      final initFuture = _initLock.putIfAbsent('objectbox', () async {
-        try {
-          await FMTCObjectBoxBackend().initialise();
-          _objectBoxInitialized = true;
-        } catch (e) {
-          // Already initialized or error - that's okay
-          _objectBoxInitialized = true;
-        }
-      });
-      await initFuture;
-    }
-
+  Future<void> _initializeInternal() async {
     try {
-      _store = FMTCStore(_storeName);
-      await _store.manage.create();
+      await _ensureObjectBoxInitialized();
+
+      final store = FMTCStore(_storeName);
+      try {
+        await store.manage.create();
+      } catch (_) {
+        // The store may already exist from a prior initialization.
+      }
+
+      _store = store;
       _isInitialized = true;
-    } catch (e) {
-      // Store might already exist
-      _store = FMTCStore(_storeName);
-      _isInitialized = true;
+    } catch (_) {
+      _initializeFuture = null;
+      rethrow;
     }
   }
 
-  FMTCTileProvider getTileProvider(MapLayer layer) {
-    if (!_isInitialized) {
+  Future<void> _ensureObjectBoxInitialized() async {
+    if (_objectBoxInitialized) return;
+
+    _objectBoxInitialization ??= () async {
+      try {
+        await FMTCObjectBoxBackend().initialise();
+      } catch (_) {
+        // Treat repeated backend initialization as a no-op.
+      } finally {
+        _objectBoxInitialized = true;
+      }
+    }();
+
+    await _objectBoxInitialization;
+  }
+
+  FMTCStore _requireStore() {
+    final store = _store;
+    if (!_isInitialized || store == null) {
       throw StateError(
         'TileCacheService not initialized. Call initialize() first.',
       );
     }
+    return store;
+  }
+
+  TileProvider getTileProvider(MapLayer layer) {
+    _requireStore();
     return FMTCTileProvider(
       stores: {_storeName: BrowseStoreStrategy.readUpdateCreate},
       loadingStrategy: BrowseLoadingStrategy.cacheFirst,
@@ -60,12 +79,8 @@ class TileCacheService {
 
   /// Get tile provider for WMS layers with caching support
   /// WMS layers require special handling because they use WMSTileLayerOptions
-  FMTCTileProvider getTileProviderForWms(MapLayer layer) {
-    if (!_isInitialized) {
-      throw StateError(
-        'TileCacheService not initialized. Call initialize() first.',
-      );
-    }
+  TileProvider getTileProviderForWms(MapLayer layer) {
+    _requireStore();
     if (!layer.isWms) {
       throw ArgumentError('Layer must be a WMS layer');
     }
@@ -97,6 +112,7 @@ class TileCacheService {
     }
 
     _isDownloading = true;
+    final store = _requireStore();
 
     try {
       final region = RectangleRegion(bounds);
@@ -107,7 +123,7 @@ class TileCacheService {
         options: TileLayer(urlTemplate: layer.urlTemplate),
       );
 
-      final download = _store.download.startForeground(region: downloadable);
+      final download = store.download.startForeground(region: downloadable);
 
       await for (final progress in download.downloadProgress) {
         if (onProgress != null && progress.maxTilesCount > 0) {
@@ -127,24 +143,25 @@ class TileCacheService {
 
   Future<void> cancelDownload() async {
     if (!_isInitialized) return;
-    await _store.download.cancel();
+    await _requireStore().download.cancel();
   }
 
   Future<void> clearCache() async {
     if (!_isInitialized) return;
-    await _store.manage.delete();
-    await _store.manage.create();
+    final store = _requireStore();
+    await store.manage.delete();
+    await store.manage.create();
   }
 
   Future<int> getCachedTileCount() async {
     if (!_isInitialized) return 0;
-    final stats = await _store.stats.length;
+    final stats = await _requireStore().stats.length;
     return stats;
   }
 
   Future<double> getCacheSizeMB() async {
     if (!_isInitialized) return 0.0;
-    final stats = await _store.stats.size;
+    final stats = await _requireStore().stats.size;
     return stats / (1024 * 1024);
   }
 
@@ -162,8 +179,9 @@ class TileCacheService {
   Future<Map<String, dynamic>> getStoreStats() async {
     if (!_isInitialized) return {};
 
-    final length = await _store.stats.length;
-    final size = await _store.stats.all.then((a) => a.size);
+    final store = _requireStore();
+    final length = await store.stats.length;
+    final size = await store.stats.all.then((a) => a.size);
 
     return {
       'tileCount': length,

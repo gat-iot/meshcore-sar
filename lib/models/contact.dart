@@ -231,10 +231,10 @@ extension ContactLocalization on Contact {
   }
 
   String get routeSummary {
-    if (routeIsUnknown || !routeHasPath) {
-      return 'Flood/Unknown';
+    if (routeIsUnknown) {
+      return 'Unknown';
     }
-    if (routeHopCount == 0) {
+    if (!routeHasPath || routeHopCount == 0) {
       return 'Direct';
     }
     return '$routeHopCount hop${routeHopCount == 1 ? '' : 's'} via $routeHashSize-byte hashes';

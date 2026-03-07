@@ -715,36 +715,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ],
                     ),
                   ),
-                  // Settings cog - hidden in simple mode
-                  if (!context.watch<AppProvider>().isSimpleMode) ...[
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const DeviceConfigScreen(),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const DeviceConfigScreen(),
+                        ),
+                      );
+                    },
+                    onLongPress: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PacketLogScreen(
+                            bleService: provider.bleService,
                           ),
-                        );
-                      },
-                      onLongPress: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => PacketLogScreen(
-                              bleService: provider.bleService,
-                            ),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.settings, size: 18),
-                      ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.settings, size: 18),
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
