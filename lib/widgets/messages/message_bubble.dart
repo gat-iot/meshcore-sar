@@ -188,6 +188,12 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   void _handleBubbleTap({required bool isSarMarker, required bool isDrawing}) {
+    if (!widget.message.isRead &&
+        !widget.message.isSentMessage &&
+        !widget.message.isSystemMessage) {
+      context.read<MessagesProvider>().markAsRead(widget.message.id);
+    }
+
     if (!widget.isCompact && !isSarMarker && !isDrawing) {
       setState(() {
         _showReceivedStats = !_showReceivedStats;
@@ -1746,6 +1752,7 @@ class _MessageBubbleState extends State<MessageBubble> {
   Widget _buildChannelHeaderPill(
     BuildContext context, {
     required String label,
+    IconData icon = Icons.campaign_outlined,
   }) {
     final labelColor = Theme.of(
       context,
@@ -1763,7 +1770,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.campaign_outlined,
+            icon,
             size: 11,
             color: Theme.of(
               context,
@@ -1788,35 +1795,12 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   Widget _buildDirectHeaderCounterpart(
     BuildContext context, {
-    required bool isOwnMessage,
     required String label,
   }) {
-    final textColor = Theme.of(
+    return _buildChannelHeaderPill(
       context,
-    ).textTheme.labelSmall?.color?.withValues(alpha: 0.75);
-
-    return Row(
-      children: [
-        Icon(
-          isOwnMessage ? Icons.arrow_forward : Icons.arrow_back,
-          size: 12,
-          color: Theme.of(
-            context,
-          ).textTheme.labelSmall?.color?.withValues(alpha: 0.7),
-        ),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: textColor,
-              fontStyle: FontStyle.italic,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
+      label: label,
+      icon: Icons.alternate_email,
     );
   }
 
@@ -2354,10 +2338,10 @@ class _MessageBubbleState extends State<MessageBubble> {
                               ),
                             )
                           else
-                            Expanded(
+                            Align(
+                              alignment: Alignment.centerRight,
                               child: _buildDirectHeaderCounterpart(
                                 context,
-                                isOwnMessage: isOwnMessage,
                                 label: directCounterpartLabel!,
                               ),
                             ),
