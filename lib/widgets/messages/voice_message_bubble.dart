@@ -2,9 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/contact.dart';
 import '../../models/message.dart';
+import '../../providers/app_provider.dart';
 import '../../providers/connection_provider.dart';
 import '../../providers/contacts_provider.dart';
+import '../../providers/messages_provider.dart';
 import '../../providers/voice_provider.dart';
 import '../../utils/transmission_target_resolver.dart';
 import '../../utils/voice_message_parser.dart';
@@ -27,7 +30,9 @@ class VoiceMessageBubble extends StatefulWidget {
 
 class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   static const int _maxFetchHops = 3;
+  static const Duration _recentInboundActivityWindow = Duration(seconds: 3);
   bool _isRequesting = false;
+  bool _isPartialRequest = false;
   bool _autoPlayWhenReady = false;
   String? _errorText;
   Timer? _requestTimeoutTimer;
@@ -54,6 +59,10 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
 
     return Consumer<VoiceProvider>(
       builder: (context, voiceProvider, _) {
+        final transferCount = context.select<MessagesProvider, int>(
+          (provider) =>
+              provider.transferCountForSession(voiceSessionId: voiceId),
+        );
         final contactsProvider = context.read<ContactsProvider>();
         final session = voiceProvider.session(voiceId);
         final envelope = VoiceEnvelope.tryParseText(widget.message.text);
@@ -62,11 +71,10 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
           isSentByMe: widget.isSentByMe,
           recipientPublicKey: widget.message.recipientPublicKey,
           senderPublicKeyPrefix: widget.message.senderPublicKeyPrefix,
-          senderKey6FromEnvelope: envelope?.senderKey6,
           senderName: widget.message.senderName,
         );
-        final effectivePathLen = sender != null && sender.outPathLen >= 0
-            ? sender.outPathLen
+        final effectivePathLen = sender != null && sender.routeHasPath
+            ? sender.routeHopCount
             : widget.message.pathLen;
         final isPlaying = voiceProvider.isPlaying(voiceId);
         final isComplete = voiceProvider.isComplete(voiceId);
@@ -76,6 +84,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
             if (!mounted) return;
             setState(() {
               _isRequesting = false;
+              _isPartialRequest = false;
               _errorText = null;
             });
           });
@@ -92,9 +101,17 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
         final received = session?.receivedCount ?? 0;
         final total = session?.total ?? envelope?.total ?? 0;
         final playbackProgress = voiceProvider.playbackProgress(voiceId);
-        final requestProgress = total > 0
-            ? (received / total).clamp(0.0, 1.0)
-            : null;
+        final packetPresence =
+            session?.packets.map((packet) => packet != null).toList() ??
+            List<bool>.filled(total, false);
+        final isReceivingData =
+            !_isRequesting &&
+            !isComplete &&
+            _hasRecentInboundActivity(
+              lastReceivedAt: session?.lastPacketAt,
+              received: received,
+              total: total,
+            );
         final durationSec =
             session?.estimatedDurationSeconds ??
             ((envelope?.durationMs ?? 0) / 1000.0);
@@ -116,32 +133,37 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
         final txEstimateLabel = _formatTransmitEstimate(txEstimate);
         final eta = voiceProvider.estimateRemainingTransferTime(voiceId);
 
+        Future<void> handlePrimaryTap() async {
+          if (isPlaying) {
+            await voiceProvider.stop();
+            return;
+          }
+          if (_isRequesting) {
+            _cancelReceive(voiceId);
+            return;
+          }
+          if (isComplete) {
+            await voiceProvider.play(voiceId);
+            return;
+          }
+          if (isReceivingData) {
+            return;
+          }
+          await _requestAndPlayVoice(
+            voiceId,
+            envelope: envelope,
+            radioBw: radioBw,
+            radioSf: radioSf,
+            radioCr: radioCr,
+            pathLen: effectivePathLen,
+          );
+        }
+
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             InkWell(
-              onTap: () async {
-                if (isPlaying) {
-                  await voiceProvider.stop();
-                  return;
-                }
-                if (_isRequesting) {
-                  _cancelReceive(voiceId);
-                  return;
-                }
-                if (isComplete) {
-                  await voiceProvider.play(voiceId);
-                  return;
-                }
-                await _requestAndPlayVoice(
-                  voiceId,
-                  envelope: envelope,
-                  radioBw: radioBw,
-                  radioSf: radioSf,
-                  radioCr: radioCr,
-                  pathLen: effectivePathLen,
-                );
-              },
+              onTap: handlePrimaryTap,
               borderRadius: BorderRadius.circular(24),
               child: Container(
                 width: 48,
@@ -155,11 +177,16 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                 child: Icon(
                   isPlaying
                       ? Icons.stop
-                      : (_isRequesting ? Icons.close : Icons.play_arrow),
+                      : (_isRequesting
+                            ? Icons.close
+                            : (isReceivingData
+                                  ? Icons.downloading_rounded
+                                  : Icons.play_arrow)),
                   size: 28,
                   color: widget.isSentByMe
                       ? Theme.of(context).colorScheme.onPrimaryContainer
-                      : Theme.of(context).colorScheme.onSecondaryContainer,
+                      : Theme.of(context).colorScheme.onSecondaryContainer
+                            .withValues(alpha: isReceivingData ? 0.6 : 1.0),
                 ),
               ),
             ),
@@ -168,13 +195,21 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (isPlaying || _isRequesting)
+                if (isPlaying)
                   SizedBox(
                     width: 100,
                     child: LinearProgressIndicator(
-                      value: isPlaying ? playbackProgress : requestProgress,
+                      value: playbackProgress,
                       backgroundColor: Colors.grey.withValues(alpha: 0.3),
                     ),
+                  )
+                else if ((_isRequesting || isReceivingData) && total > 0)
+                  _PacketBlockProgress(
+                    presence: packetPresence,
+                    activeColor: widget.isSentByMe
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.secondary,
+                    highlightMissing: _isPartialRequest,
                   )
                 else
                   _WaveformBar(isComplete: isComplete, bars: waveformBars),
@@ -188,11 +223,15 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                     total: total,
                     isComplete: isComplete,
                     isRequesting: _isRequesting,
+                    isReceivingData: isReceivingData,
+                    isPartialRequest: _isPartialRequest,
                     errorText: _errorText,
                     requestingLabel: AppLocalizations.of(
                       context,
                     )!.requestingVoice,
                     eta: eta,
+                    isSentByMe: widget.isSentByMe,
+                    transferCount: transferCount,
                   ),
                   style: TextStyle(
                     fontSize: 11,
@@ -218,23 +257,31 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     int pathLen = 0,
   }) async {
     if (_isRequesting) return;
+    setState(() {
+      _isRequesting = true;
+      _isPartialRequest = false;
+      _autoPlayWhenReady = true;
+      _errorText = null;
+    });
+
     final connectionProvider = context.read<ConnectionProvider>();
     final voiceProvider = context.read<VoiceProvider>();
     voiceProvider.resumeIncomingSession(sessionId);
     final contactsProvider = context.read<ContactsProvider>();
-    final resolution = await TransmissionTargetResolver.resolveFetchTarget(
+    final appProvider = context.read<AppProvider>();
+    var resolution = await TransmissionTargetResolver.resolveFetchTarget(
       contactsProvider: contactsProvider,
       refreshContacts: connectionProvider.getContacts,
       isSentByMe: widget.isSentByMe,
       recipientPublicKey: widget.message.recipientPublicKey,
       senderPublicKeyPrefix: widget.message.senderPublicKeyPrefix,
-      senderKey6FromEnvelope: envelope?.senderKey6,
       senderName: widget.message.senderName,
       maxFetchHops: _maxFetchHops,
     );
     if (!mounted) return;
 
     if (resolution.failure == TransmissionTargetFailure.unknownContact) {
+      _clearRequestState();
       await _showBlockingAlert(
         'Cannot fetch voice',
         'Sender contact is unknown. Sync contacts first.',
@@ -242,6 +289,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       return;
     }
     if (resolution.failure == TransmissionTargetFailure.unknownRoute) {
+      _clearRequestState();
       await _showBlockingAlert(
         'Cannot fetch voice',
         'Sender route is unknown. Sync contacts/path first.',
@@ -249,27 +297,93 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       return;
     }
     if (resolution.failure == TransmissionTargetFailure.tooFar) {
+      _clearRequestState();
       await _showBlockingAlert(
         'Cannot fetch voice',
         'Message is too far (${resolution.hops} hops, max ${resolution.maxHops}).',
       );
       return;
     }
+    if (resolution.failure == TransmissionTargetFailure.unreachable) {
+      _clearRequestState();
+      await _showBlockingAlert(
+        'Cannot fetch voice',
+        'Sender route did not respond to a path check. Sync contacts/path and try again.',
+      );
+      return;
+    }
 
-    final sender = resolution.target!;
-    if (sender.outPathLen >= 2) {
+    var sender = resolution.target!;
+    var routeVerified = await appProvider.verifyRawTransportRoute(sender);
+    if (!mounted) return;
+    if (!routeVerified) {
+      await connectionProvider.getContacts();
+      if (!mounted) return;
+      resolution = await TransmissionTargetResolver.resolveFetchTarget(
+        contactsProvider: contactsProvider,
+        refreshContacts: connectionProvider.getContacts,
+        isSentByMe: widget.isSentByMe,
+        recipientPublicKey: widget.message.recipientPublicKey,
+        senderPublicKeyPrefix: widget.message.senderPublicKeyPrefix,
+        senderName: widget.message.senderName,
+        maxFetchHops: _maxFetchHops,
+      );
+      if (!mounted) return;
+      if (resolution.failure == TransmissionTargetFailure.unknownContact) {
+        _clearRequestState();
+        await _showBlockingAlert(
+          'Cannot fetch voice',
+          'Sender contact is unknown. Sync contacts first.',
+        );
+        return;
+      }
+      if (resolution.failure == TransmissionTargetFailure.unknownRoute) {
+        _clearRequestState();
+        await _showBlockingAlert(
+          'Cannot fetch voice',
+          'Sender route is unknown. Sync contacts/path first.',
+        );
+        return;
+      }
+      if (resolution.failure == TransmissionTargetFailure.tooFar) {
+        _clearRequestState();
+        await _showBlockingAlert(
+          'Cannot fetch voice',
+          'Message is too far (${resolution.hops} hops, max ${resolution.maxHops}).',
+        );
+        return;
+      }
+      sender = resolution.target!;
+      routeVerified = await appProvider.verifyRawTransportRoute(sender);
+      if (!mounted) return;
+      if (!routeVerified) {
+        _clearRequestState();
+        await _showBlockingAlert(
+          'Cannot fetch voice',
+          'Sender route did not respond on the raw transport path.',
+        );
+        return;
+      }
+    }
+
+    if (!sender.routeSupportsLegacyRawTransport) {
+      _clearRequestState();
+      await _showBlockingAlert(
+        'Cannot fetch voice',
+        'Sender route uses 3-byte hashes. Raw media fetch is not supported in this client yet.',
+      );
+      return;
+    }
+
+    if (sender.routeHopCount >= 2) {
       _showToast(
-        'Voice fetch over ${sender.outPathLen} hops may take a while.',
+        'Voice fetch over ${sender.routeHopCount} hops may take a while.',
       );
     }
 
-    if (!mounted) return;
-    setState(() {
-      _errorText = null;
-    });
-
     final deviceKey = connectionProvider.deviceInfo.publicKey;
     if (deviceKey == null || deviceKey.length < 6) {
+      _clearRequestState();
       await _showBlockingAlert(
         'Cannot fetch voice',
         'Device key is unavailable.',
@@ -281,23 +395,38 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
         .sublist(0, 6)
         .map((b) => b.toRadixString(16).padLeft(2, '0'))
         .join('');
-    final request = VoiceFetchRequest(
+    final missing = voiceProvider.missingPacketIndices(sessionId);
+    final totalPackets = sessionPacketCount(
+      voiceProvider: voiceProvider,
       sessionId: sessionId,
-      requesterKey6: requesterKey6,
-      timestampSec: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      version: 2,
+      envelope: envelope,
     );
-
-    setState(() {
-      _isRequesting = true;
-      _autoPlayWhenReady = true;
-      _errorText = null;
-    });
+    final isPartialResume =
+        missing.isNotEmpty && totalPackets > 0 && missing.length < totalPackets;
+    if (_isPartialRequest != isPartialResume && mounted) {
+      setState(() {
+        _isPartialRequest = isPartialResume;
+      });
+    }
+    final request = isPartialResume
+        ? VoiceFetchRequest(
+            sessionId: sessionId,
+            want: 'missing',
+            missingIndices: missing,
+            requesterKey6: requesterKey6,
+          )
+        : VoiceFetchRequest(
+            sessionId: sessionId,
+            requesterKey6: requesterKey6,
+          );
 
     try {
+      debugPrint(
+        '🎙️ [VoiceMessageBubble] Outgoing voice fetch request: session=$sessionId want=${isPartialResume ? 'missing' : 'all'} target=${sender.advName} hops=${sender.routeHopCount}',
+      );
       await connectionProvider.sendRawVoicePacket(
         contactPath: sender.outPath,
-        contactPathLen: sender.outPathLen,
+        contactPathLen: sender.routeSignedPathLen,
         payload: request.encodeBinary(),
       );
     } catch (_) {
@@ -306,14 +435,21 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     }
 
     // Timeout = 2× estimated LoRa airtime (min 30s).
-    final effectivePathLen = sender.outPathLen >= 0
-        ? sender.outPathLen
+    final effectivePathLen = sender.routeHasPath
+        ? sender.routeHopCount
         : pathLen;
+    final estimatedDurationMs =
+        envelope != null &&
+            totalPackets > 0 &&
+            missing.isNotEmpty &&
+            missing.length < totalPackets
+        ? ((envelope.durationMs * missing.length) / totalPackets).round()
+        : envelope?.durationMs;
     final txEstimate = envelope != null
         ? estimateVoiceTransmitDuration(
-            packetCount: envelope.total,
+            packetCount: isPartialResume ? missing.length : envelope.total,
             mode: envelope.mode,
-            durationMs: envelope.durationMs,
+            durationMs: estimatedDurationMs ?? envelope.durationMs,
             pathLen: effectivePathLen,
             radioBw: radioBw,
             radioSf: radioSf,
@@ -331,13 +467,31 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     );
   }
 
+  int sessionPacketCount({
+    required VoiceProvider voiceProvider,
+    required String sessionId,
+    required VoiceEnvelope? envelope,
+  }) {
+    return voiceProvider.session(sessionId)?.total ?? envelope?.total ?? 0;
+  }
+
   void _setUnavailable() {
     if (!mounted) return;
     _showToast(AppLocalizations.of(context)!.voiceUnavailable);
     setState(() {
       _isRequesting = false;
+      _isPartialRequest = false;
       _autoPlayWhenReady = false;
       _errorText = AppLocalizations.of(context)!.voiceUnavailable;
+    });
+  }
+
+  void _clearRequestState() {
+    if (!mounted) return;
+    setState(() {
+      _isRequesting = false;
+      _isPartialRequest = false;
+      _autoPlayWhenReady = false;
     });
   }
 
@@ -348,6 +502,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     _showToast('Voice receive canceled');
     setState(() {
       _isRequesting = false;
+      _isPartialRequest = false;
       _autoPlayWhenReady = false;
       _errorText = 'Voice receive canceled';
     });
@@ -392,19 +547,33 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     required int total,
     required bool isComplete,
     required bool isRequesting,
+    required bool isReceivingData,
+    required bool isPartialRequest,
     required String? errorText,
     required String requestingLabel,
     required Duration? eta,
+    required bool isSentByMe,
+    required int transferCount,
   }) {
     if (errorText != null) return errorText;
     final progress = total > 0 ? ' ($received/$total)' : '';
     if (isRequesting) {
-      return '$requestingLabel$progress · ${_formatEta(eta)} · $txEstimateLabel';
+      final actionLabel = isPartialRequest
+          ? 'Fetching missing voice fragments'
+          : requestingLabel;
+      return '$actionLabel$progress · ${_formatEta(eta)} · $txEstimateLabel';
+    }
+    if (isReceivingData) {
+      return 'Receiving voice$progress · ${_formatEta(eta)} · $txEstimateLabel';
     }
     if (!isComplete && total > 0) {
-      return '🎙️ $durationLabel · $modeLabel$progress · $txEstimateLabel';
+      return isSentByMe
+          ? '🎙️ $durationLabel · $modeLabel$progress · ${_formatTransferCount(transferCount)} · $txEstimateLabel'
+          : '🎙️ $durationLabel · $modeLabel$progress · $txEstimateLabel';
     }
-    return '🎙️ $durationLabel · $modeLabel · $txEstimateLabel';
+    return isSentByMe
+        ? '🎙️ $durationLabel · $modeLabel · ${_formatTransferCount(transferCount)} · $txEstimateLabel'
+        : '🎙️ $durationLabel · $modeLabel · $txEstimateLabel';
   }
 
   List<double> _resolveWaveformBars({
@@ -486,6 +655,86 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     final minutes = eta.inMinutes;
     final seconds = eta.inSeconds % 60;
     return 'ETA ~${minutes}m ${seconds}s';
+  }
+
+  static String _formatTransferCount(int transferCount) {
+    return '$transferCount transfer${transferCount == 1 ? '' : 's'}';
+  }
+
+  bool _hasRecentInboundActivity({
+    required DateTime? lastReceivedAt,
+    required int received,
+    required int total,
+  }) {
+    if (lastReceivedAt == null || received <= 0 || received >= total) {
+      return false;
+    }
+    return DateTime.now().difference(lastReceivedAt) <=
+        _recentInboundActivityWindow;
+  }
+}
+
+class _PacketBlockProgress extends StatelessWidget {
+  final List<bool> presence;
+  final Color activeColor;
+  final bool highlightMissing;
+
+  const _PacketBlockProgress({
+    required this.presence,
+    required this.activeColor,
+    this.highlightMissing = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (presence.isEmpty) {
+      return const SizedBox(width: 100, height: 16);
+    }
+
+    final bucketCount = presence.length <= 20 ? presence.length : 20;
+    final bucketFill = List<double>.generate(bucketCount, (bucketIndex) {
+      final start = (bucketIndex * presence.length) ~/ bucketCount;
+      final end = ((bucketIndex + 1) * presence.length) ~/ bucketCount;
+      final safeEnd = end <= start ? start + 1 : end;
+      final slice = presence.sublist(start, safeEnd);
+      final received = slice.where((value) => value).length;
+      return slice.isEmpty ? 0.0 : received / slice.length;
+    });
+    final missingColor = highlightMissing
+        ? Colors.amberAccent
+        : Colors.white.withValues(alpha: 0.14);
+
+    return SizedBox(
+      width: 100,
+      height: 16,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (final fill in bucketFill)
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 1),
+                decoration: BoxDecoration(
+                  color: fill > 0
+                      ? activeColor.withValues(alpha: 0.18 + (0.72 * fill))
+                      : missingColor.withValues(
+                          alpha: highlightMissing ? 0.45 : 0.14,
+                        ),
+                  borderRadius: BorderRadius.circular(2),
+                  border: Border.all(
+                    color: fill > 0
+                        ? Colors.white.withValues(alpha: 0.18)
+                        : missingColor.withValues(
+                            alpha: highlightMissing ? 0.7 : 0.18,
+                          ),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'connection_provider.dart';
@@ -16,9 +17,13 @@ import '../services/packet_capture_storage_service.dart';
 import '../models/contact.dart';
 import '../models/message.dart';
 import '../models/ble_packet_log.dart';
+import '../models/message_reception_details.dart';
 import '../utils/drawing_message_parser.dart';
+import '../utils/raw_route_probe.dart';
 import '../utils/voice_message_parser.dart';
 import '../utils/image_message_parser.dart';
+import '../utils/media_swarm_protocol.dart';
+import '../utils/message_airtime_estimator.dart';
 
 /// Main App Provider - coordinates all other providers
 class AppProvider with ChangeNotifier {
@@ -46,6 +51,8 @@ class AppProvider with ChangeNotifier {
   bool get isMapEnabled => _isMapEnabled;
   bool _isContactsEnabled = true;
   bool get isContactsEnabled => _isContactsEnabled;
+  bool _isSensorsEnabled = true;
+  bool get isSensorsEnabled => _isSensorsEnabled;
 
   bool _isVoiceSilenceTrimmingEnabled = true;
   bool get isVoiceSilenceTrimmingEnabled => _isVoiceSilenceTrimmingEnabled;
@@ -59,15 +66,19 @@ class AppProvider with ChangeNotifier {
   bool get autoAddDiscoveredContacts => _autoAddDiscoveredContacts;
 
   static const Duration _packetRetryDelay = Duration(milliseconds: 1200);
+  static const Duration _mediaSwarmResponseWindow = Duration(seconds: 10);
   static const int _maxPacketRetryAttempts = 4;
   final Map<String, String> _voiceSessionSenderKey6 = {};
   final Map<String, String> _imageSessionSenderKey6 = {};
   final Map<String, Timer> _voiceMissingRetryTimers = {};
   final Map<String, int> _voiceMissingRetryAttempts = {};
-  final FragmentAckWaitRegistry _voiceFragmentAckWaiters =
-      FragmentAckWaitRegistry();
-  final FragmentAckWaitRegistry _imageFragmentAckWaiters =
-      FragmentAckWaitRegistry();
+  final Map<String, Timer> _imageMissingRetryTimers = {};
+  final Map<String, int> _imageMissingRetryAttempts = {};
+  final FragmentAckWaitRegistry _rawProbeWaiters = FragmentAckWaitRegistry();
+  final Map<String, Future<bool>> _pendingRawRouteProbes = {};
+  final Map<String, Future<bool>> _pendingMediaSwarmFetches = {};
+  final Map<String, Map<String, MediaSwarmAvailability>>
+  _pendingMediaSwarmResponses = {};
   Timer? _packetCaptureFlushTimer;
   String? _lastPersistedPacketSignature;
   bool _isPersistingPacketCapture = false;
@@ -88,6 +99,7 @@ class AppProvider with ChangeNotifier {
     _loadSimpleMode();
     _loadMapEnabled();
     _loadContactsEnabled();
+    _loadSensorsEnabled();
     _loadVoiceSilenceTrimmingEnabled();
     _loadVoiceBandPassFilterEnabled();
     _loadVoiceCompressorEnabled();
@@ -179,12 +191,12 @@ class AppProvider with ChangeNotifier {
 
   void _restoreSessionMetadataFromMessages() {
     final restored = restoreSessionMetadataFromMessages(
-      messagesProvider.messages.map((message) => message.text),
+      messagesProvider.messages,
     );
 
     _voiceSessionSenderKey6.addAll(restored.voiceSenderKeyBySession);
+    _imageSessionSenderKey6.addAll(restored.imageSenderKeyBySession);
     for (final entry in restored.imageEnvelopeBySession.entries) {
-      _imageSessionSenderKey6[entry.key] = entry.value.senderKey6.toLowerCase();
       imageProvider.registerEnvelope(entry.value);
     }
 
@@ -196,6 +208,21 @@ class AppProvider with ChangeNotifier {
         '$restoredVoice voice, $restoredImage image',
       );
     }
+  }
+
+  String? _resolveContactNameForNotification(Uint8List? publicKey) {
+    if (publicKey == null || publicKey.isEmpty) return null;
+
+    Contact? contact;
+    if (publicKey.length >= 32) {
+      contact = contactsProvider.findContactByKey(publicKey);
+    }
+    contact ??= publicKey.length >= 6
+        ? contactsProvider.findContactByPrefix(
+            Uint8List.fromList(publicKey.sublist(0, 6)),
+          )
+        : null;
+    return contact?.advName;
   }
 
   /// Load simple mode setting from shared preferences
@@ -264,6 +291,29 @@ class AppProvider with ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Error saving contacts enabled setting: $e');
+    }
+  }
+
+  /// Load sensors enabled setting from shared preferences
+  Future<void> _loadSensorsEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _isSensorsEnabled = prefs.getBool('sensors_enabled') ?? true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading sensors enabled setting: $e');
+    }
+  }
+
+  /// Toggle sensors tab on/off
+  Future<void> toggleSensorsEnabled(bool enabled) async {
+    try {
+      _isSensorsEnabled = enabled;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('sensors_enabled', enabled);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error saving sensors enabled setting: $e');
     }
   }
 
@@ -433,6 +483,10 @@ class AppProvider with ChangeNotifier {
   void _setupCallbacks() {
     // Monitor connection state changes to start/stop location tracking
     connectionProvider.addListener(_handleConnectionStateChange);
+    messagesProvider.resolveContactNameCallback =
+        _resolveContactNameForNotification;
+    messagesProvider.resolveChannelNameCallback =
+        channelsProvider.getChannelDisplayName;
 
     voiceProvider.sendRawPacketCallback =
         ({
@@ -460,27 +514,6 @@ class AppProvider with ChangeNotifier {
             payload: payload,
           );
         };
-    voiceProvider.waitForFragmentAckCallback =
-        ({
-          required sessionId,
-          required index,
-          timeout = const Duration(seconds: 8),
-        }) => _waitForVoiceFragmentAck(
-          sessionId: sessionId,
-          index: index,
-          timeout: timeout,
-        );
-    imageProvider.waitForFragmentAckCallback =
-        ({
-          required sessionId,
-          required index,
-          timeout = const Duration(seconds: 8),
-        }) => _waitForImageFragmentAck(
-          sessionId: sessionId,
-          index: index,
-          timeout: timeout,
-        );
-
     // When a contact is received from BLE
     connectionProvider.onContactReceived = (contact) {
       // Pass device public key to filter out our own contact
@@ -631,6 +664,9 @@ class AppProvider with ChangeNotifier {
               capturedAt: enrichedMessage.receivedAt,
             )
           : null;
+      final receptionDetailsSnapshot = _buildReceptionDetailsSnapshot(
+        enrichedMessage,
+      );
 
       // Check if message is a drawing broadcast
       if (DrawingMessageParser.isDrawingMessage(enrichedMessage.text)) {
@@ -662,6 +698,7 @@ class AppProvider with ChangeNotifier {
             updatedMessage,
             contactLookup: (name) => '',
             contactLocationSnapshot: contactLocationSnapshot,
+            receptionDetailsSnapshot: receptionDetailsSnapshot,
           );
 
           // Broadcast drawing message to SSE clients if server is running
@@ -675,9 +712,15 @@ class AppProvider with ChangeNotifier {
       // Voice envelope message (new public/direct on-demand format).
       final voiceEnvelope = VoiceEnvelope.tryParseText(enrichedMessage.text);
       if (voiceEnvelope != null) {
-        _voiceSessionSenderKey6[voiceEnvelope.sessionId] = voiceEnvelope
-            .senderKey6
-            .toLowerCase();
+        final senderPrefix = enrichedMessage.senderPublicKeyPrefix;
+        if (senderPrefix != null && senderPrefix.length >= 6) {
+          _voiceSessionSenderKey6[voiceEnvelope.sessionId] = senderPrefix
+              .sublist(0, 6)
+              .map((b) => b.toRadixString(16).padLeft(2, '0'))
+              .join()
+              .toLowerCase();
+        }
+        voiceProvider.registerEnvelope(voiceEnvelope);
         enrichedMessage = enrichedMessage.copyWith(
           isVoice: true,
           voiceId: voiceEnvelope.sessionId,
@@ -698,6 +741,7 @@ class AppProvider with ChangeNotifier {
             }
           },
           contactLocationSnapshot: contactLocationSnapshot,
+          receptionDetailsSnapshot: receptionDetailsSnapshot,
         );
         connectionProvider.broadcastMessageToSseClients(enrichedMessage);
         return;
@@ -706,9 +750,14 @@ class AppProvider with ChangeNotifier {
       // Image envelope (IE1): announce image availability.
       final imageEnvelope = ImageEnvelope.tryParse(enrichedMessage.text);
       if (imageEnvelope != null) {
-        _imageSessionSenderKey6[imageEnvelope.sessionId] = imageEnvelope
-            .senderKey6
-            .toLowerCase();
+        final senderPrefix = enrichedMessage.senderPublicKeyPrefix;
+        if (senderPrefix != null && senderPrefix.length >= 6) {
+          _imageSessionSenderKey6[imageEnvelope.sessionId] = senderPrefix
+              .sublist(0, 6)
+              .map((b) => b.toRadixString(16).padLeft(2, '0'))
+              .join()
+              .toLowerCase();
+        }
         imageProvider.registerEnvelope(imageEnvelope);
         messagesProvider.addMessage(
           enrichedMessage,
@@ -726,22 +775,10 @@ class AppProvider with ChangeNotifier {
             }
           },
           contactLocationSnapshot: contactLocationSnapshot,
+          receptionDetailsSnapshot: receptionDetailsSnapshot,
         );
         connectionProvider.broadcastMessageToSseClients(enrichedMessage);
         return;
-      }
-
-      // If it's a text-format voice packet, feed it to VoiceProvider
-      if (VoicePacket.isVoiceText(enrichedMessage.text)) {
-        final pkt = VoicePacket.tryParseText(enrichedMessage.text);
-        if (pkt != null) {
-          voiceProvider.addPacket(pkt);
-          // Mark the message with voice metadata before adding to chat
-          enrichedMessage = enrichedMessage.copyWith(
-            isVoice: true,
-            voiceId: pkt.sessionId,
-          );
-        }
       }
 
       // Pass contact lookup function to link channel messages with contacts
@@ -763,11 +800,15 @@ class AppProvider with ChangeNotifier {
           }
         },
         contactLocationSnapshot: contactLocationSnapshot,
+        receptionDetailsSnapshot: receptionDetailsSnapshot,
       );
 
       // Broadcast message to SSE clients if server is running
       connectionProvider.broadcastMessageToSseClients(enrichedMessage);
     };
+
+    // Keep a compact receive-time snapshot because packet logs roll over.
+    // This lets the UI still show timing/link details after app restarts.
 
     // When telemetry is received via PUSH_CODE_TELEMETRY_RESPONSE (0x8B)
     // Used by older firmware versions for telemetry responses
@@ -791,14 +832,48 @@ class AppProvider with ChangeNotifier {
     };
 
     // When raw binary data is received (PUSH_CODE_RAW_DATA 0x84)
-    // Magic 0x72 'r' = voice fetch request; 0x69 'i' = image fetch request.
-    // Magic 0x56 'V' = voice packet; magic 0x49 'I' = image packet.
+    // Magic 0x6d 'm' = swarm control; 0x72 'r' = voice fetch request.
+    // Magic 0x69 'i' = image fetch request; 0x56 'V' = voice packet.
+    // Magic 0x49 'I' = image packet.
     connectionProvider.onRawDataReceived = (payload, snrRaw, rssiDbm) {
+      final rawProbeRequest = RawRouteProbeRequest.tryParseBinary(payload);
+      if (rawProbeRequest != null) {
+        debugPrint(
+          '📡 [AppProvider] Incoming raw route probe: nonce=${rawProbeRequest.nonce.toRadixString(16)} requester=${rawProbeRequest.requesterKey6}',
+        );
+        _handleRawRouteProbeRequest(rawProbeRequest);
+        return;
+      }
+
+      final rawProbeAck = RawRouteProbeAck.tryParseBinary(payload);
+      if (rawProbeAck != null) {
+        debugPrint(
+          '📡 [AppProvider] Incoming raw route probe ACK: nonce=${rawProbeAck.nonce.toRadixString(16)}',
+        );
+        _completeRawRouteProbeAck(rawProbeAck.nonce);
+        return;
+      }
+
+      final mediaSwarmRequest = MediaSwarmRequest.tryParseBinary(payload);
+      if (mediaSwarmRequest != null) {
+        _handleIncomingMediaSwarmRequest(mediaSwarmRequest);
+        return;
+      }
+
+      final mediaSwarmAvailability = MediaSwarmAvailability.tryParseBinary(
+        payload,
+      );
+      if (mediaSwarmAvailability != null) {
+        _handleIncomingMediaSwarmAvailability(mediaSwarmAvailability);
+        return;
+      }
+
       final voiceFetchRequest = VoiceFetchRequest.tryParseBinary(payload);
       if (voiceFetchRequest != null) {
-        final requester = contactsProvider.findContactByPrefixHex(
-          voiceFetchRequest.requesterKey6,
+        debugPrint(
+          '🎙️ [AppProvider] Incoming voice fetch request: session=${voiceFetchRequest.sessionId} want=${voiceFetchRequest.want} requester=${voiceFetchRequest.requesterKey6}',
         );
+        final requester = _resolveVoiceFetchRequester(voiceFetchRequest);
         if (requester == null) {
           debugPrint(
             '⚠️ [AppProvider] Voice fetch requester contact not found (binary)',
@@ -810,26 +885,34 @@ class AppProvider with ChangeNotifier {
           );
           return;
         }
-        if (requester.outPathLen > _maxDirectPayloadHops) {
+        if (requester.routeHopCount > _maxDirectPayloadHops) {
           debugPrint(
-            '⚠️ [AppProvider] Voice fetch requester too far: ${requester.outPathLen} hops',
+            '⚠️ [AppProvider] Voice fetch requester too far: ${requester.routeHopCount} hops',
           );
           messagesProvider.logSystemMessage(
             text:
-                'Cannot fetch voice for ${requester.advName}: message is too far (${requester.outPathLen} hops, max $_maxDirectPayloadHops).',
+                'Cannot fetch voice for ${requester.advName}: message is too far (${requester.routeHopCount} hops, max $_maxDirectPayloadHops).',
             level: 'warning',
           );
           return;
         }
-        unawaited(
-          voiceProvider.serveSessionTo(
+        unawaited(() async {
+          final served = await voiceProvider.serveSessionTo(
             sessionId: voiceFetchRequest.sessionId,
             requester: requester,
             requestedIndices: voiceFetchRequest.want == 'missing'
                 ? voiceFetchRequest.missingIndices.toSet()
                 : null,
-          ),
-        );
+          );
+          if (served) {
+            messagesProvider.recordMediaTransfer(
+              sessionId: voiceFetchRequest.sessionId,
+              mediaType: 'voice',
+              requesterKey6: voiceFetchRequest.requesterKey6,
+              requesterName: requester.advName,
+            );
+          }
+        }());
         return;
       }
 
@@ -849,44 +932,40 @@ class AppProvider with ChangeNotifier {
           );
           return;
         }
-        if (requester.outPathLen > _maxDirectPayloadHops) {
+        if (requester.routeHopCount > _maxDirectPayloadHops) {
           debugPrint(
             '⚠️ [AppProvider] Image fetch requester too far: '
-            '${requester.outPathLen} hops for session '
+            '${requester.routeHopCount} hops for session '
             '${imageFetchRequest.sessionId}',
           );
           messagesProvider.logSystemMessage(
             text:
-                'Cannot fetch image for ${requester.advName}: message is too far (${requester.outPathLen} hops, max $_maxDirectPayloadHops).',
+                'Cannot fetch image for ${requester.advName}: message is too far (${requester.routeHopCount} hops, max $_maxDirectPayloadHops).',
             level: 'warning',
           );
           return;
         }
         debugPrint(
           '📷 [AppProvider] Serving image session ${imageFetchRequest.sessionId} '
-          'to ${requester.advName} via ${requester.outPathLen} hop(s)',
+          'to ${requester.advName} via ${requester.routeHopCount} hop(s)',
         );
-        unawaited(
-          imageProvider.serveSessionTo(
+        unawaited(() async {
+          final served = await imageProvider.serveSessionTo(
             sessionId: imageFetchRequest.sessionId,
             requester: requester,
             requestedIndices: imageFetchRequest.want == 'missing'
                 ? imageFetchRequest.missingIndices.toSet()
                 : null,
-          ),
-        );
-        return;
-      }
-
-      final voiceAck = VoiceFragmentAck.tryParseBinary(payload);
-      if (voiceAck != null) {
-        _completeVoiceFragmentAck(voiceAck.sessionId, voiceAck.index);
-        return;
-      }
-
-      final imageAck = ImageFragmentAck.tryParseBinary(payload);
-      if (imageAck != null) {
-        _completeImageFragmentAck(imageAck.sessionId, imageAck.index);
+          );
+          if (served) {
+            messagesProvider.recordMediaTransfer(
+              sessionId: imageFetchRequest.sessionId,
+              mediaType: 'image',
+              requesterKey6: imageFetchRequest.requesterKey6,
+              requesterName: requester.advName,
+            );
+          }
+        }());
         return;
       }
 
@@ -895,12 +974,30 @@ class AppProvider with ChangeNotifier {
         if (frag == null) return;
         debugPrint('📷 [AppProvider] Binary image fragment received: $frag');
         final session = imageProvider.session(frag.sessionId);
+        if (session == null && frag.total < 1) {
+          debugPrint(
+            '⚠️ [AppProvider] Dropping compact image fragment without envelope '
+            'for session ${frag.sessionId}',
+          );
+          return;
+        }
         imageProvider.addFragment(
-          frag,
+          session == null
+              ? frag
+              : ImagePacket(
+                  sessionId: frag.sessionId,
+                  format: session.format,
+                  index: frag.index,
+                  total: session.total,
+                  data: frag.data,
+                ),
           width: session?.width ?? 0,
           height: session?.height ?? 0,
         );
-        _sendImageFragmentAck(frag);
+        _scheduleImageMissingRetry(
+          frag.sessionId,
+          justComplete: imageProvider.isComplete(frag.sessionId),
+        );
         return;
       }
 
@@ -908,8 +1005,25 @@ class AppProvider with ChangeNotifier {
       final pkt = VoicePacket.tryParseBinary(payload);
       if (pkt == null) return;
       debugPrint('🎙️ [AppProvider] Binary voice packet received: $pkt');
-      final justComplete = voiceProvider.addPacket(pkt);
-      _sendVoiceFragmentAck(pkt);
+      final session = voiceProvider.session(pkt.sessionId);
+      if (session == null && pkt.total < 1) {
+        debugPrint(
+          '⚠️ [AppProvider] Dropping compact voice packet without envelope '
+          'for session ${pkt.sessionId}',
+        );
+        return;
+      }
+      final justComplete = voiceProvider.addPacket(
+        session == null
+            ? pkt
+            : VoicePacket(
+                sessionId: pkt.sessionId,
+                mode: session.mode,
+                index: pkt.index,
+                total: session.total,
+                codec2Data: pkt.codec2Data,
+              ),
+      );
       _scheduleVoiceMissingRetry(pkt.sessionId, justComplete: justComplete);
       // Insert or update the placeholder message in the chat list
       _handleIncomingVoicePacket(pkt, justComplete: justComplete);
@@ -1268,15 +1382,51 @@ class AppProvider with ChangeNotifier {
     return contactsProvider.findContactByPrefixHex(prefixHex.toLowerCase());
   }
 
+  Contact? _resolveVoiceFetchRequester(VoiceFetchRequest request) {
+    final liveContact = _resolveContactByPrefixHex(request.requesterKey6);
+    if (liveContact != null) {
+      return liveContact;
+    }
+
+    return _resolveRequesterFromSentMessages(
+      sessionId: request.sessionId,
+      requesterKey6: request.requesterKey6,
+      tryParseEnvelope: VoiceEnvelope.tryParseText,
+      mediaLabel: 'voice',
+    );
+  }
+
   Contact? _resolveImageFetchRequester(ImageFetchRequest request) {
     final liveContact = _resolveContactByPrefixHex(request.requesterKey6);
     if (liveContact != null) {
       return liveContact;
     }
 
+    return _resolveRequesterFromSentMessages(
+      sessionId: request.sessionId,
+      requesterKey6: request.requesterKey6,
+      tryParseEnvelope: ImageEnvelope.tryParse,
+      mediaLabel: 'image',
+    );
+  }
+
+  Contact? _resolveRequesterFromSentMessages<T>({
+    required String sessionId,
+    required String requesterKey6,
+    required T? Function(String text) tryParseEnvelope,
+    required String mediaLabel,
+  }) {
     for (final message in messagesProvider.messages.reversed) {
-      final envelope = ImageEnvelope.tryParse(message.text);
-      if (envelope == null || envelope.sessionId != request.sessionId) {
+      final envelope = tryParseEnvelope(message.text);
+      if (envelope == null) {
+        continue;
+      }
+      final envelopeSessionId = switch (envelope) {
+        VoiceEnvelope voiceEnvelope => voiceEnvelope.sessionId,
+        ImageEnvelope imageEnvelope => imageEnvelope.sessionId,
+        _ => null,
+      };
+      if (envelopeSessionId != sessionId) {
         continue;
       }
       final recipientKey = message.recipientPublicKey;
@@ -1291,12 +1441,13 @@ class AppProvider with ChangeNotifier {
           .sublist(0, 6)
           .map((b) => b.toRadixString(16).padLeft(2, '0'))
           .join();
-      if (recipientKey6 != request.requesterKey6) {
+      if (recipientKey6 != requesterKey6) {
         continue;
       }
       debugPrint(
-        '📷 [AppProvider] Resolved image requester from sent message metadata '
-        'for session ${request.sessionId}: ${recipient.advName}',
+        '${mediaLabel == 'voice' ? '🎙️' : '📷'} [AppProvider] Resolved '
+        '$mediaLabel requester from sent message metadata for session '
+        '$sessionId: ${recipient.advName}',
       );
       return recipient;
     }
@@ -1304,13 +1455,301 @@ class AppProvider with ChangeNotifier {
     return null;
   }
 
+  String _mediaSwarmKey(String mediaType, String sessionId) =>
+      '$mediaType:$sessionId';
+
+  String? _deviceKey6Hex() {
+    final deviceKey = connectionProvider.deviceInfo.publicKey;
+    if (deviceKey == null || deviceKey.length < 6) {
+      return null;
+    }
+    return deviceKey
+        .sublist(0, 6)
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join('');
+  }
+
+  List<int> _availableIndicesForSession(String mediaType, String sessionId) {
+    return switch (mediaType) {
+      'voice' => voiceProvider.availablePacketIndices(sessionId),
+      'image' => imageProvider.availableFragmentIndices(sessionId),
+      _ => const <int>[],
+    };
+  }
+
+  List<int> _matchingAvailableIndices(MediaSwarmRequest request) {
+    final available = _availableIndicesForSession(
+      request.mediaType,
+      request.sessionId,
+    );
+    if (available.isEmpty) return const [];
+    if (request.requestsAll) return available;
+    final requested = request.missingIndices.toSet();
+    return available.where(requested.contains).toList()..sort();
+  }
+
+  List<Contact> _eligibleSwarmPeers({String? excludeKey6}) {
+    final ownKey6 = _deviceKey6Hex();
+    return contactsProvider.contacts.where((contact) {
+      if (!contact.routeHasPath ||
+          contact.routeHopCount > _maxDirectPayloadHops ||
+          !contact.routeSupportsLegacyRawTransport ||
+          contact.outPath.isEmpty ||
+          contact.publicKey.length < 6) {
+        return false;
+      }
+      final key6 = contact.publicKey
+          .sublist(0, 6)
+          .map((b) => b.toRadixString(16).padLeft(2, '0'))
+          .join();
+      if (key6 == ownKey6 || key6 == excludeKey6) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  void _handleIncomingMediaSwarmRequest(MediaSwarmRequest request) {
+    final ownKey6 = _deviceKey6Hex();
+    if (ownKey6 == null || request.requesterKey6 == ownKey6) {
+      return;
+    }
+
+    final available = _matchingAvailableIndices(request);
+    if (available.isEmpty) {
+      return;
+    }
+
+    final availability = MediaSwarmAvailability(
+      mediaType: request.mediaType,
+      sessionId: request.sessionId,
+      requesterKey6: request.requesterKey6,
+      responderKey6: ownKey6,
+      availableIndices: available,
+    );
+
+    debugPrint(
+      '🌐 [AppProvider] Media swarm availability for ${request.mediaType} '
+      '${request.sessionId}: ${available.length} fragment(s)',
+    );
+    final requester = _resolveContactByPrefixHex(request.requesterKey6);
+    if (requester == null ||
+        !requester.routeHasPath ||
+        requester.routeHopCount > _maxDirectPayloadHops ||
+        !requester.routeSupportsLegacyRawTransport ||
+        requester.outPath.isEmpty) {
+      return;
+    }
+    unawaited(
+      connectionProvider.sendRawVoicePacket(
+        contactPath: requester.outPath,
+        contactPathLen: requester.routeSignedPathLen,
+        payload: availability.encodeBinary(),
+      ),
+    );
+  }
+
+  void _handleIncomingMediaSwarmAvailability(
+    MediaSwarmAvailability availability,
+  ) {
+    final ownKey6 = _deviceKey6Hex();
+    if (ownKey6 == null || availability.requesterKey6 != ownKey6) {
+      return;
+    }
+
+    final key = _mediaSwarmKey(availability.mediaType, availability.sessionId);
+    final responses = _pendingMediaSwarmResponses[key];
+    if (responses == null) {
+      return;
+    }
+    responses[availability.responderKey6] = availability;
+    debugPrint(
+      '🌐 [AppProvider] Media swarm response for ${availability.mediaType} '
+      '${availability.sessionId} from ${availability.responderKey6} '
+      '(${availability.servesAll ? 'all' : availability.availableIndices.length})',
+    );
+  }
+
+  Future<bool> _requestMissingMediaViaSwarm({
+    required String mediaType,
+    required String sessionId,
+    required List<int> missingIndices,
+    required String? originalSenderKey6,
+  }) async {
+    if (!connectionProvider.deviceInfo.isConnected || missingIndices.isEmpty) {
+      return false;
+    }
+
+    final key = _mediaSwarmKey(mediaType, sessionId);
+    final pending = _pendingMediaSwarmFetches[key];
+    if (pending != null) {
+      return pending;
+    }
+
+    final requesterKey6 = _deviceKey6Hex();
+    if (requesterKey6 == null) {
+      return false;
+    }
+
+    final future = () async {
+      final responses = <String, MediaSwarmAvailability>{};
+      _pendingMediaSwarmResponses[key] = responses;
+
+      try {
+        final request = MediaSwarmRequest(
+          mediaType: mediaType,
+          sessionId: sessionId,
+          requesterKey6: requesterKey6,
+          missingIndices: missingIndices,
+        );
+        final peers = _eligibleSwarmPeers(excludeKey6: originalSenderKey6);
+        if (peers.isEmpty) {
+          return false;
+        }
+        debugPrint(
+          '🌐 [AppProvider] Media swarm request for $mediaType $sessionId '
+          '(${missingIndices.length} needed fragment(s), ${peers.length} peer(s))',
+        );
+        for (final peer in peers) {
+          await connectionProvider.sendRawVoicePacket(
+            contactPath: peer.outPath,
+            contactPathLen: peer.routeSignedPathLen,
+            payload: request.encodeBinary(),
+          );
+        }
+
+        await Future<void>.delayed(_mediaSwarmResponseWindow);
+        final orderedResponses =
+            responses.values
+                .where(
+                  (response) => response.responderKey6 != originalSenderKey6,
+                )
+                .toList()
+              ..sort((a, b) {
+                final aScore = _swarmResponseScore(a, missingIndices);
+                final bScore = _swarmResponseScore(b, missingIndices);
+                return bScore.compareTo(aScore);
+              });
+
+        for (final response in orderedResponses) {
+          final responder = _resolveContactByPrefixHex(response.responderKey6);
+          if (responder == null ||
+              !responder.routeHasPath ||
+              responder.routeHopCount > _maxDirectPayloadHops ||
+              !responder.routeSupportsLegacyRawTransport ||
+              responder.outPath.isEmpty) {
+            continue;
+          }
+
+          final requestedSubset = response.servesAll
+              ? missingIndices
+              : missingIndices
+                    .where(response.availableIndices.toSet().contains)
+                    .toList();
+          if (requestedSubset.isEmpty) {
+            continue;
+          }
+
+          final requestedSet = requestedSubset.toSet();
+          final sent = await _sendDirectMediaFetchRequest(
+            mediaType: mediaType,
+            sessionId: sessionId,
+            target: responder,
+            requesterKey6: requesterKey6,
+            missingIndices: requestedSet,
+          );
+          if (sent) {
+            debugPrint(
+              '🌐 [AppProvider] Requested $mediaType $sessionId '
+              'from swarm peer ${responder.advName} '
+              '(${requestedSubset.length} fragment(s))',
+            );
+            return true;
+          }
+        }
+
+        return false;
+      } catch (e) {
+        debugPrint(
+          '⚠️ [AppProvider] Media swarm request failed for $mediaType '
+          '$sessionId: $e',
+        );
+        return false;
+      } finally {
+        _pendingMediaSwarmResponses.remove(key);
+      }
+    }();
+
+    _pendingMediaSwarmFetches[key] = future;
+    try {
+      return await future;
+    } finally {
+      _pendingMediaSwarmFetches.remove(key);
+    }
+  }
+
+  int _swarmResponseScore(
+    MediaSwarmAvailability response,
+    List<int> missingIndices,
+  ) {
+    if (response.servesAll) {
+      return missingIndices.length;
+    }
+    final needed = missingIndices.toSet();
+    return response.availableIndices.where(needed.contains).length;
+  }
+
+  Future<bool> _sendDirectMediaFetchRequest({
+    required String mediaType,
+    required String sessionId,
+    required Contact target,
+    required String requesterKey6,
+    required Set<int> missingIndices,
+  }) async {
+    try {
+      final payload = switch (mediaType) {
+        'voice' => VoiceFetchRequest(
+          sessionId: sessionId,
+          want: missingIndices.isEmpty ? 'all' : 'missing',
+          missingIndices: missingIndices.toList()..sort(),
+          requesterKey6: requesterKey6,
+        ).encodeBinary(),
+        'image' => ImageFetchRequest(
+          sessionId: sessionId,
+          want: missingIndices.isEmpty ? 'all' : 'missing',
+          missingIndices: missingIndices.toList()..sort(),
+          requesterKey6: requesterKey6,
+        ).encodeBinary(),
+        _ => null,
+      };
+      if (payload == null) {
+        return false;
+      }
+
+      await connectionProvider.sendRawVoicePacket(
+        contactPath: target.outPath,
+        contactPathLen: target.routeSignedPathLen,
+        payload: payload,
+      );
+      return true;
+    } catch (e) {
+      debugPrint(
+        '⚠️ [AppProvider] Direct $mediaType fetch via ${target.advName} failed: $e',
+      );
+      return false;
+    }
+  }
+
   void _scheduleVoiceMissingRetry(
     String sessionId, {
     required bool justComplete,
   }) {
+    if (voiceProvider.isReceiveCanceled(sessionId)) {
+      _clearVoiceMissingRetry(sessionId);
+      return;
+    }
     if (justComplete || voiceProvider.isComplete(sessionId)) {
-      _voiceMissingRetryTimers.remove(sessionId)?.cancel();
-      _voiceMissingRetryAttempts.remove(sessionId);
+      _clearVoiceMissingRetry(sessionId);
       return;
     }
 
@@ -1321,10 +1760,43 @@ class AppProvider with ChangeNotifier {
     });
   }
 
+  void _scheduleImageMissingRetry(
+    String sessionId, {
+    required bool justComplete,
+  }) {
+    if (imageProvider.isReceiveCanceled(sessionId)) {
+      _clearImageMissingRetry(sessionId);
+      return;
+    }
+    if (justComplete || imageProvider.isComplete(sessionId)) {
+      _clearImageMissingRetry(sessionId);
+      return;
+    }
+
+    _imageMissingRetryAttempts[sessionId] = 0;
+    _imageMissingRetryTimers[sessionId]?.cancel();
+    _imageMissingRetryTimers[sessionId] = Timer(_packetRetryDelay, () {
+      unawaited(_requestMissingImageFragments(sessionId));
+    });
+  }
+
+  void _clearVoiceMissingRetry(String sessionId) {
+    _voiceMissingRetryTimers.remove(sessionId)?.cancel();
+    _voiceMissingRetryAttempts.remove(sessionId);
+  }
+
+  void _clearImageMissingRetry(String sessionId) {
+    _imageMissingRetryTimers.remove(sessionId)?.cancel();
+    _imageMissingRetryAttempts.remove(sessionId);
+  }
+
   Future<void> _requestMissingVoicePackets(String sessionId) async {
+    if (voiceProvider.isReceiveCanceled(sessionId)) {
+      _clearVoiceMissingRetry(sessionId);
+      return;
+    }
     if (voiceProvider.isComplete(sessionId)) {
-      _voiceMissingRetryTimers.remove(sessionId)?.cancel();
-      _voiceMissingRetryAttempts.remove(sessionId);
+      _clearVoiceMissingRetry(sessionId);
       return;
     }
 
@@ -1333,44 +1805,44 @@ class AppProvider with ChangeNotifier {
       debugPrint(
         '⚠️ [AppProvider] Voice re-request limit reached for $sessionId',
       );
-      _voiceMissingRetryTimers.remove(sessionId)?.cancel();
+      _clearVoiceMissingRetry(sessionId);
       return;
     }
 
     final senderKey6 = _voiceSessionSenderKey6[sessionId];
     if (senderKey6 == null) return;
     final sender = _resolveContactByPrefixHex(senderKey6);
-    final deviceKey = connectionProvider.deviceInfo.publicKey;
-    if (sender == null || deviceKey == null || deviceKey.length < 6) return;
+    final requesterKey6 = _deviceKey6Hex();
+    if (requesterKey6 == null) return;
 
     final missing = voiceProvider.missingPacketIndices(sessionId);
     if (missing.isEmpty) {
-      _voiceMissingRetryTimers.remove(sessionId)?.cancel();
-      _voiceMissingRetryAttempts.remove(sessionId);
+      _clearVoiceMissingRetry(sessionId);
       return;
     }
 
-    final requesterKey6 = deviceKey
-        .sublist(0, 6)
-        .map((b) => b.toRadixString(16).padLeft(2, '0'))
-        .join('');
-
-    final request = VoiceFetchRequest(
-      sessionId: sessionId,
-      want: 'missing',
-      missingIndices: missing,
-      requesterKey6: requesterKey6,
-      timestampSec: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      version: 2,
-    );
-
-    try {
-      await connectionProvider.sendRawVoicePacket(
-        contactPath: sender.outPath,
-        contactPathLen: sender.outPathLen,
-        payload: request.encodeBinary(),
+    var sent = false;
+    if (sender != null) {
+      final routeOk = await verifyRawTransportRoute(sender);
+      if (routeOk) {
+        sent = await _sendDirectMediaFetchRequest(
+          mediaType: 'voice',
+          sessionId: sessionId,
+          target: sender,
+          requesterKey6: requesterKey6,
+          missingIndices: missing.toSet(),
+        );
+      }
+    }
+    if (!sent) {
+      sent = await _requestMissingMediaViaSwarm(
+        mediaType: 'voice',
+        sessionId: sessionId,
+        missingIndices: missing,
+        originalSenderKey6: senderKey6,
       );
-    } catch (_) {
+    }
+    if (!sent) {
       return;
     }
 
@@ -1378,6 +1850,69 @@ class AppProvider with ChangeNotifier {
     _voiceMissingRetryTimers[sessionId]?.cancel();
     _voiceMissingRetryTimers[sessionId] = Timer(_packetRetryDelay, () {
       unawaited(_requestMissingVoicePackets(sessionId));
+    });
+  }
+
+  Future<void> _requestMissingImageFragments(String sessionId) async {
+    if (imageProvider.isReceiveCanceled(sessionId)) {
+      _clearImageMissingRetry(sessionId);
+      return;
+    }
+    if (imageProvider.isComplete(sessionId)) {
+      _clearImageMissingRetry(sessionId);
+      return;
+    }
+
+    final attempt = _imageMissingRetryAttempts[sessionId] ?? 0;
+    if (attempt >= _maxPacketRetryAttempts) {
+      debugPrint(
+        '⚠️ [AppProvider] Image re-request limit reached for $sessionId',
+      );
+      _clearImageMissingRetry(sessionId);
+      return;
+    }
+
+    final senderKey6 = _imageSessionSenderKey6[sessionId];
+    if (senderKey6 == null) return;
+    final sender = _resolveContactByPrefixHex(senderKey6);
+    final requesterKey6 = _deviceKey6Hex();
+    if (requesterKey6 == null) return;
+
+    final missing = imageProvider.missingFragmentIndices(sessionId);
+    if (missing.isEmpty) {
+      _clearImageMissingRetry(sessionId);
+      return;
+    }
+
+    var sent = false;
+    if (sender != null) {
+      final routeOk = await verifyRawTransportRoute(sender);
+      if (routeOk) {
+        sent = await _sendDirectMediaFetchRequest(
+          mediaType: 'image',
+          sessionId: sessionId,
+          target: sender,
+          requesterKey6: requesterKey6,
+          missingIndices: missing.toSet(),
+        );
+      }
+    }
+    if (!sent) {
+      sent = await _requestMissingMediaViaSwarm(
+        mediaType: 'image',
+        sessionId: sessionId,
+        missingIndices: missing,
+        originalSenderKey6: senderKey6,
+      );
+    }
+    if (!sent) {
+      return;
+    }
+
+    _imageMissingRetryAttempts[sessionId] = attempt + 1;
+    _imageMissingRetryTimers[sessionId]?.cancel();
+    _imageMissingRetryTimers[sessionId] = Timer(_packetRetryDelay, () {
+      unawaited(_requestMissingImageFragments(sessionId));
     });
   }
 
@@ -1421,94 +1956,212 @@ class AppProvider with ChangeNotifier {
     messagesProvider.addMessage(placeholder, contactLookup: (_) => '');
   }
 
-  String _fragmentAckKey(String sessionId, int index) => '$sessionId:$index';
+  String _rawProbeKey(int nonce) =>
+      nonce.toRadixString(16).padLeft(8, '0').toLowerCase();
 
-  Future<bool> _waitForVoiceFragmentAck({
-    required String sessionId,
-    required int index,
+  Future<bool> verifyRawTransportRoute(
+    Contact target, {
     Duration timeout = const Duration(seconds: 8),
-  }) => _voiceFragmentAckWaiters.waitFor(
-    _fragmentAckKey(sessionId, index),
-    timeout: timeout,
-  );
+  }) async {
+    if (!connectionProvider.deviceInfo.isConnected) {
+      return false;
+    }
+    if (!target.routeHasPath || target.routeHopCount > _maxDirectPayloadHops) {
+      return false;
+    }
+    if (!target.routeSupportsLegacyRawTransport) {
+      return false;
+    }
+    if (target.outPath.isEmpty) {
+      return false;
+    }
 
-  void _completeVoiceFragmentAck(String sessionId, int index) {
-    final completed = _voiceFragmentAckWaiters.complete(
-      _fragmentAckKey(sessionId, index),
-    );
-    if (completed == 0) {
+    final probeKey = _routeProbeTargetKey(target);
+    final pendingProbe = _pendingRawRouteProbes[probeKey];
+    if (pendingProbe != null) {
+      return pendingProbe;
+    }
+
+    final deviceKey = connectionProvider.deviceInfo.publicKey;
+    if (deviceKey == null || deviceKey.length < 6) {
+      return false;
+    }
+
+    final requesterKey6 = deviceKey
+        .sublist(0, 6)
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join();
+    final future = () async {
+      final nonce = math.Random.secure().nextInt(0x100000000);
+      final ackFuture = _rawProbeWaiters.waitFor(
+        _rawProbeKey(nonce),
+        timeout: timeout,
+      );
+
+      try {
+        debugPrint(
+          '📡 [AppProvider] Outgoing raw route probe: target=${target.advName} hops=${target.routeHopCount} nonce=${nonce.toRadixString(16)}',
+        );
+        await connectionProvider.sendRawVoicePacket(
+          contactPath: target.outPath,
+          contactPathLen: target.routeSignedPathLen,
+          payload: RawRouteProbeRequest(
+            nonce: nonce,
+            requesterKey6: requesterKey6,
+          ).encodeBinary(),
+        );
+        return await ackFuture;
+      } catch (e) {
+        debugPrint(
+          '⚠️ [AppProvider] Raw route probe failed for ${target.advName}: $e',
+        );
+        _rawProbeWaiters.complete(_rawProbeKey(nonce));
+        return false;
+      }
+    }();
+
+    _pendingRawRouteProbes[probeKey] = future;
+    try {
+      return await future;
+    } finally {
+      _pendingRawRouteProbes.remove(probeKey);
+    }
+  }
+
+  String _routeProbeTargetKey(Contact target) {
+    if (target.publicKeyHex.isNotEmpty) {
+      return 'pk:${target.publicKeyHex}';
+    }
+    return 'name:${target.advName}:${target.routeSignedPathLen}:${target.outPath.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
+  }
+
+  void _handleRawRouteProbeRequest(RawRouteProbeRequest request) {
+    final requester = _resolveContactByPrefixHex(request.requesterKey6);
+    if (requester == null) {
       debugPrint(
-        'ℹ️ [AppProvider] Voice fragment ACK had no waiter: $sessionId#$index',
+        '⚠️ [AppProvider] Raw route probe requester not found: ${request.requesterKey6}',
       );
       return;
     }
-    debugPrint(
-      '✅ [AppProvider] Voice fragment ACK received for $sessionId#$index ($completed waiter(s))',
-    );
-  }
-
-  Future<bool> _waitForImageFragmentAck({
-    required String sessionId,
-    required int index,
-    Duration timeout = const Duration(seconds: 8),
-  }) => _imageFragmentAckWaiters.waitFor(
-    _fragmentAckKey(sessionId, index),
-    timeout: timeout,
-  );
-
-  void _completeImageFragmentAck(String sessionId, int index) {
-    final completed = _imageFragmentAckWaiters.complete(
-      _fragmentAckKey(sessionId, index),
-    );
-    if (completed == 0) {
+    if (!requester.routeHasPath ||
+        requester.routeHopCount > _maxDirectPayloadHops) {
       debugPrint(
-        'ℹ️ [AppProvider] Image fragment ACK had no waiter: $sessionId#$index',
+        '⚠️ [AppProvider] Raw route probe requester out of range: ${requester.routeHopCount}',
       );
       return;
     }
-    debugPrint(
-      '✅ [AppProvider] Image fragment ACK received for $sessionId#$index ($completed waiter(s))',
-    );
-  }
-
-  void _sendVoiceFragmentAck(VoicePacket packet) {
-    final senderKey6 = _voiceSessionSenderKey6[packet.sessionId];
-    if (senderKey6 == null) return;
-    final sender = _resolveContactByPrefixHex(senderKey6);
-    if (sender == null) return;
-    if (sender.outPathLen < 0 || sender.outPathLen > _maxDirectPayloadHops) {
+    if (!requester.routeSupportsLegacyRawTransport) {
       return;
     }
+    if (requester.outPath.isEmpty) {
+      return;
+    }
+    debugPrint(
+      '📡 [AppProvider] Outgoing raw route probe ACK: requester=${requester.advName} hops=${requester.routeHopCount} nonce=${request.nonce.toRadixString(16)}',
+    );
     unawaited(
       connectionProvider.sendRawVoicePacket(
-        contactPath: sender.outPath,
-        contactPathLen: sender.outPathLen,
-        payload: VoiceFragmentAck(
-          sessionId: packet.sessionId,
-          index: packet.index,
-        ).encodeBinary(),
+        contactPath: requester.outPath,
+        contactPathLen: requester.routeSignedPathLen,
+        payload: RawRouteProbeAck(nonce: request.nonce).encodeBinary(),
       ),
     );
   }
 
-  void _sendImageFragmentAck(ImagePacket fragment) {
-    final senderKey6 = _imageSessionSenderKey6[fragment.sessionId];
-    if (senderKey6 == null) return;
-    final sender = _resolveContactByPrefixHex(senderKey6);
-    if (sender == null) return;
-    if (sender.outPathLen < 0 || sender.outPathLen > _maxDirectPayloadHops) {
-      return;
-    }
-    unawaited(
-      connectionProvider.sendRawVoicePacket(
-        contactPath: sender.outPath,
-        contactPathLen: sender.outPathLen,
-        payload: ImageFragmentAck(
-          sessionId: fragment.sessionId,
-          index: fragment.index,
-        ).encodeBinary(),
-      ),
+  void _completeRawRouteProbeAck(int nonce) {
+    _rawProbeWaiters.complete(_rawProbeKey(nonce));
+  }
+
+  MessageReceptionDetails? _buildReceptionDetailsSnapshot(Message message) {
+    final matchedRxLog = _findBestMatchingRxLog(message);
+    final estimatedTx = estimateMessageTransmitDuration(
+      message,
+      radioBw: connectionProvider.deviceInfo.radioBw,
+      radioSf: connectionProvider.deviceInfo.radioSf,
+      radioCr: connectionProvider.deviceInfo.radioCr,
     );
+    final senderToReceiptMs = _senderToReceiptMs(message);
+    final estimatedTransmitMs = sanitizeEstimatedTransmitMs(
+      estimatedTransmitMs: estimatedTx > Duration.zero
+          ? estimatedTx.inMilliseconds
+          : null,
+      senderToReceiptMs: senderToReceiptMs,
+    );
+    final postTransmitDelayMs =
+        senderToReceiptMs != null && estimatedTransmitMs != null
+        ? (senderToReceiptMs - estimatedTransmitMs).clamp(0, 86400000).toInt()
+        : null;
+
+    if (matchedRxLog == null &&
+        senderToReceiptMs == null &&
+        estimatedTransmitMs == null) {
+      return null;
+    }
+
+    return MessageReceptionDetails(
+      capturedAt: DateTime.now(),
+      packetLoggedAt: matchedRxLog?.timestamp,
+      rssiDbm: matchedRxLog?.logRxDataInfo?.rssiDbm,
+      snrDb: matchedRxLog?.logRxDataInfo?.snrDb,
+      pathBytes: _extractPathBytesFromLog(matchedRxLog),
+      senderToReceiptMs: senderToReceiptMs,
+      estimatedTransmitMs: estimatedTransmitMs,
+      postTransmitDelayMs: postTransmitDelayMs,
+    );
+  }
+
+  int? _senderToReceiptMs(Message message) {
+    if (message.senderTimestamp <= 0) return null;
+    final senderAt = DateTime.fromMillisecondsSinceEpoch(
+      message.senderTimestamp * 1000,
+      isUtc: true,
+    );
+    final deltaMs = message.receivedAt
+        .toUtc()
+        .difference(senderAt)
+        .inMilliseconds;
+    if (deltaMs < 0 || deltaMs > 86400000) return null;
+    return deltaMs;
+  }
+
+  BlePacketLog? _findBestMatchingRxLog(Message message) {
+    if (message.pathLen < 0 || message.pathLen >= 255) return null;
+    final expectedPayloadType = message.messageType == MessageType.channel
+        ? 0x05
+        : 0x02;
+    BlePacketLog? bestLog;
+    var bestDeltaMs = 999999999;
+
+    for (final log in connectionProvider.bleService.packetLogs) {
+      if (log.responseCode != 0x88) continue;
+      if (log.rawData.length < 6) continue;
+
+      final raw = log.rawData;
+      final payloadType = (raw[3] >> 2) & 0x0F;
+      final pathLen = raw[4];
+      if (payloadType != expectedPayloadType) continue;
+      if (pathLen != message.pathLen) continue;
+      if (raw.length < 5 + pathLen) continue;
+
+      final deltaMs =
+          (log.timestamp.difference(message.receivedAt).inMilliseconds).abs();
+      if (deltaMs < bestDeltaMs) {
+        bestDeltaMs = deltaMs;
+        bestLog = log;
+      }
+    }
+
+    if (bestDeltaMs > 30000) return null;
+    return bestLog;
+  }
+
+  List<int>? _extractPathBytesFromLog(BlePacketLog? log) {
+    if (log == null) return null;
+    final raw = log.rawData;
+    if (raw.length < 6) return null;
+    final pathLen = raw[4];
+    if (pathLen <= 0 || raw.length < 5 + pathLen) return null;
+    return raw.sublist(5, 5 + pathLen);
   }
 
   // Removed _syncMessages() - messages are automatically synced via PUSH_CODE_MSG_WAITING events
@@ -1604,9 +2257,15 @@ class AppProvider with ChangeNotifier {
     for (final timer in _voiceMissingRetryTimers.values) {
       timer.cancel();
     }
+    for (final timer in _imageMissingRetryTimers.values) {
+      timer.cancel();
+    }
     _voiceMissingRetryTimers.clear();
     _voiceMissingRetryAttempts.clear();
+    _imageMissingRetryTimers.clear();
+    _imageMissingRetryAttempts.clear();
     _voiceSessionSenderKey6.clear();
+    _imageSessionSenderKey6.clear();
     notifyListeners();
   }
 
@@ -1638,6 +2297,9 @@ class AppProvider with ChangeNotifier {
     // Dispose the location tracking service to stop GPS stream and clean up resources
     locationTrackingService.dispose();
     for (final timer in _voiceMissingRetryTimers.values) {
+      timer.cancel();
+    }
+    for (final timer in _imageMissingRetryTimers.values) {
       timer.cancel();
     }
     super.dispose();

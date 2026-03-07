@@ -13,7 +13,6 @@ import '../../providers/connection_provider.dart';
 import '../../providers/drawing_provider.dart';
 import '../../providers/voice_provider.dart';
 import '../../providers/image_provider.dart' as ip;
-import '../contacts/direct_message_sheet.dart';
 import '../drawing_minimap_preview.dart';
 import '../../models/ble_packet_log.dart';
 import '../../services/sar_template_service.dart';
@@ -22,15 +21,19 @@ import '../../utils/sar_message_parser.dart';
 import '../../utils/key_comparison.dart';
 import '../../utils/voice_message_parser.dart';
 import '../../utils/image_message_parser.dart';
+import '../../utils/message_airtime_estimator.dart';
 import '../../utils/tictactoe_message_parser.dart';
-import '../../utils/avatar_label_helper.dart';
+import '../../utils/location_formats.dart';
 import '../../l10n/app_localizations.dart';
 import '../../utils/message_extensions.dart';
-import '../common/contact_avatar.dart';
+import '../../models/message_transfer_details.dart';
 import 'voice_message_bubble.dart';
 import 'image_message_bubble.dart';
 import 'tictactoe_message_bubble.dart';
 import 'message_trace_sheet.dart';
+import 'message_bubble_header.dart';
+import 'message_bubble_signal.dart';
+import 'system_message_bubble.dart';
 
 /// Reusable message bubble widget that displays messages with various types:
 /// - Regular text messages (channel or direct)
@@ -64,103 +67,6 @@ class _MessageBubbleState extends State<MessageBubble> {
   bool _isExpanded = false;
   bool _showReceivedStats = false;
 
-  Widget _buildHeaderAvatar(
-    BuildContext context, {
-    required bool isOwnMessage,
-    required bool isChannelMessage,
-    required dynamic senderContact,
-    required String displayName,
-  }) {
-    if (isOwnMessage) {
-      return CircleAvatar(
-        radius: 10.5,
-        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-        child: Icon(
-          Icons.account_circle,
-          size: 16,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      );
-    }
-
-    if (senderContact is Contact) {
-      return ContactAvatar(
-        contact: senderContact,
-        radius: 10.5,
-        displayName: displayName,
-      );
-    }
-
-    final background = isChannelMessage
-        ? Colors.teal.withValues(alpha: 0.16)
-        : Theme.of(context).colorScheme.surfaceContainerHighest;
-    final foreground = isChannelMessage
-        ? Colors.teal.shade800
-        : Theme.of(context).colorScheme.onSurfaceVariant;
-
-    return CircleAvatar(
-      radius: 10.5,
-      backgroundColor: background,
-      child: Text(
-        AvatarLabelHelper.buildLabel(displayName),
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: foreground,
-          letterSpacing: -0.2,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBubbleMetaFooter(
-    BuildContext context, {
-    required Message message,
-    required bool isOwnMessage,
-    required bool isSarMarker,
-  }) {
-    final metaColor = Theme.of(
-      context,
-    ).textTheme.labelSmall?.color?.withValues(alpha: 0.68);
-
-    final items = <Widget>[
-      Text(
-        message.getLocalizedTimeAgo(context),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: metaColor,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    ];
-
-    if (!isOwnMessage && !isSarMarker && message.pathLen < 255) {
-      items.addAll([
-        Text(
-          ' • ',
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: metaColor),
-        ),
-        Icon(Icons.alt_route, size: 11, color: metaColor),
-        const SizedBox(width: 3),
-        Text(
-          message.pathLen == 0 ? 'direct' : '${message.pathLen}hop',
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: metaColor),
-        ),
-      ]);
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 6, right: 6, top: 1, bottom: 18),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Row(mainAxisSize: MainAxisSize.min, children: items),
-      ),
-    );
-  }
-
   @override
   void didUpdateWidget(MessageBubble oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -186,6 +92,12 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   void _handleBubbleTap({required bool isSarMarker, required bool isDrawing}) {
+    if (!widget.message.isRead &&
+        !widget.message.isSentMessage &&
+        !widget.message.isSystemMessage) {
+      context.read<MessagesProvider>().markAsRead(widget.message.id);
+    }
+
     if (!widget.isCompact && !isSarMarker && !isDrawing) {
       setState(() {
         _showReceivedStats = !_showReceivedStats;
@@ -207,20 +119,9 @@ class _MessageBubbleState extends State<MessageBubble> {
     }
 
     try {
-      // Create new message ID for retry
-      final retryMessageId = '${failedMessage.id}_retry';
-
-      // Create retry message
-      final retryMessage = failedMessage.copyWith(
-        id: retryMessageId,
-        deliveryStatus: MessageDeliveryStatus.sending,
-      );
-
-      // Add retry message to provider
       Contact? roomContact;
       if (failedMessage.messageType == MessageType.contact) {
         if (failedMessage.recipientPublicKey == null) {
-          messagesProvider.markMessageFailed(retryMessageId);
           ToastLogger.error(
             context,
             AppLocalizations.of(context)!.cannotRetryMissingRecipient,
@@ -236,13 +137,10 @@ class _MessageBubbleState extends State<MessageBubble> {
         }).firstOrNull;
       }
 
-      messagesProvider.addSentMessage(retryMessage, contact: roomContact);
-
       // Resend the message
       if (failedMessage.messageType == MessageType.contact) {
         // Direct message retry (for SAR markers sent to rooms)
         if (failedMessage.recipientPublicKey == null) {
-          messagesProvider.markMessageFailed(retryMessageId);
           ToastLogger.error(
             context,
             AppLocalizations.of(context)!.cannotRetryMissingRecipient,
@@ -250,26 +148,39 @@ class _MessageBubbleState extends State<MessageBubble> {
           return;
         }
 
-        // Resend to the same room
+        final prepared = messagesProvider.prepareMessageForRetry(
+          failedMessage.id,
+        );
+        if (!prepared) {
+          return;
+        }
+
         final sentSuccessfully = await connectionProvider.sendTextMessage(
           contactPublicKey: failedMessage.recipientPublicKey!,
           text: failedMessage.text,
-          messageId: retryMessageId,
+          messageId: failedMessage.id,
           contact: roomContact,
         );
 
         if (!context.mounted) return;
 
         if (!sentSuccessfully) {
-          messagesProvider.markMessageFailed(retryMessageId);
+          messagesProvider.markMessageFailed(failedMessage.id);
           ToastLogger.error(context, 'Failed to resend message');
         }
       } else if (failedMessage.messageType == MessageType.channel) {
+        final prepared = messagesProvider.prepareMessageForRetry(
+          failedMessage.id,
+        );
+        if (!prepared) {
+          return;
+        }
+
         // Channel message retry
         await connectionProvider.sendChannelMessage(
           channelIdx: failedMessage.channelIdx ?? 0,
           text: failedMessage.text,
-          messageId: retryMessageId,
+          messageId: failedMessage.id,
         );
 
         if (!context.mounted) return;
@@ -281,18 +192,11 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   void _showMessageOptions(BuildContext context) {
-    // Determine if this is own message
     final connectionProvider = context.read<ConnectionProvider>();
     final selfPublicKey = connectionProvider.deviceInfo.publicKey;
     final isOwnMessage =
         widget.message.isSentMessage ||
         widget.message.isFromSelf(selfPublicKey);
-
-    // Check if we can reply to this message (must be contact message from someone else)
-    final canReply =
-        widget.message.isContactMessage &&
-        !isOwnMessage &&
-        widget.message.senderPublicKeyPrefix != null;
 
     showModalBottomSheet(
       context: context,
@@ -305,16 +209,6 @@ class _MessageBubbleState extends State<MessageBubble> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Reply option (only for contact messages from others)
-            if (canReply)
-              ListTile(
-                leading: const Icon(Icons.reply),
-                title: Text(AppLocalizations.of(context)!.reply),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showReplySheet(context);
-                },
-              ),
             // Copy text option
             ListTile(
               leading: const Icon(Icons.copy),
@@ -500,9 +394,14 @@ class _MessageBubbleState extends State<MessageBubble> {
     final senderLocationSnapshot = messagesProvider.getMessageContactLocation(
       widget.message.id,
     );
+    final receptionDetails = messagesProvider.getMessageReceptionDetails(
+      widget.message.id,
+    );
+    final transferDetails = messagesProvider.getMessageTransferDetails(
+      widget.message.id,
+    );
 
     final envelope = VoiceEnvelope.tryParseText(widget.message.text);
-    final legacyVoicePacket = VoicePacket.tryParseText(widget.message.text);
     final voiceSession = widget.message.voiceId != null
         ? voiceProvider.session(widget.message.voiceId!)
         : null;
@@ -539,16 +438,6 @@ class _MessageBubbleState extends State<MessageBubble> {
             radioSf: radioSf,
             radioCr: radioCr,
           )
-        : legacyVoicePacket != null
-        ? estimateVoiceTransmitDuration(
-            mode: legacyVoicePacket.mode,
-            packetCount: legacyVoicePacket.total,
-            durationMs: legacyVoicePacket.durationMs * legacyVoicePacket.total,
-            pathLen: widget.message.pathLen,
-            radioBw: radioBw,
-            radioSf: radioSf,
-            radioCr: radioCr,
-          )
         : Duration.zero;
 
     final senderPrefixHex = widget.message.senderPublicKeyPrefix
@@ -564,16 +453,19 @@ class _MessageBubbleState extends State<MessageBubble> {
       widget.message,
     );
     final packetPathBytes = _extractPathBytesFromLog(matchedRxLog);
-    final packetPathHex = packetPathBytes
+    final packetPathHex = (receptionDetails?.pathBytes ?? packetPathBytes)
         ?.map((b) => b.toRadixString(16).padLeft(2, '0'))
         .join(':');
     final snrDb =
+        receptionDetails?.snrDb ??
         matchedRxLog?.logRxDataInfo?.snrDb ??
         (widget.message.lastEchoSnrRaw != null
             ? (widget.message.lastEchoSnrRaw!.toSigned(8) / 4.0)
             : null);
     final rssiDbm =
-        matchedRxLog?.logRxDataInfo?.rssiDbm ?? widget.message.lastEchoRssiDbm;
+        receptionDetails?.rssiDbm ??
+        matchedRxLog?.logRxDataInfo?.rssiDbm ??
+        widget.message.lastEchoRssiDbm;
     final retryCause = _retryCauseLabel(widget.message);
     final retryResult = _retryResultLabel(widget.message);
     final retryMode = _retryModeLabel(widget.message);
@@ -596,6 +488,9 @@ class _MessageBubbleState extends State<MessageBubble> {
       'Matched RX RSSI: ${rssiDbm ?? '-'}',
       'Matched RX SNR: ${snrDb?.toStringAsFixed(2) ?? '-'}',
       'Matched path bytes: ${packetPathHex ?? '-'}',
+      'Sender to receipt ms: ${receptionDetails?.senderToReceiptMs ?? '-'}',
+      'Estimated transmit ms: ${receptionDetails?.estimatedTransmitMs ?? '-'}',
+      'Post-transmit delay ms: ${receptionDetails?.postTransmitDelayMs ?? '-'}',
       'Expected ACK tag: ${widget.message.expectedAckTag ?? '-'}',
       'Suggested timeout ms: ${widget.message.suggestedTimeoutMs ?? '-'}',
       'Round-trip ms: ${widget.message.roundTripTimeMs ?? '-'}',
@@ -619,10 +514,17 @@ class _MessageBubbleState extends State<MessageBubble> {
       'Text length: ${widget.message.text.length}',
     ];
 
+    if (transferDetails != null) {
+      rawLines.add('Transfers served: ${transferDetails.totalTransfers}');
+      rawLines.add(
+        'Downloaded by: ${_formatDownloaderSummary(transferDetails)}',
+      );
+    }
+
     if (widget.message.isVoice) {
       rawLines.add('--- Voice Technical ---');
       if (envelope != null) {
-        rawLines.add('Envelope format: VE1 compact');
+        rawLines.add('Envelope format: VE3 compact');
         rawLines.add(
           'Voice mode: ${envelope.mode.label} (id=${envelope.mode.id})',
         );
@@ -630,17 +532,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         rawLines.add(
           'Estimated duration ms (envelope): ${envelope.durationMs}',
         );
-        rawLines.add('Envelope senderKey6: ${envelope.senderKey6}');
-        rawLines.add('Envelope ts: ${envelope.timestampSec}');
         rawLines.add('Envelope ver: ${envelope.version}');
-      } else if (legacyVoicePacket != null) {
-        rawLines.add('Envelope format: legacy V packet');
-        rawLines.add(
-          'Legacy segment index/total: ${legacyVoicePacket.index + 1}/${legacyVoicePacket.total}',
-        );
-        rawLines.add(
-          'Legacy codec mode: ${legacyVoicePacket.mode.label} (id=${legacyVoicePacket.mode.id})',
-        );
       } else {
         rawLines.add('Envelope format: unknown');
       }
@@ -683,8 +575,6 @@ class _MessageBubbleState extends State<MessageBubble> {
       rawLines.add(
         'Estimated image tx: ~${imageTxEstimate.inSeconds}s (current radio)',
       );
-      rawLines.add('Envelope senderKey6: ${imageEnvelope.senderKey6}');
-      rawLines.add('Envelope ts: ${imageEnvelope.timestampSec}');
       rawLines.add('Envelope ver: ${imageEnvelope.version}');
 
       if (imageSession != null) {
@@ -759,7 +649,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                           _techBadge(
                             context,
                             icon: Icons.route,
-                            label: _hopDisplayLabel(widget.message),
+                            label: hopDisplayLabel(widget.message),
                           ),
                           _techBadge(
                             context,
@@ -846,6 +736,30 @@ class _MessageBubbleState extends State<MessageBubble> {
                                 label: l10n.expectedAckTag,
                                 value: widget.message.expectedAckTag!
                                     .toString(),
+                              ),
+                            if (receptionDetails?.senderToReceiptMs != null)
+                              _detailRow(
+                                context,
+                                label: 'Sender to receipt',
+                                value: _formatDurationMs(
+                                  receptionDetails!.senderToReceiptMs!,
+                                ),
+                              ),
+                            if (receptionDetails?.estimatedTransmitMs != null)
+                              _detailRow(
+                                context,
+                                label: 'Estimated tx',
+                                value: _formatDurationMs(
+                                  receptionDetails!.estimatedTransmitMs!,
+                                ),
+                              ),
+                            if (receptionDetails?.postTransmitDelayMs != null)
+                              _detailRow(
+                                context,
+                                label: 'Post-tx delay',
+                                value: _formatDurationMs(
+                                  receptionDetails!.postTransmitDelayMs!,
+                                ),
                               ),
                             if (widget.message.suggestedTimeoutMs != null)
                               _detailRow(
@@ -971,11 +885,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                               _detailRow(
                                 context,
                                 label: l10n.envelope,
-                                value: envelope != null
-                                    ? 'VE1 compact'
-                                    : legacyVoicePacket != null
-                                    ? 'Legacy V packet'
-                                    : l10n.unknown,
+                                value: envelope != null ? 'VE3 compact' : l10n.unknown,
                               ),
                               if (voiceSession != null)
                                 _detailRow(
@@ -991,6 +901,21 @@ class _MessageBubbleState extends State<MessageBubble> {
                                   value: voiceSession.isComplete
                                       ? l10n.yes
                                       : l10n.no,
+                                ),
+                              if (transferDetails != null)
+                                _detailRow(
+                                  context,
+                                  label: 'Transfers',
+                                  value: '${transferDetails.totalTransfers}',
+                                ),
+                              if (transferDetails != null &&
+                                  transferDetails.downloaders.isNotEmpty)
+                                _detailRow(
+                                  context,
+                                  label: 'Downloaded by',
+                                  value: _formatDownloaderSummary(
+                                    transferDetails,
+                                  ),
                                 ),
                               if (voiceTxEstimate > Duration.zero)
                                 _detailRow(
@@ -1042,6 +967,21 @@ class _MessageBubbleState extends State<MessageBubble> {
                                   value: imageSession.isComplete
                                       ? l10n.yes
                                       : l10n.no,
+                                ),
+                              if (transferDetails != null)
+                                _detailRow(
+                                  context,
+                                  label: 'Transfers',
+                                  value: '${transferDetails.totalTransfers}',
+                                ),
+                              if (transferDetails != null &&
+                                  transferDetails.downloaders.isNotEmpty)
+                                _detailRow(
+                                  context,
+                                  label: 'Downloaded by',
+                                  value: _formatDownloaderSummary(
+                                    transferDetails,
+                                  ),
                                 ),
                               if (imageTxEstimate > Duration.zero)
                                 _detailRow(
@@ -1202,6 +1142,20 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
+  String _formatDownloaderSummary(MessageTransferDetails transferDetails) {
+    return transferDetails.downloaders.map(_formatDownloaderLabel).join(', ');
+  }
+
+  String _formatDownloaderLabel(MessageTransferDownloader downloader) {
+    final name = downloader.requesterName?.trim();
+    final base = name != null && name.isNotEmpty
+        ? '$name (${downloader.requesterKey6})'
+        : downloader.requesterKey6;
+    return downloader.transferCount > 1
+        ? '$base ×${downloader.transferCount}'
+        : base;
+  }
+
   Widget _signalRow(
     BuildContext context, {
     required String label,
@@ -1255,6 +1209,18 @@ class _MessageBubbleState extends State<MessageBubble> {
         '${fraction}Z';
   }
 
+  String _formatDurationMs(int durationMs) {
+    if (durationMs >= 60000) {
+      final minutes = durationMs ~/ 60000;
+      final seconds = (durationMs % 60000) ~/ 1000;
+      return '${minutes}m ${seconds}s';
+    }
+    if (durationMs >= 1000) {
+      return '${(durationMs / 1000).toStringAsFixed(durationMs >= 10000 ? 0 : 1)} s';
+    }
+    return '$durationMs ms';
+  }
+
   BlePacketLog? _findBestMatchingRxLog(
     List<BlePacketLog> logs,
     Message message,
@@ -1298,44 +1264,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     final pathLen = raw[4];
     if (pathLen <= 0 || raw.length < 5 + pathLen) return null;
     return raw.sublist(5, 5 + pathLen);
-  }
-
-  void _showReplySheet(BuildContext context) {
-    // Find the sender contact by public key prefix
-    final contactsProvider = context.read<ContactsProvider>();
-
-    if (widget.message.senderPublicKeyPrefix == null) {
-      ToastLogger.error(context, 'Cannot reply: sender information missing');
-      return;
-    }
-
-    // Find contact by public key prefix (first 6 bytes)
-    final senderKeyHex = widget.message.senderPublicKeyPrefix!
-        .sublist(
-          0,
-          widget.message.senderPublicKeyPrefix!.length < 6
-              ? widget.message.senderPublicKeyPrefix!.length
-              : 6,
-        )
-        .map((b) => b.toRadixString(16).padLeft(2, '0'))
-        .join('');
-
-    final senderContact = contactsProvider.contacts.where((c) {
-      return c.publicKeyHex.startsWith(senderKeyHex);
-    }).firstOrNull;
-
-    if (senderContact == null) {
-      ToastLogger.error(context, 'Cannot reply: contact not found');
-      return;
-    }
-
-    // Show direct message sheet for the sender
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DirectMessageSheet(contact: senderContact),
-    );
   }
 
   void _showDeleteConfirmation(BuildContext context) {
@@ -1583,163 +1511,12 @@ class _MessageBubbleState extends State<MessageBubble> {
     }
   }
 
-  IconData _getDeliveryStatusIcon(MessageDeliveryStatus status) {
-    switch (status) {
-      case MessageDeliveryStatus.sending:
-        return Icons.schedule;
-      case MessageDeliveryStatus.sent:
-        return Icons.check;
-      case MessageDeliveryStatus.delivered:
-        return Icons.done_all;
-      case MessageDeliveryStatus.failed:
-        return Icons.error_outline;
-      case MessageDeliveryStatus.received:
-        return Icons.inbox;
-    }
-  }
-
-  Color _getDeliveryStatusColor(MessageDeliveryStatus status) {
-    switch (status) {
-      case MessageDeliveryStatus.sending:
-        return Colors.orange;
-      case MessageDeliveryStatus.sent:
-        return Colors.blue;
-      case MessageDeliveryStatus.delivered:
-        return Colors.green;
-      case MessageDeliveryStatus.failed:
-        return Colors.red;
-      case MessageDeliveryStatus.received:
-        return Colors.grey;
-    }
-  }
-
-  Widget _buildChannelEchoStatus(BuildContext context, Message message) {
-    final statusColor = _getDeliveryStatusColor(message.deliveryStatus);
-    final hasEcho = message.echoCount > 0;
-
-    if (!hasEcho) {
-      return Text(
-        message.getLocalizedDeliveryStatus(context),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: statusColor,
-          fontStyle: FontStyle.italic,
-        ),
-      );
-    }
-
-    final rssi = message.lastEchoRssiDbm;
-    final snr = message.lastEchoSnrRaw != null
-        ? message.lastEchoSnrRaw!.toSigned(8) / 4.0
-        : null;
-    final quality = _linkQualityLabel(rssi, snr);
-    final qualityColor = _linkQualityColor(quality);
-
-    return Wrap(
-      spacing: 4,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        _techChip(
-          context,
-          icon: Icons.hub_outlined,
-          label: 'x${message.echoCount}',
-          color: statusColor,
-        ),
-        if (message.expectedAckTag != null)
-          _techChip(
-            context,
-            icon: Icons.tag,
-            label:
-                'ACK ${message.expectedAckTag!.toRadixString(16).toUpperCase()}',
-            color: Colors.indigo,
-          ),
-        _techChip(
-          context,
-          icon: Icons.bolt,
-          label: quality,
-          color: qualityColor,
-        ),
-        if (message.lastEchoRssiDbm != null)
-          _signalCapsule(
-            context,
-            icon: Icons.network_cell,
-            label: message.lastEchoRssiDbm!.toString(),
-            filled: _rssiScore(message.lastEchoRssiDbm!),
-            color: Colors.blueGrey,
-          ),
-        if (message.lastEchoSnrRaw != null)
-          _signalCapsule(
-            context,
-            icon: Icons.graphic_eq,
-            label: (message.lastEchoSnrRaw!.toSigned(8) / 4.0).toStringAsFixed(
-              1,
-            ),
-            filled: _snrScore(message.lastEchoSnrRaw!.toSigned(8) / 4.0),
-            color: Colors.teal,
-          ),
-      ],
-    );
-  }
-
-  Widget _buildReceivedSignalStatus(
-    BuildContext context,
-    Message message, {
-    required int? rssiDbm,
-    required double? snrDb,
-  }) {
-    final hopLabel = _hopDisplayLabel(message);
-
-    return Wrap(
-      spacing: 4,
-      runSpacing: 4,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        _techChip(
-          context,
-          icon: Icons.alt_route,
-          label: hopLabel,
-          color: Colors.indigo,
-        ),
-        if (rssiDbm != null || snrDb != null) ...[
-          _techChip(
-            context,
-            icon: Icons.bolt,
-            label: _linkQualityLabel(rssiDbm, snrDb),
-            color: _linkQualityColor(_linkQualityLabel(rssiDbm, snrDb)),
-          ),
-          if (rssiDbm != null)
-            _signalCapsule(
-              context,
-              icon: Icons.network_cell,
-              label: '$rssiDbm',
-              filled: _rssiScore(rssiDbm),
-              color: Colors.blueGrey,
-            ),
-          if (snrDb != null)
-            _signalCapsule(
-              context,
-              icon: Icons.graphic_eq,
-              label: snrDb.toStringAsFixed(1),
-              filled: _snrScore(snrDb),
-              color: Colors.teal,
-            ),
-        ],
-      ],
-    );
-  }
-
-  String _hopDisplayLabel(Message message) {
-    if (message.pathLen == 0) return 'Direct';
-    if (message.pathLen >= 255 && message.isContactMessage) return 'Direct';
-    if (message.pathLen >= 255) return 'Unknown';
-    return '${message.pathLen} hop${message.pathLen == 1 ? '' : 's'}';
-  }
-
   String _hopDebugLabel(Message message) {
     if (message.pathLen >= 255 && message.isContactMessage) {
       return 'Direct (raw: ${message.pathLen})';
     }
     if (message.pathLen >= 255) return 'Unknown (raw: ${message.pathLen})';
-    return _hopDisplayLabel(message);
+    return hopDisplayLabel(message);
   }
 
   String? _retryCauseLabel(Message message) {
@@ -1821,110 +1598,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     return null;
   }
 
-  Widget _techChip(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 10, color: color),
-          const SizedBox(width: 2),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _signalCapsule(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required int filled,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 10, color: color),
-          const SizedBox(width: 2),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: List.generate(5, (i) {
-              final active = i < filled;
-              return Container(
-                width: 3,
-                height: (4 + i).toDouble(),
-                margin: const EdgeInsets.symmetric(horizontal: 0.5),
-                decoration: BoxDecoration(
-                  color: active ? color : color.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(1),
-                ),
-              );
-            }),
-          ),
-          const SizedBox(width: 2),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  int _rssiScore(int rssiDbm) => ((rssiDbm + 120) / 10).round().clamp(0, 5);
-
-  int _snrScore(double snrDb) => ((snrDb + 5.0) / 5.0).round().clamp(0, 5);
-
-  String _linkQualityLabel(int? rssiDbm, double? snrDb) {
-    var score = 0;
-    if (rssiDbm != null) score += _rssiScore(rssiDbm);
-    if (snrDb != null) score += _snrScore(snrDb);
-    if (score >= 8) return 'Excellent';
-    if (score >= 6) return 'Good';
-    if (score >= 4) return 'Fair';
-    return 'Weak';
-  }
-
-  Color _linkQualityColor(String quality) {
-    switch (quality) {
-      case 'Excellent':
-        return Colors.green;
-      case 'Good':
-        return Colors.lightGreen;
-      case 'Fair':
-        return Colors.orange;
-      default:
-        return Colors.redAccent;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     // Display system messages with minimal styling
@@ -1945,9 +1618,13 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     // Determine if this is own message
     final connectionProvider = context.read<ConnectionProvider>();
+    final messagesProvider = context.read<MessagesProvider>();
     final selfPublicKey = connectionProvider.deviceInfo.publicKey;
     final isOwnMessage =
         message.isSentMessage || message.isFromSelf(selfPublicKey);
+    final receptionDetails = !isOwnMessage
+        ? messagesProvider.getMessageReceptionDetails(message.id)
+        : null;
     final matchedRxLog = !isOwnMessage
         ? _findBestMatchingRxLog(
             connectionProvider.bleService.packetLogs,
@@ -1955,12 +1632,15 @@ class _MessageBubbleState extends State<MessageBubble> {
           )
         : null;
     final snrDb =
+        receptionDetails?.snrDb ??
         matchedRxLog?.logRxDataInfo?.snrDb ??
         (message.lastEchoSnrRaw != null
             ? (message.lastEchoSnrRaw!.toSigned(8) / 4.0)
             : null);
     final rssiDbm =
-        matchedRxLog?.logRxDataInfo?.rssiDbm ?? message.lastEchoRssiDbm;
+        receptionDetails?.rssiDbm ??
+        matchedRxLog?.logRxDataInfo?.rssiDbm ??
+        message.lastEchoRssiDbm;
 
     // Look up contact information for rich display name
     final contactsProvider = context.read<ContactsProvider>();
@@ -2039,6 +1719,9 @@ class _MessageBubbleState extends State<MessageBubble> {
         isOwnMessage && message.isChannelMessage && recipientDisplayName != null
         ? '${l10n.channel}: $recipientDisplayName'
         : recipientDisplayName;
+    final directCounterpartLabel = !message.isChannelMessage
+        ? (isOwnMessage ? recipientSubtitle : l10n.you)
+        : null;
     final receivedChannelSubtitle =
         !isOwnMessage && message.isChannelMessage && channelDisplayName != null
         ? '${l10n.channel}: $channelDisplayName'
@@ -2137,78 +1820,78 @@ class _MessageBubbleState extends State<MessageBubble> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header: Badge (if SAR or drawing) and time
-              if (isSarMarker || message.isDrawing)
+              // Header badge for drawing messages
+              if (message.isDrawing)
                 Row(
                   children: [
-                    if (isSarMarker)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _getSarMarkerBorderColor(context, isDarkMode),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.warning_amber_rounded,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              AppLocalizations.of(context)!.sarAlert,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.5,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else if (message.isDrawing)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.draw,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              AppLocalizations.of(context)!.mapDrawing,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.5,
-                                  ),
-                            ),
-                          ],
-                        ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
                       ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.draw, size: 16, color: Colors.white),
+                          const SizedBox(width: 4),
+                          Text(
+                            AppLocalizations.of(context)!.mapDrawing,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
 
               // Sender info row (shown for all messages)
               Row(
                 children: [
+                  if (isSarMarker) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getSarMarkerBorderColor(context, isDarkMode),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.warning_amber_rounded,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            AppLocalizations.of(context)!.sarAlert,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            softWrap: false,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   // Unread indicator badge (only for regular messages, not SAR/drawing)
                   if (!message.isRead &&
                       !message.isSentMessage &&
@@ -2224,7 +1907,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                         shape: BoxShape.circle,
                       ),
                     ),
-                  _buildHeaderAvatar(
+                  buildMessageHeaderAvatar(
                     context,
                     isOwnMessage: isOwnMessage,
                     isChannelMessage: message.isChannelMessage,
@@ -2235,7 +1918,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                   Expanded(
                     child: Row(
                       children: [
-                        Flexible(
+                        Expanded(
                           child: Text(
                             displayName,
                             style: Theme.of(context).textTheme.labelMedium
@@ -2251,98 +1934,25 @@ class _MessageBubbleState extends State<MessageBubble> {
                         ),
                         if (!widget.isCompact &&
                             (recipientSubtitle != null ||
+                                directCounterpartLabel != null ||
                                 receivedChannelSubtitle != null)) ...[
                           const SizedBox(width: 8),
                           if (message.isChannelMessage)
-                            Flexible(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest
-                                      .withValues(alpha: 0.65),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      isOwnMessage
-                                          ? Icons.campaign_outlined
-                                          : Icons.tag,
-                                      size: 11,
-                                      color: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.color
-                                          ?.withValues(alpha: 0.7),
-                                    ),
-                                    const SizedBox(width: 5),
-                                    Flexible(
-                                      child: Text(
-                                        isOwnMessage
-                                            ? recipientDisplayName!
-                                            : channelDisplayName!,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelSmall
-                                            ?.copyWith(
-                                              color: Theme.of(context)
-                                                  .textTheme
-                                                  .labelSmall
-                                                  ?.color
-                                                  ?.withValues(alpha: 0.82),
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: buildChannelHeaderPill(
+                                context,
+                                label: isOwnMessage
+                                    ? recipientDisplayName!
+                                    : channelDisplayName!,
                               ),
                             )
                           else
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    isOwnMessage
-                                        ? Icons.arrow_forward
-                                        : Icons.arrow_back,
-                                    size: 12,
-                                    color: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.color
-                                        ?.withValues(alpha: 0.7),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      isOwnMessage
-                                          ? recipientSubtitle!
-                                          : receivedChannelSubtitle!,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(
-                                            color: Theme.of(context)
-                                                .textTheme
-                                                .labelSmall
-                                                ?.color
-                                                ?.withValues(alpha: 0.75),
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: buildDirectHeaderCounterpart(
+                                context,
+                                label: directCounterpartLabel!,
                               ),
                             ),
                         ],
@@ -2407,6 +2017,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                                         fontWeight: FontWeight.w800,
                                         letterSpacing: -0.2,
                                       ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  softWrap: false,
                                 ),
                                 if (message.sarNotes != null &&
                                     message.sarNotes!.isNotEmpty) ...[
@@ -2455,27 +2068,64 @@ class _MessageBubbleState extends State<MessageBubble> {
                             ),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                Icons.place_outlined,
-                                size: 15,
-                                color: _getSarMarkerBorderColor(
-                                  context,
-                                  isDarkMode,
-                                ),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.place_outlined,
+                                    size: 15,
+                                    color: _getSarMarkerBorderColor(
+                                      context,
+                                      isDarkMode,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      '${message.sarGpsCoordinates!.latitude.toStringAsFixed(5)}, ${message.sarGpsCoordinates!.longitude.toStringAsFixed(5)}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelMedium
+                                          ?.copyWith(
+                                            fontFamily: 'monospace',
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 0.15,
+                                          ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  '${message.sarGpsCoordinates!.latitude.toStringAsFixed(5)}, ${message.sarGpsCoordinates!.longitude.toStringAsFixed(5)}',
-                                  style: Theme.of(context).textTheme.labelMedium
-                                      ?.copyWith(
-                                        fontFamily: 'monospace',
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.15,
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.tag_rounded,
+                                    size: 15,
+                                    color: _getSarMarkerBorderColor(
+                                      context,
+                                      isDarkMode,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      formatPlusCode(
+                                        message.sarGpsCoordinates!.latitude,
+                                        message.sarGpsCoordinates!.longitude,
                                       ),
-                                ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelMedium
+                                          ?.copyWith(
+                                            fontFamily: 'monospace',
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 0.15,
+                                          ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -2593,11 +2243,13 @@ class _MessageBubbleState extends State<MessageBubble> {
               if (!widget.isCompact &&
                   !isSarMarker &&
                   !message.isDrawing &&
+                  !message.isSentMessage &&
                   _showReceivedStats) ...[
                 const SizedBox(height: 6),
-                _buildReceivedSignalStatus(
+                buildReceivedSignalStatus(
                   context,
                   message,
+                  receptionDetails: receptionDetails,
                   rssiDbm: rssiDbm,
                   snrDb: snrDb,
                 ),
@@ -2783,81 +2435,124 @@ class _MessageBubbleState extends State<MessageBubble> {
                   ),
                 ]
                 // Show single message delivery status
-                else
-                  Row(
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      Icon(
-                        _getDeliveryStatusIcon(message.deliveryStatus),
-                        size: 12,
-                        color: _getDeliveryStatusColor(message.deliveryStatus),
-                      ),
-                      const SizedBox(width: 3),
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child:
-                              message.isChannelMessage &&
-                                  message.deliveryStatus ==
-                                      MessageDeliveryStatus.sent
-                              ? _buildChannelEchoStatus(context, message)
-                              : Text(
-                                  message.getLocalizedDeliveryStatus(context),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.labelSmall
-                                      ?.copyWith(
-                                        color: _getDeliveryStatusColor(
-                                          message.deliveryStatus,
-                                        ),
-                                        fontStyle: FontStyle.italic,
-                                      ),
+                else if (!message.isChannelMessage ||
+                    message.deliveryStatus == MessageDeliveryStatus.failed)
+                  Builder(
+                    builder: (context) {
+                      final txEstimate = estimateMessageTransmitDuration(
+                        message,
+                        radioBw: connectionProvider.deviceInfo.radioBw,
+                        radioSf: connectionProvider.deviceInfo.radioSf,
+                        radioCr: connectionProvider.deviceInfo.radioCr,
+                      );
+                      final showSentDirectStats =
+                          message.isContactMessage &&
+                          message.deliveryStatus ==
+                              MessageDeliveryStatus.delivered &&
+                          _showReceivedStats &&
+                          message.roundTripTimeMs != null;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.max,
+                            children: [
+                              Icon(
+                                getDeliveryStatusIcon(message.deliveryStatus),
+                                size: 12,
+                                color: getDeliveryStatusColor(
+                                  message.deliveryStatus,
                                 ),
-                        ),
-                      ),
-                      // Show retry button for failed messages
-                      if (message.deliveryStatus ==
-                          MessageDeliveryStatus.failed) ...[
-                        const SizedBox(width: 6),
-                        GestureDetector(
-                          onTap: () => _retryFailedMessage(context, message),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: Colors.orange,
-                                width: 1,
                               ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.refresh,
-                                  size: 12,
-                                  color: Colors.orange,
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    message.getLocalizedDeliveryStatus(context),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: getDeliveryStatusColor(
+                                            message.deliveryStatus,
+                                          ),
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                  ),
                                 ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Retry',
-                                  style: Theme.of(context).textTheme.labelSmall
-                                      ?.copyWith(
-                                        color: Colors.orange,
-                                        fontWeight: FontWeight.bold,
+                              ),
+                              // Show retry button for failed messages
+                              if (message.deliveryStatus ==
+                                  MessageDeliveryStatus.failed) ...[
+                                const SizedBox(width: 6),
+                                GestureDetector(
+                                  onTap: () =>
+                                      _retryFailedMessage(context, message),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withValues(
+                                        alpha: 0.2,
                                       ),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: Colors.orange,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.refresh,
+                                          size: 12,
+                                          color: Colors.orange,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Retry',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall
+                                              ?.copyWith(
+                                                color: Colors.orange,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ],
-                            ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ],
+                          if (showSentDirectStats) ...[
+                            const SizedBox(height: 6),
+                            buildSentDirectSignalStatus(
+                              context,
+                              message,
+                              roundTripTimeMs: message.roundTripTimeMs!,
+                              txEstimate: txEstimate,
+                            ),
+                          ],
+                        ],
+                      );
+                    },
                   ),
+                if (shouldShowSentChannelStats(
+                  message,
+                  showReceivedStats: _showReceivedStats,
+                )) ...[
+                  const SizedBox(height: 6),
+                  buildChannelEchoStatus(context, message),
+                ],
               ],
             ],
           ),
@@ -2871,10 +2566,9 @@ class _MessageBubbleState extends State<MessageBubble> {
           : CrossAxisAlignment.start,
       children: [
         bubble,
-        _buildBubbleMetaFooter(
+        buildBubbleMetaFooter(
           context,
           message: message,
-          isOwnMessage: isOwnMessage,
           isSarMarker: isSarMarker,
         ),
       ],
@@ -2889,88 +2583,6 @@ class _MessageBubbleState extends State<MessageBubble> {
           ? MainAxisAlignment.end
           : MainAxisAlignment.start,
       children: [Flexible(child: bubbleWithMeta)],
-    );
-  }
-}
-
-/// System message bubble - compact log-style display
-class SystemMessageBubble extends StatelessWidget {
-  final Message message;
-
-  const SystemMessageBubble({super.key, required this.message});
-
-  Color _getLevelColor(String? level) {
-    switch (level?.toLowerCase()) {
-      case 'success':
-        return Colors.green;
-      case 'warning':
-        return Colors.orange;
-      case 'error':
-        return Colors.red;
-      case 'info':
-      default:
-        return Colors.blue.shade300;
-    }
-  }
-
-  IconData _getLevelIcon(String? level) {
-    switch (level?.toLowerCase()) {
-      case 'success':
-        return Icons.check_circle_outline;
-      case 'warning':
-        return Icons.warning_amber_outlined;
-      case 'error':
-        return Icons.error_outline;
-      case 'info':
-      default:
-        return Icons.info_outline;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final level = message.senderName ?? 'info';
-    final levelColor = _getLevelColor(level);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: isDarkMode
-            ? levelColor.withValues(alpha: 0.1)
-            : levelColor.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        children: [
-          Icon(_getLevelIcon(level), size: 14, color: levelColor),
-          const SizedBox(width: 6),
-          Text(
-            message.getLocalizedTimeAgo(context),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(
-                context,
-              ).textTheme.bodySmall?.color?.withValues(alpha: 0.6),
-              fontSize: 10,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message.text,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 11,
-                color: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.color?.withValues(alpha: 0.8),
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

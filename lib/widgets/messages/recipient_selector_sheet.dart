@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/contact.dart';
 import '../../l10n/app_localizations.dart';
+import '../common/contact_avatar.dart';
 
 /// Bottom sheet for selecting message recipient (channel, contact, or room)
 class RecipientSelectorSheet extends StatefulWidget {
@@ -168,7 +169,7 @@ class _RecipientSelectorSheetState extends State<RecipientSelectorSheet> {
                     ...filteredChannels.map((channel) {
                       return _buildRecipientTile(
                         context: context,
-                        icon: Icons.public,
+                        contact: channel,
                         title: channel.getLocalizedDisplayName(context),
                         subtitle: channel.isPublicChannel
                             ? l10n.broadcastToAllNearby
@@ -215,10 +216,9 @@ class _RecipientSelectorSheetState extends State<RecipientSelectorSheet> {
                     ...filteredContacts.map((contact) {
                       return _buildRecipientTile(
                         context: context,
-                        icon: Icons.person,
+                        contact: contact,
                         title: contact.displayName,
                         subtitle: contact.publicKeyShort,
-                        emoji: contact.roleEmoji,
                         isSelected: _isSelected('contact', contact),
                         onTap: () {
                           widget.onSelect('contact', contact);
@@ -261,10 +261,9 @@ class _RecipientSelectorSheetState extends State<RecipientSelectorSheet> {
                     ...filteredRooms.map((room) {
                       return _buildRecipientTile(
                         context: context,
-                        icon: Icons.meeting_room,
+                        contact: room,
                         title: room.displayName,
                         subtitle: room.publicKeyShort,
-                        emoji: room.roleEmoji,
                         isSelected: _isSelected('room', room),
                         onTap: () {
                           widget.onSelect('room', room);
@@ -275,7 +274,9 @@ class _RecipientSelectorSheetState extends State<RecipientSelectorSheet> {
                 ],
 
                 // Empty state
-                if (widget.contacts.isEmpty && widget.rooms.isEmpty && widget.channels.isEmpty) ...[
+                if (widget.contacts.isEmpty &&
+                    widget.rooms.isEmpty &&
+                    widget.channels.isEmpty) ...[
                   Padding(
                     padding: const EdgeInsets.all(32),
                     child: Column(
@@ -310,36 +311,16 @@ class _RecipientSelectorSheetState extends State<RecipientSelectorSheet> {
 
   Widget _buildRecipientTile({
     required BuildContext context,
-    required IconData icon,
+    required Contact contact,
     required String title,
     required String subtitle,
-    String? emoji,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
     return ListTile(
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Icon(
-          icon,
-          color: isSelected
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-      ),
+      leading: ContactAvatar(contact: contact, radius: 20, displayName: title),
       title: Row(
         children: [
-          if (emoji != null && emoji.isNotEmpty) ...[
-            Text(emoji, style: const TextStyle(fontSize: 16)),
-            const SizedBox(width: 8),
-          ],
           Expanded(
             child: Text(
               title,

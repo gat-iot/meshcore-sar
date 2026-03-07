@@ -128,6 +128,8 @@ void main() {
       expect(updated.displayLocation, isNotNull);
       expect(updated.displayLocation!.latitude, closeTo(45.0001, 0.0001));
       expect(updated.displayLocation!.longitude, closeTo(13.9999, 0.0001));
+      expect(updated.advLat, equals((45.0001 * 1e6).round()));
+      expect(updated.advLon, equals((13.9999 * 1e6).round()));
     });
 
     test(
@@ -231,6 +233,71 @@ void main() {
       expect(snapshot!.source, equals('advert'));
       expect(snapshot.location.latitude, closeTo(46.0569, 0.000001));
       expect(snapshot.location.longitude, closeTo(14.5058, 0.000001));
+    });
+
+    test('persists last valid telemetry gps on the contact across reloads', () async {
+      final telemetryData = CayenneLppParser.createGpsData(
+        latitude: 45.0001,
+        longitude: 13.9999,
+      );
+
+      provider.updateTelemetry(publicKey.sublist(0, 6), telemetryData);
+      await Future<void>.delayed(Duration.zero);
+
+      final reloadedProvider = ContactsProvider();
+      await reloadedProvider.initializeEarly();
+
+      final reloaded = reloadedProvider.findContactByKey(publicKey)!;
+      expect(reloaded.advLat, equals((45.0001 * 1e6).round()));
+      expect(reloaded.advLon, equals((13.9999 * 1e6).round()));
+      expect(reloaded.advertLocation, isNotNull);
+      expect(reloaded.advertLocation!.latitude, closeTo(45.0001, 0.0001));
+      expect(reloaded.advertLocation!.longitude, closeTo(13.9999, 0.0001));
+    });
+  });
+
+  group('ContactsProvider route updates', () {
+    late ContactsProvider provider;
+    late Uint8List publicKey;
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      provider = ContactsProvider();
+      publicKey = createPublicKey(64);
+      provider.addOrUpdateContact(
+        createContact(key: publicKey, type: ContactType.chat, name: 'Routey'),
+      );
+    });
+
+    test('optimistically stores a multi-byte route locally', () {
+      final route = ContactRouteCodec.parse('AABB,CCDD');
+
+      provider.setContactRouteLocal(
+        publicKey,
+        signedEncodedPathLen: route.signedEncodedPathLen,
+        paddedPathBytes: route.paddedPathBytes,
+      );
+
+      final updated = provider.findContactByKey(publicKey)!;
+      expect(updated.routeHasPath, isTrue);
+      expect(updated.routeHashSize, 2);
+      expect(updated.routeHopCount, 2);
+      expect(updated.routeCanonicalText, 'AABB,CCDD');
+    });
+
+    test('resetContactRouteLocal clears route state', () {
+      final route = ContactRouteCodec.parse('AA,BB,CC');
+      provider.setContactRouteLocal(
+        publicKey,
+        signedEncodedPathLen: route.signedEncodedPathLen,
+        paddedPathBytes: route.paddedPathBytes,
+      );
+
+      provider.resetContactRouteLocal(publicKey);
+
+      final updated = provider.findContactByKey(publicKey)!;
+      expect(updated.routeHasPath, isFalse);
+      expect(updated.routeSummary, 'Flood/Unknown');
     });
   });
 }

@@ -71,12 +71,6 @@ class VoiceProvider with ChangeNotifier {
     required Uint8List payload,
   })?
   sendRawPacketCallback;
-  Future<bool> Function({
-    required String sessionId,
-    required int index,
-    Duration timeout,
-  })?
-  waitForFragmentAckCallback;
 
   final Map<String, _OutgoingVoiceSession> _outgoingSessions = {};
 
@@ -131,6 +125,23 @@ class VoiceProvider with ChangeNotifier {
     return missing;
   }
 
+  List<int> availablePacketIndices(String sessionId) {
+    final outgoing = _outgoingSessions[sessionId];
+    if (outgoing != null) {
+      return outgoing.packets.map((packet) => packet.index).toList()..sort();
+    }
+
+    final session = _sessions[sessionId];
+    if (session == null) return const [];
+    final indices = <int>[];
+    for (var i = 0; i < session.packets.length; i++) {
+      if (session.packets[i] != null) {
+        indices.add(i);
+      }
+    }
+    return indices;
+  }
+
   // ── Packet reception ─────────────────────────────────────────────────────
 
   /// Add an incoming [packet] to its session.  Creates the session on first packet.
@@ -142,14 +153,18 @@ class VoiceProvider with ChangeNotifier {
       );
       return false;
     }
-    _sessions.putIfAbsent(
-      packet.sessionId,
-      () => VoiceSession(
+    _sessions.putIfAbsent(packet.sessionId, () {
+      if (packet.total < 1) {
+        throw StateError(
+          'Voice envelope missing for compact packet ${packet.sessionId}',
+        );
+      }
+      return VoiceSession(
         sessionId: packet.sessionId,
         mode: packet.mode,
         total: packet.total,
-      ),
-    );
+      );
+    });
 
     final session = _sessions[packet.sessionId]!;
     if (packet.index < session.total) {
@@ -185,6 +200,47 @@ class VoiceProvider with ChangeNotifier {
     }
   }
 
+  void registerEnvelope(VoiceEnvelope envelope) {
+    if (_ignoredIncomingSessions.contains(envelope.sessionId)) {
+      return;
+    }
+    final existing = _sessions[envelope.sessionId];
+    if (existing == null) {
+      _sessions[envelope.sessionId] = VoiceSession(
+        sessionId: envelope.sessionId,
+        mode: envelope.mode,
+        total: envelope.total,
+      );
+      _persistVoiceData();
+      notifyListeners();
+      return;
+    }
+
+    final needsMerge =
+        existing.total != envelope.total || existing.mode != envelope.mode;
+    if (!needsMerge) {
+      notifyListeners();
+      return;
+    }
+
+    final merged = VoiceSession(
+      sessionId: envelope.sessionId,
+      mode: envelope.mode,
+      total: envelope.total,
+    );
+    merged.firstPacketAt = existing.firstPacketAt;
+    merged.lastPacketAt = existing.lastPacketAt;
+    for (final packet in existing.packets) {
+      if (packet == null) continue;
+      if (packet.index < merged.total) {
+        merged.packets[packet.index] = packet;
+      }
+    }
+    _sessions[envelope.sessionId] = merged;
+    _persistVoiceData();
+    notifyListeners();
+  }
+
   /// Cache encoded packets for deferred voice serving.
   void cacheOutgoingSession(String sessionId, List<VoicePacket> packets) {
     if (packets.isEmpty) return;
@@ -201,10 +257,14 @@ class VoiceProvider with ChangeNotifier {
     required Contact requester,
     Set<int>? requestedIndices,
   }) async {
-    final cached = _outgoingSessions[sessionId];
-    if (cached == null) {
+    final outgoing = _outgoingSessions[sessionId];
+    final packets = outgoing != null
+        ? List<VoicePacket>.from(outgoing.packets)
+        : _sessions[sessionId]?.packets.whereType<VoicePacket>().toList() ??
+              const <VoicePacket>[];
+    if (packets.isEmpty) {
       debugPrint(
-        '⚠️ [VoiceProvider] No cached outgoing session for $sessionId',
+        '⚠️ [VoiceProvider] No cached or received session for $sessionId',
       );
       return false;
     }
@@ -212,12 +272,11 @@ class VoiceProvider with ChangeNotifier {
       providerLabel: 'VoiceProvider',
       sessionId: sessionId,
       requester: requester,
-      fragments: cached.packets,
+      fragments: packets,
       maxDirectPayloadHops: maxDirectPayloadHops,
       indexOf: (packet) => packet.index,
       encodeBinary: (packet) => packet.encodeBinary(),
       sendRawPacket: sendRawPacketCallback,
-      waitForFragmentAck: waitForFragmentAckCallback,
       requestedIndices: requestedIndices,
     );
   }

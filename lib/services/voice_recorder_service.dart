@@ -18,7 +18,7 @@ class VoiceRecorderService {
 
   /// Request microphone permission.  Returns true if granted.
   Future<bool> requestPermission() async {
-    return _recorder.hasPermission();
+    return _recorder.hasPermission(request: true);
   }
 
   /// Start capturing PCM audio.
@@ -38,9 +38,7 @@ class VoiceRecorderService {
       throw StateError('VoiceRecorderService: already recording');
     }
 
-    _controller = StreamController<Int16List>(
-      onCancel: () => _stopInternal(),
-    );
+    _controller = StreamController<Int16List>(onCancel: () => _stopInternal());
     _isRecording = true;
 
     _startRecording(
@@ -167,17 +165,17 @@ class _VoiceDynamicsProcessor {
     required int sampleRate,
     required bool enableCompressor,
     required bool enableLimiter,
-  })  : _enableCompressor = enableCompressor,
-        _enableLimiter = enableLimiter,
-        _compressor = _SimpleCompressor(
-          sampleRate: sampleRate.toDouble(),
-          thresholdDb: -18.0,
-          ratio: 2.5,
-          attackMs: 8.0,
-          releaseMs: 120.0,
-          makeupGainDb: 4.0,
-        ),
-        _limiter = _PeakLimiter(ceilingDb: -1.0);
+  }) : _enableCompressor = enableCompressor,
+       _enableLimiter = enableLimiter,
+       _compressor = _SimpleCompressor(
+         sampleRate: sampleRate.toDouble(),
+         thresholdDb: -18.0,
+         ratio: 2.5,
+         attackMs: 8.0,
+         releaseMs: 120.0,
+         makeupGainDb: 4.0,
+       ),
+       _limiter = _PeakLimiter(ceilingDb: -1.0);
 
   Int16List process(Int16List input) {
     final output = Int16List(input.length);
@@ -214,11 +212,11 @@ class _SimpleCompressor {
     required double attackMs,
     required double releaseMs,
     required double makeupGainDb,
-  })  : _thresholdDb = thresholdDb,
-        _ratio = ratio,
-        _makeupGain = math.pow(10.0, makeupGainDb / 20.0).toDouble(),
-        _attackCoeff = math.exp(-1.0 / (sampleRate * (attackMs / 1000.0))),
-        _releaseCoeff = math.exp(-1.0 / (sampleRate * (releaseMs / 1000.0)));
+  }) : _thresholdDb = thresholdDb,
+       _ratio = ratio,
+       _makeupGain = math.pow(10.0, makeupGainDb / 20.0).toDouble(),
+       _attackCoeff = math.exp(-1.0 / (sampleRate * (attackMs / 1000.0))),
+       _releaseCoeff = math.exp(-1.0 / (sampleRate * (releaseMs / 1000.0)));
 
   double process(double x) {
     final absX = x.abs();
@@ -266,14 +264,14 @@ class _VoiceBandPassFilter {
     required int sampleRate,
     required double lowCutHz,
     required double highCutHz,
-  })  : _highPass = _BiquadFilter.highPass(
-          sampleRate: sampleRate.toDouble(),
-          cutoffHz: lowCutHz,
-        ),
-        _lowPass = _BiquadFilter.lowPass(
-          sampleRate: sampleRate.toDouble(),
-          cutoffHz: highCutHz,
-        );
+  }) : _highPass = _BiquadFilter.highPass(
+         sampleRate: sampleRate.toDouble(),
+         cutoffHz: lowCutHz,
+       ),
+       _lowPass = _BiquadFilter.lowPass(
+         sampleRate: sampleRate.toDouble(),
+         cutoffHz: highCutHz,
+       );
 
   Int16List process(Int16List input) {
     final output = Int16List(input.length);
@@ -306,11 +304,11 @@ class _BiquadFilter {
     required double b2,
     required double a1,
     required double a2,
-  })  : _b0 = b0,
-        _b1 = b1,
-        _b2 = b2,
-        _a1 = a1,
-        _a2 = a2;
+  }) : _b0 = b0,
+       _b1 = b1,
+       _b2 = b2,
+       _a1 = a1,
+       _a2 = a2;
 
   factory _BiquadFilter.lowPass({
     required double sampleRate,

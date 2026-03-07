@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import '../models/message.dart';
 import '../models/contact.dart';
 import '../models/message_contact_location.dart';
+import '../models/message_reception_details.dart';
+import '../models/message_transfer_details.dart';
 import '../models/sar_marker.dart';
 import '../models/map_drawing.dart';
 import '../services/message_storage_service.dart';
@@ -10,6 +12,7 @@ import '../services/notification_service.dart';
 import '../utils/sar_message_parser.dart';
 import '../utils/drawing_message_parser.dart';
 import '../utils/voice_message_parser.dart';
+import '../utils/image_message_parser.dart';
 import '../l10n/app_localizations.dart';
 import 'helpers/message_retry_manager.dart';
 
@@ -22,6 +25,8 @@ class MessagesProvider with ChangeNotifier {
   bool _isInitialized = false;
   AppLocalizations? _localizations;
   final Map<String, MessageContactLocation> _messageContactLocations = {};
+  final Map<String, MessageReceptionDetails> _messageReceptionDetails = {};
+  final Map<String, MessageTransferDetails> _messageTransferDetails = {};
 
   // Track pending sent messages by expected ACK/TAG
   final Map<int, Message> _pendingSentMessages = {};
@@ -74,11 +79,11 @@ class MessagesProvider with ChangeNotifier {
   })?
   sendMessageCallback;
 
-  Future<void> Function({
-    required Contact contact,
-    required int failureStreak,
-  })?
+  Future<void> Function({required Contact contact, required int failureStreak})?
   onDirectPathFailedCallback;
+
+  String? Function(Uint8List? publicKey)? resolveContactNameCallback;
+  String Function(int channelIdx)? resolveChannelNameCallback;
 
   List<Message> get messages => List.unmodifiable(_messages);
 
@@ -115,6 +120,12 @@ class MessagesProvider with ChangeNotifier {
   MessageContactLocation? getMessageContactLocation(String messageId) =>
       _messageContactLocations[messageId];
 
+  MessageReceptionDetails? getMessageReceptionDetails(String messageId) =>
+      _messageReceptionDetails[messageId];
+
+  MessageTransferDetails? getMessageTransferDetails(String messageId) =>
+      _messageTransferDetails[messageId];
+
   /// Set localizations for notifications
   void setLocalizations(AppLocalizations localizations) {
     _localizations = localizations;
@@ -145,9 +156,19 @@ class MessagesProvider with ChangeNotifier {
       final storedMessages = await _storageService.loadMessages();
       final storedContactLocations = await _storageService
           .loadMessageContactLocations();
+      final storedReceptionDetails = await _storageService
+          .loadMessageReceptionDetails();
+      final storedTransferDetails = await _storageService
+          .loadMessageTransferDetails();
       _messageContactLocations
         ..clear()
         ..addAll(storedContactLocations);
+      _messageReceptionDetails
+        ..clear()
+        ..addAll(storedReceptionDetails);
+      _messageTransferDetails
+        ..clear()
+        ..addAll(storedTransferDetails);
 
       // Add stored messages with enhancement to ensure SAR detection
       for (final message in storedMessages) {
@@ -187,14 +208,6 @@ class MessagesProvider with ChangeNotifier {
               isVoice: true,
               voiceId: envelope.sessionId,
             );
-          } else if (VoicePacket.isVoiceText(enhancedMessage.text)) {
-            final pkt = VoicePacket.tryParseText(enhancedMessage.text);
-            if (pkt != null) {
-              enhancedMessage = enhancedMessage.copyWith(
-                isVoice: true,
-                voiceId: pkt.sessionId,
-              );
-            }
           }
         }
 
@@ -311,6 +324,7 @@ class MessagesProvider with ChangeNotifier {
     Message message, {
     String Function(String name)? contactLookup,
     MessageContactLocation? contactLocationSnapshot,
+    MessageReceptionDetails? receptionDetailsSnapshot,
   }) {
     // Always enhance message with SAR parser to detect SAR markers
     var enhancedMessage = SarMessageParser.enhanceMessage(message);
@@ -341,14 +355,6 @@ class MessagesProvider with ChangeNotifier {
           isVoice: true,
           voiceId: envelope.sessionId,
         );
-      } else if (VoicePacket.isVoiceText(enhancedMessage.text)) {
-        final pkt = VoicePacket.tryParseText(enhancedMessage.text);
-        if (pkt != null) {
-          enhancedMessage = enhancedMessage.copyWith(
-            isVoice: true,
-            voiceId: pkt.sessionId,
-          );
-        }
       }
     }
 
@@ -397,12 +403,31 @@ class MessagesProvider with ChangeNotifier {
       debugPrint(
         '   Text: ${finalMessage.text.substring(0, finalMessage.text.length > 50 ? 50 : finalMessage.text.length)}...',
       );
+      final existingIndex = _messages.indexWhere(
+        (existing) =>
+            existing.messageType == finalMessage.messageType &&
+            existing.senderTimestamp == finalMessage.senderTimestamp &&
+            existing.text == finalMessage.text,
+      );
+      if (existingIndex != -1) {
+        final existingId = _messages[existingIndex].id;
+        if (contactLocationSnapshot != null) {
+          _messageContactLocations[existingId] = contactLocationSnapshot;
+        }
+        if (receptionDetailsSnapshot != null) {
+          _messageReceptionDetails[existingId] = receptionDetailsSnapshot;
+        }
+        _persistMessages();
+      }
       return; // Skip duplicate
     }
 
     _messages.add(finalMessage);
     if (contactLocationSnapshot != null) {
       _messageContactLocations[finalMessage.id] = contactLocationSnapshot;
+    }
+    if (receptionDetailsSnapshot != null) {
+      _messageReceptionDetails[finalMessage.id] = receptionDetailsSnapshot;
     }
 
     // If it's a SAR marker message, extract and store the marker
@@ -549,33 +574,31 @@ class MessagesProvider with ChangeNotifier {
   /// Trigger notification for regular message
   Future<void> _triggerMessageNotification(Message message) async {
     try {
-      // Get sender name from message
-      final senderName =
-          message.senderName ?? message.senderKeyShort ?? 'Unknown';
-
-      // Determine if it's a channel message
+      final senderName = _resolveParticipantName(
+        publicKey: message.senderPublicKeyPrefix,
+        fallback: message.senderName ?? message.senderKeyShort,
+      );
       final isChannelMessage = message.isChannelMessage;
-
-      // Get channel name if available
-      String? channelName;
-      if (isChannelMessage) {
-        // You could map channelIdx to channel name here if needed
-        // For now, use "Public" for channel 0
-        channelName = message.channelIdx == 0
-            ? 'Public'
-            : 'Channel ${message.channelIdx}';
-      }
+      final channelName = isChannelMessage
+          ? _resolveChannelName(message.channelIdx)
+          : null;
+      final messageText = _buildNotificationMessageText(
+        message,
+        senderName: senderName,
+        isChannelMessage: isChannelMessage,
+        channelName: channelName,
+      );
 
       debugPrint('🔔 [MessagesProvider] Triggering message notification');
       debugPrint('   Sender: $senderName');
       debugPrint('   Type: ${isChannelMessage ? "Channel" : "Direct"}');
       debugPrint(
-        '   Message: ${message.text.substring(0, message.text.length > 50 ? 50 : message.text.length)}...',
+        '   Message: ${messageText.substring(0, messageText.length > 50 ? 50 : messageText.length)}...',
       );
 
       await _notificationService.showMessageNotification(
         senderName: senderName,
-        messageText: message.text,
+        messageText: messageText,
         isChannelMessage: isChannelMessage,
         channelName: channelName,
         localizations: _localizations,
@@ -587,12 +610,84 @@ class MessagesProvider with ChangeNotifier {
     }
   }
 
+  String _resolveParticipantName({
+    required Uint8List? publicKey,
+    String? fallback,
+  }) {
+    final resolved = resolveContactNameCallback?.call(publicKey)?.trim();
+    if (resolved != null && resolved.isNotEmpty) {
+      return resolved;
+    }
+    final normalizedFallback = fallback?.trim();
+    if (normalizedFallback != null && normalizedFallback.isNotEmpty) {
+      return normalizedFallback;
+    }
+    return 'Unknown';
+  }
+
+  String _resolveChannelName(int? channelIdx) {
+    final idx = channelIdx ?? 0;
+    final resolved = resolveChannelNameCallback?.call(idx).trim();
+    if (resolved != null && resolved.isNotEmpty) {
+      return resolved;
+    }
+    return idx == 0 ? 'Public' : 'Channel $idx';
+  }
+
+  String _buildNotificationMessageText(
+    Message message, {
+    required String senderName,
+    required bool isChannelMessage,
+    String? channelName,
+  }) {
+    final voiceEnvelope = VoiceEnvelope.tryParseText(message.text);
+    if (voiceEnvelope != null) {
+      final seconds = (voiceEnvelope.durationMs / 1000).ceil();
+      final summary =
+          'Voice message - ${voiceEnvelope.mode.label} - ${seconds}s - ${voiceEnvelope.total} packets';
+      return isChannelMessage ? '$senderName\n$summary' : summary;
+    }
+
+    final imageEnvelope = ImageEnvelope.tryParse(message.text);
+    if (imageEnvelope != null) {
+      final summary =
+          'Image - ${imageEnvelope.format.label} - ${imageEnvelope.width}x${imageEnvelope.height} - ${_formatBytes(imageEnvelope.sizeBytes)}';
+      return isChannelMessage ? '$senderName\n$summary' : summary;
+    }
+
+    if (!isChannelMessage && message.recipientPublicKey != null) {
+      final recipientName = _resolveParticipantName(
+        publicKey: message.recipientPublicKey,
+        fallback: null,
+      );
+      if (recipientName != 'Unknown') {
+        return 'To: $recipientName\n${message.text}';
+      }
+    }
+
+    if (isChannelMessage) {
+      return '$senderName\n${message.text}';
+    }
+
+    return message.text;
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    final kib = bytes / 1024;
+    if (kib < 1024) return '${kib.toStringAsFixed(kib >= 10 ? 0 : 1)} KB';
+    final mib = kib / 1024;
+    return '${mib.toStringAsFixed(mib >= 10 ? 0 : 1)} MB';
+  }
+
   /// Persist messages to storage (async, non-blocking)
   Future<void> _persistMessages() async {
     try {
       await _storageService.saveMessages(
         _messages,
         messageContactLocations: _messageContactLocations,
+        messageReceptionDetails: _messageReceptionDetails,
+        messageTransferDetails: _messageTransferDetails,
       );
     } catch (e) {
       debugPrint('❌ [MessagesProvider] Error persisting messages: $e');
@@ -709,6 +804,8 @@ class MessagesProvider with ChangeNotifier {
       _messageContactMap.remove(messageId);
       _groupedMessageMapping.remove(messageId);
       _messageContactLocations.remove(messageId);
+      _messageReceptionDetails.remove(messageId);
+      _messageTransferDetails.remove(messageId);
 
       debugPrint('🗑️ [MessagesProvider] Message $messageId deleted');
 
@@ -738,6 +835,8 @@ class MessagesProvider with ChangeNotifier {
     _messages.clear();
     _sarMarkers.clear();
     _messageContactLocations.clear();
+    _messageReceptionDetails.clear();
+    _messageTransferDetails.clear();
     _persistMessages();
     notifyListeners();
   }
@@ -753,8 +852,68 @@ class MessagesProvider with ChangeNotifier {
     _messages.clear();
     _sarMarkers.clear();
     _messageContactLocations.clear();
+    _messageReceptionDetails.clear();
+    _messageTransferDetails.clear();
     _persistMessages();
     notifyListeners();
+  }
+
+  int transferCountForSession({
+    String? voiceSessionId,
+    String? imageSessionId,
+  }) {
+    final messageId = _findMessageIdByMediaSession(
+      voiceSessionId: voiceSessionId,
+      imageSessionId: imageSessionId,
+    );
+    if (messageId == null) return 0;
+    return _messageTransferDetails[messageId]?.totalTransfers ?? 0;
+  }
+
+  void recordMediaTransfer({
+    required String sessionId,
+    required String mediaType,
+    required String requesterKey6,
+    String? requesterName,
+  }) {
+    final messageId = _findMessageIdByMediaSession(
+      voiceSessionId: mediaType == 'voice' ? sessionId : null,
+      imageSessionId: mediaType == 'image' ? sessionId : null,
+    );
+    if (messageId == null) {
+      debugPrint(
+        '⚠️ [MessagesProvider] No message found for $mediaType session $sessionId',
+      );
+      return;
+    }
+
+    final current =
+        _messageTransferDetails[messageId] ??
+        const MessageTransferDetails.empty();
+    _messageTransferDetails[messageId] = current.registerTransfer(
+      requesterKey6: requesterKey6,
+      requesterName: requesterName,
+    );
+    _persistMessages();
+    notifyListeners();
+  }
+
+  String? _findMessageIdByMediaSession({
+    String? voiceSessionId,
+    String? imageSessionId,
+  }) {
+    for (final message in _messages.reversed) {
+      if (voiceSessionId != null && message.voiceId == voiceSessionId) {
+        return message.id;
+      }
+      if (imageSessionId != null) {
+        final envelope = ImageEnvelope.tryParse(message.text);
+        if (envelope != null && envelope.sessionId == imageSessionId) {
+          return message.id;
+        }
+      }
+    }
+    return null;
   }
 
   /// Get storage statistics
@@ -852,14 +1011,6 @@ class MessagesProvider with ChangeNotifier {
           isVoice: true,
           voiceId: envelope.sessionId,
         );
-      } else if (VoicePacket.isVoiceText(enhancedMessage.text)) {
-        final pkt = VoicePacket.tryParseText(enhancedMessage.text);
-        if (pkt != null) {
-          enhancedMessage = enhancedMessage.copyWith(
-            isVoice: true,
-            voiceId: pkt.sessionId,
-          );
-        }
       }
     }
 
@@ -1062,10 +1213,11 @@ class MessagesProvider with ChangeNotifier {
         '  Message text preview: ${message.text.substring(0, message.text.length > 30 ? 30 : message.text.length)}...',
       );
 
+      // Once the device accepts a direct message and returns an ACK tag, the
+      // send itself succeeded locally even if end-to-end delivery confirmation
+      // may still arrive later. Keep ACK tracking, but stop showing "waiting".
       final updatedMessage = message.copyWith(
-        deliveryStatus: expectedAckTag > 0
-            ? MessageDeliveryStatus.sending
-            : MessageDeliveryStatus.sent,
+        deliveryStatus: MessageDeliveryStatus.sent,
         expectedAckTag: expectedAckTag > 0 ? expectedAckTag : null,
         suggestedTimeoutMs: expectedAckTag > 0 ? effectiveTimeout : null,
       );
@@ -1522,7 +1674,7 @@ class MessagesProvider with ChangeNotifier {
 
     debugPrint('❌ [MessagesProvider] Message $messageId timeout/failed');
     debugPrint('   Retry attempt: ${message.retryAttempt}');
-    debugPrint('   Contact has path: ${contact?.hasPath ?? false}');
+    debugPrint('   Contact has path: ${contact?.routeHasPath ?? false}');
     debugPrint('   Used flood fallback: ${message.usedFloodFallback}');
 
     // Decision tree for retry/flood/fail
@@ -1678,7 +1830,7 @@ class MessagesProvider with ChangeNotifier {
       _retryManager.clearRetry(messageId);
 
       final failedContact = _messageContactMap[messageId];
-      if (failedContact != null && failedContact.hasPath) {
+      if (failedContact != null && failedContact.routeHasPath) {
         final failureStreak = _retryManager.recordPathFailure(failedContact);
         debugPrint(
           '   Path failure streak for ${failedContact.advName}: $failureStreak',
@@ -1698,8 +1850,69 @@ class MessagesProvider with ChangeNotifier {
     }
   }
 
+  /// Reset an existing failed message back into a sending state so a manual
+  /// retry can reuse the same record instead of appending a duplicate.
+  bool prepareMessageForRetry(String messageId) {
+    final index = _messages.indexWhere((m) => m.id == messageId);
+    if (index == -1) {
+      debugPrint(
+        '⚠️ [MessagesProvider] prepareMessageForRetry: Message not found: $messageId',
+      );
+      return false;
+    }
+
+    final message = _messages[index];
+
+    _timeoutTimers[message.id]?.cancel();
+    _timeoutTimers.remove(message.id);
+    if (message.expectedAckTag != null) {
+      _pendingSentMessages.remove(message.expectedAckTag);
+    }
+    _clearAckHistoryForMessage(messageId);
+    _retryManager.clearRetry(messageId);
+
+    _messages[index] = Message(
+      id: message.id,
+      messageType: message.messageType,
+      senderPublicKeyPrefix: message.senderPublicKeyPrefix,
+      channelIdx: message.channelIdx,
+      pathLen: message.pathLen,
+      textType: message.textType,
+      senderTimestamp: message.senderTimestamp,
+      text: message.text,
+      isSarMarker: message.isSarMarker,
+      sarGpsCoordinates: message.sarGpsCoordinates,
+      sarNotes: message.sarNotes,
+      sarCustomEmoji: message.sarCustomEmoji,
+      sarColorIndex: message.sarColorIndex,
+      receivedAt: message.receivedAt,
+      senderName: message.senderName,
+      deliveryStatus: MessageDeliveryStatus.sending,
+      recipientPublicKey: message.recipientPublicKey,
+      retryAttempt: 0,
+      lastRetryAt: DateTime.now(),
+      usedFloodFallback: false,
+      isRead: message.isRead,
+      echoCount: message.echoCount,
+      firstEchoAt: message.firstEchoAt,
+      lastEchoSnrRaw: message.lastEchoSnrRaw,
+      lastEchoRssiDbm: message.lastEchoRssiDbm,
+      lastEchoAt: message.lastEchoAt,
+      isDrawing: message.isDrawing,
+      drawingId: message.drawingId,
+      groupId: message.groupId,
+      recipients: message.recipients,
+      isVoice: message.isVoice,
+      voiceId: message.voiceId,
+    );
+
+    _persistMessages();
+    notifyListeners();
+    return true;
+  }
+
   /// Resend a failed message
-  Future<void> resendMessage(String messageId) async {
+  Future<void> resendMessage(String messageId, {Contact? contact}) async {
     final index = _messages.indexWhere((m) => m.id == messageId);
     if (index == -1) {
       debugPrint(
@@ -1709,9 +1922,9 @@ class MessagesProvider with ChangeNotifier {
     }
 
     final message = _messages[index];
-    final contact = _messageContactMap[messageId];
+    final resolvedContact = contact ?? _messageContactMap[messageId];
 
-    if (contact == null) {
+    if (resolvedContact == null) {
       debugPrint(
         '⚠️ [MessagesProvider] Cannot resend: Contact not found for message $messageId',
       );
@@ -1720,26 +1933,19 @@ class MessagesProvider with ChangeNotifier {
 
     debugPrint('🔁 [MessagesProvider] Resending message $messageId');
 
-    // Reset retry state
-    _messages[index] = message.copyWith(
-      retryAttempt: 0,
-      usedFloodFallback: false,
-      deliveryStatus: MessageDeliveryStatus.sending,
-      lastRetryAt: DateTime.now(),
-    );
-
-    // Clear retry tracking
-    _retryManager.clearRetry(messageId);
-
-    notifyListeners();
+    _messageContactMap[messageId] = resolvedContact;
+    final prepared = prepareMessageForRetry(messageId);
+    if (!prepared) {
+      return;
+    }
 
     // Send again
     if (sendMessageCallback != null) {
       final queued = await sendMessageCallback!(
-        contactPublicKey: contact.publicKey,
+        contactPublicKey: resolvedContact.publicKey,
         text: message.text,
         messageId: messageId,
-        contact: contact,
+        contact: resolvedContact,
         retryAttempt: 0,
       );
       if (!queued) {

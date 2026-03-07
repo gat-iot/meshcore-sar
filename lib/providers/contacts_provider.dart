@@ -423,9 +423,16 @@ class ContactsProvider with ChangeNotifier {
       debugPrint('  Old lastAdvert: ${contact.lastAdvert}');
       debugPrint('  New lastAdvert: $currentTimestamp');
 
+      final persistedGps = _getValidGpsOrNull(telemetry.gpsLocation);
       final updatedContact = contact.copyWith(
         telemetry: telemetry,
         lastAdvert: currentTimestamp, // Update last seen time
+        advLat: persistedGps != null
+            ? _coordinateToAdvertMicrodegrees(persistedGps.latitude)
+            : contact.advLat,
+        advLon: persistedGps != null
+            ? _coordinateToAdvertMicrodegrees(persistedGps.longitude)
+            : contact.advLon,
       );
       _contacts[contact.publicKeyHex] = updatedContact;
       debugPrint('  ✅ Updated contact in map (with new lastAdvert)');
@@ -476,6 +483,10 @@ class ContactsProvider with ChangeNotifier {
     return incomingGps == null;
   }
 
+  int _coordinateToAdvertMicrodegrees(double coordinate) {
+    return (coordinate * 1e6).round();
+  }
+
   /// Find contact by public key prefix (6 bytes)
   Contact? _findContactByPrefix(Uint8List prefix) {
     if (prefix.length < 6) return null;
@@ -521,7 +532,39 @@ class ContactsProvider with ChangeNotifier {
   /// prefer flood routing until the radio reports a fresh route.
   void markPathUnhealthy(Uint8List publicKey) {
     final contact = findContactByKey(publicKey);
-    if (contact == null || !contact.hasPath) {
+    if (contact == null || !contact.routeHasPath) {
+      return;
+    }
+
+    _contacts[contact.publicKeyHex] = contact.copyWith(
+      outPathLen: -1,
+      outPath: Uint8List(0),
+    );
+    _persistContacts();
+    notifyListeners();
+  }
+
+  void setContactRouteLocal(
+    Uint8List publicKey, {
+    required int signedEncodedPathLen,
+    required Uint8List paddedPathBytes,
+  }) {
+    final contact = findContactByKey(publicKey);
+    if (contact == null) {
+      return;
+    }
+
+    _contacts[contact.publicKeyHex] = contact.copyWith(
+      outPathLen: signedEncodedPathLen,
+      outPath: Uint8List.fromList(paddedPathBytes),
+    );
+    _persistContacts();
+    notifyListeners();
+  }
+
+  void resetContactRouteLocal(Uint8List publicKey) {
+    final contact = findContactByKey(publicKey);
+    if (contact == null) {
       return;
     }
 

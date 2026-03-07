@@ -9,8 +9,9 @@ import '../../providers/connection_provider.dart';
 import '../../providers/contacts_provider.dart';
 import '../../providers/map_provider.dart';
 import '../../providers/app_provider.dart';
-import 'direct_message_sheet.dart';
+import 'contact_route_dialog.dart';
 import 'room_login_sheet.dart';
+import '../../utils/location_formats.dart';
 import '../../utils/toast_logger.dart';
 import '../../utils/battery_display_helper.dart';
 import '../../l10n/app_localizations.dart';
@@ -51,6 +52,7 @@ class ContactTile extends StatelessWidget {
         contact.telemetry != null && contact.telemetry!.isRecent;
     final battery = contact.displayBattery;
     final location = contact.displayLocation;
+    final routeHasPath = contact.routeHasPath;
 
     // Calculate distance if both positions are available
     String? distanceText;
@@ -69,6 +71,9 @@ class ContactTile extends StatelessWidget {
 
     // Get room login state if this is a room
     final connectionProvider = context.watch<ConnectionProvider>();
+    final isPingInProgress = connectionProvider.isPingInProgress(
+      contact.publicKey,
+    );
     final roomLoginState = contact.type == ContactType.room
         ? connectionProvider.getRoomLoginState(contact.publicKeyPrefix)
         : null;
@@ -155,12 +160,12 @@ class ContactTile extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 decoration: BoxDecoration(
-                  color: contact.hasPath
+                  color: routeHasPath
                       ? Colors.green.withValues(alpha: 0.15)
                       : Colors.orange.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(3),
                   border: Border.all(
-                    color: contact.hasPath ? Colors.green : Colors.orange,
+                    color: routeHasPath ? Colors.green : Colors.orange,
                     width: 0.5,
                   ),
                 ),
@@ -168,22 +173,33 @@ class ContactTile extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      contact.hasPath ? Icons.route : Icons.waves,
+                      routeHasPath ? Icons.route : Icons.waves,
                       size: 10,
-                      color: contact.hasPath ? Colors.green : Colors.orange,
+                      color: routeHasPath ? Colors.green : Colors.orange,
                     ),
                     const SizedBox(width: 2),
                     Text(
-                      contact.hasPath
+                      routeHasPath
                           ? AppLocalizations.of(context)!.direct
                           : AppLocalizations.of(context)!.flood,
                       style: TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.w600,
-                        color: contact.hasPath ? Colors.green : Colors.orange,
+                        color: routeHasPath ? Colors.green : Colors.orange,
                       ),
                     ),
                   ],
+                ),
+              ),
+            ],
+            if (isPingInProgress) ...[
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
             ],
@@ -443,9 +459,9 @@ class ContactTile extends StatelessWidget {
               )
             : null,
         onTap: () {
-          // In simple mode, tap directly opens message sheet for chat contacts
+          // In simple mode, tap directly opens the route editor for chat contacts
           if (isSimpleMode && contact.type == ContactType.chat) {
-            _showDirectMessageDialog(context, contact);
+            _showSetRouteDialog(context, contact);
           } else if (isSimpleMode && contact.type == ContactType.repeater) {
             // In simple mode, tapping a repeater jumps to the map
             _jumpToMapForRepeater(context, contact);
@@ -457,49 +473,44 @@ class ContactTile extends StatelessWidget {
             _showContactDetails(context, contact);
           }
         },
-        onLongPress: () async {
-          final connectionProvider = context.read<ConnectionProvider>();
+        onLongPress: isPingInProgress
+            ? null
+            : () async {
+                final connectionProvider = context.read<ConnectionProvider>();
 
-          // Determine if we should use flooding (no path) or direct (has path)
-          final hasPath = contact.hasPath;
+                // Determine if we should use flooding (no path) or direct (has path)
+                final hasPath = contact.routeHasPath;
 
-          // Use smart ping with automatic fallback
-          final result = await connectionProvider.smartPing(
-            contactPublicKey: contact.publicKey,
-            hasPath: hasPath,
-            onRetryWithFlooding: () {
-              // Called when retrying with flooding after direct timeout
-              if (context.mounted) {
-                ToastLogger.warning(
-                  context,
-                  AppLocalizations.of(
-                    context,
-                  )!.directPingTimeout(contact.displayName),
+                // Use smart ping with automatic fallback
+                final result = await connectionProvider.smartPing(
+                  contactPublicKey: contact.publicKey,
+                  hasPath: hasPath,
+                  onRetryWithFlooding: () {
+                    // Called when retrying with flooding after direct timeout
+                    if (context.mounted) {
+                      ToastLogger.warning(
+                        context,
+                        AppLocalizations.of(
+                          context,
+                        )!.directPingTimeout(contact.displayName),
+                      );
+                    }
+                  },
                 );
-              }
-            },
-          );
 
-          // Show final result
-          if (context.mounted) {
-            if (!result.success) {
-              ToastLogger.error(
-                context,
-                AppLocalizations.of(context)!.pingFailed(contact.displayName),
-              );
-            }
-          }
-        },
+                // Show final result
+                if (context.mounted) {
+                  if (!result.success) {
+                    ToastLogger.error(
+                      context,
+                      AppLocalizations.of(
+                        context,
+                      )!.pingFailed(contact.displayName),
+                    );
+                  }
+                }
+              },
       ),
-    );
-  }
-
-  void _showDirectMessageDialog(BuildContext context, Contact contact) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DirectMessageSheet(contact: contact),
     );
   }
 
@@ -602,398 +613,527 @@ class ContactTile extends StatelessWidget {
         minChildSize: 0.4,
         maxChildSize: 0.9,
         expand: false,
-        builder: (context, scrollController) => Column(
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 8, bottom: 16),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
+        builder: (context, scrollController) {
+          final contactsProvider = context.watch<ContactsProvider>();
+          final currentContact =
+              contactsProvider.findContactByKey(contact.publicKey) ?? contact;
+          final isPingInProgress = context
+              .watch<ConnectionProvider>()
+              .isPingInProgress(contact.publicKey);
+          return Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 8, bottom: 16),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: _getTypeColor(contact.type, context),
-                    child: contact.roleEmoji != null
-                        ? Text(
-                            contact.roleEmoji!,
-                            style: const TextStyle(fontSize: 24),
-                          )
-                        : Icon(_getTypeIcon(contact.type), color: Colors.white),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      contact.displayName,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: _getTypeColor(contact.type, context),
+                      child: contact.roleEmoji != null
+                          ? Text(
+                              contact.roleEmoji!,
+                              style: const TextStyle(fontSize: 24),
+                            )
+                          : Icon(
+                              _getTypeIcon(contact.type),
+                              color: Colors.white,
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        contact.displayName,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(),
-            // Content
-            Expanded(
-              child: ListView(
-                controller: scrollController,
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _detailRow(l10n.type, contact.type.displayName),
-                  if (contact.isChannel) ...[
-                    _detailRow(
-                      l10n.channel,
-                      contact.getLocalizedDisplayName(context),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
                     ),
-                    if (!contact.isPublicChannel)
+                  ],
+                ),
+              ),
+              const Divider(),
+              // Content
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _detailRow(l10n.type, contact.type.displayName),
+                    if (contact.isChannel) ...[
                       _detailRow(
-                        'Slot',
-                        '${l10n.channel} ${contact.publicKey.length > 1 ? contact.publicKey[1] : '-'}',
+                        l10n.channel,
+                        contact.getLocalizedDisplayName(context),
                       ),
-                  ] else
-                    // Public Key with copy button
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 100,
-                            child: Text(
-                              '${l10n.publicKey}:',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
+                      if (!contact.isPublicChannel)
+                        _detailRow(
+                          'Slot',
+                          '${l10n.channel} ${contact.publicKey.length > 1 ? contact.publicKey[1] : '-'}',
+                        ),
+                    ] else
+                      // Public Key with copy button
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 100,
+                              child: Text(
+                                '${l10n.publicKey}:',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
+                            Expanded(child: Text(contact.publicKeyShort)),
+                            const SizedBox(width: 8),
+                            InkWell(
+                              onTap: () {
+                                Clipboard.setData(
+                                  ClipboardData(text: contact.publicKeyHex),
+                                );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(l10n.publicKeyCopied),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(4),
+                              child: Padding(
+                                padding: const EdgeInsets.all(4),
+                                child: Icon(
+                                  Icons.copy,
+                                  size: 16,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    _detailRow(
+                      l10n.lastSeen,
+                      _getLocalizedTimeSinceLastSeen(context),
+                    ),
+                    const SizedBox(height: 16),
+                    // Room Login Status
+                    if (roomLoginState != null) ...[
+                      Text(
+                        '${AppLocalizations.of(context)!.roomStatus}:',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _detailRow(
+                        AppLocalizations.of(context)!.loginStatus,
+                        roomLoginState.isLoggedIn
+                            ? AppLocalizations.of(context)!.loggedIn
+                            : AppLocalizations.of(context)!.notLoggedIn,
+                      ),
+                      if (roomLoginState.isLoggedIn) ...[
+                        _detailRow(
+                          AppLocalizations.of(context)!.adminAccess,
+                          roomLoginState.isAdmin
+                              ? AppLocalizations.of(context)!.yes
+                              : AppLocalizations.of(context)!.no,
+                        ),
+                        _detailRow(
+                          AppLocalizations.of(context)!.permissions,
+                          roomLoginState.permissions.toString(),
+                        ),
+                        if (roomLoginState.loginDurationFormatted != null)
+                          _detailRow(
+                            AppLocalizations.of(context)!.loggedIn,
+                            roomLoginState.loginDurationFormatted!,
                           ),
-                          Expanded(child: Text(contact.publicKeyShort)),
-                          const SizedBox(width: 8),
-                          InkWell(
-                            onTap: () {
-                              Clipboard.setData(
-                                ClipboardData(text: contact.publicKeyHex),
-                              );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(l10n.publicKeyCopied),
-                                  duration: const Duration(seconds: 2),
+                      ],
+                      _detailRow(
+                        AppLocalizations.of(context)!.passwordSaved,
+                        roomLoginState.hasPassword
+                            ? AppLocalizations.of(context)!.yes
+                            : AppLocalizations.of(context)!.no,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (contact.displayLocation != null) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            AppLocalizations.of(context)!.locationColon,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () {
+                              // Navigate to map and close modal
+                              final mapProvider = context.read<MapProvider>();
+                              mapProvider.navigateToLocation(
+                                location: LatLng(
+                                  contact.displayLocation!.latitude,
+                                  contact.displayLocation!.longitude,
                                 ),
                               );
+                              Navigator.pop(context);
+
+                              // Switch to map tab using callback
+                              onNavigateToMap?.call();
                             },
-                            borderRadius: BorderRadius.circular(4),
-                            child: Padding(
-                              padding: const EdgeInsets.all(4),
-                              child: Icon(
-                                Icons.copy,
-                                size: 16,
-                                color: Theme.of(context).colorScheme.primary,
+                            icon: const Icon(Icons.map, size: 18),
+                            label: Text(
+                              AppLocalizations.of(context)!.viewOnMap,
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
                               ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  _detailRow(
-                    l10n.lastSeen,
-                    _getLocalizedTimeSinceLastSeen(context),
-                  ),
-                  const SizedBox(height: 16),
-                  // Room Login Status
-                  if (roomLoginState != null) ...[
-                    Text(
-                      '${AppLocalizations.of(context)!.roomStatus}:',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                      const SizedBox(height: 8),
+                      // Decimal Degrees (DD)
+                      _detailRowWithCopy(
+                        context,
+                        'DD',
+                        '${contact.displayLocation!.latitude.toStringAsFixed(6)}, ${contact.displayLocation!.longitude.toStringAsFixed(6)}',
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    _detailRow(
-                      AppLocalizations.of(context)!.loginStatus,
-                      roomLoginState.isLoggedIn
-                          ? AppLocalizations.of(context)!.loggedIn
-                          : AppLocalizations.of(context)!.notLoggedIn,
-                    ),
-                    if (roomLoginState.isLoggedIn) ...[
-                      _detailRow(
-                        AppLocalizations.of(context)!.adminAccess,
-                        roomLoginState.isAdmin
-                            ? AppLocalizations.of(context)!.yes
-                            : AppLocalizations.of(context)!.no,
-                      ),
-                      _detailRow(
-                        AppLocalizations.of(context)!.permissions,
-                        roomLoginState.permissions.toString(),
-                      ),
-                      if (roomLoginState.loginDurationFormatted != null)
-                        _detailRow(
-                          AppLocalizations.of(context)!.loggedIn,
-                          roomLoginState.loginDurationFormatted!,
+                      // Degrees Minutes Seconds (DMS)
+                      _detailRowWithCopy(
+                        context,
+                        'DMS',
+                        _convertToDMS(
+                          contact.displayLocation!.latitude,
+                          contact.displayLocation!.longitude,
                         ),
+                      ),
+                      // Degrees Decimal Minutes (DDM)
+                      _detailRowWithCopy(
+                        context,
+                        'DDM',
+                        _convertToDDM(
+                          contact.displayLocation!.latitude,
+                          contact.displayLocation!.longitude,
+                        ),
+                      ),
+                      // MGRS (Military Grid Reference System)
+                      _detailRowWithCopy(
+                        context,
+                        'MGRS',
+                        _convertToMGRS(
+                          contact.displayLocation!.latitude,
+                          contact.displayLocation!.longitude,
+                        ),
+                      ),
+                      // Google Plus Code
+                      _detailRowWithCopy(
+                        context,
+                        'Plus Code',
+                        formatPlusCode(
+                          contact.displayLocation!.latitude,
+                          contact.displayLocation!.longitude,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                     ],
-                    _detailRow(
-                      AppLocalizations.of(context)!.passwordSaved,
-                      roomLoginState.hasPassword
-                          ? AppLocalizations.of(context)!.yes
-                          : AppLocalizations.of(context)!.no,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (contact.displayLocation != null) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          AppLocalizations.of(context)!.locationColon,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                    if (contact.telemetry != null) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${AppLocalizations.of(context)!.telemetry}:',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
                           ),
-                        ),
-                        TextButton.icon(
-                          onPressed: () {
-                            // Navigate to map and close modal
-                            final mapProvider = context.read<MapProvider>();
-                            mapProvider.navigateToLocation(
-                              location: LatLng(
-                                contact.displayLocation!.latitude,
-                                contact.displayLocation!.longitude,
-                              ),
-                            );
-                            Navigator.pop(context);
+                          TextButton.icon(
+                            onPressed: isPingInProgress
+                                ? null
+                                : () async {
+                                    final connectionProvider = context
+                                        .read<ConnectionProvider>();
+                                    final result = await connectionProvider.smartPing(
+                                      contactPublicKey: contact.publicKey,
+                                      hasPath: contact.routeHasPath,
+                                    );
 
-                            // Switch to map tab using callback
-                            onNavigateToMap?.call();
-                          },
-                          icon: const Icon(Icons.map, size: 18),
-                          label: Text(AppLocalizations.of(context)!.viewOnMap),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
+                                    if (!context.mounted || result.success) {
+                                      return;
+                                    }
+
+                                    ToastLogger.error(
+                                      context,
+                                      AppLocalizations.of(
+                                        context,
+                                      )!.pingFailed(contact.displayName),
+                                    );
+                                  },
+                            icon: isPingInProgress
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.refresh, size: 18),
+                            label: Text(AppLocalizations.of(context)!.refresh),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                             ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (contact.telemetry!.batteryMilliVolts != null)
+                        _detailRow(
+                          AppLocalizations.of(context)!.voltage,
+                          '${(contact.telemetry!.batteryMilliVolts! / 1000).toStringAsFixed(3)}V'
+                          '${contact.telemetry!.batteryPercentage != null ? ' (${contact.telemetry!.batteryPercentage!.toStringAsFixed(1)}%)' : ''}',
+                        )
+                      else if (contact.telemetry!.batteryPercentage != null)
+                        _detailRow(
+                          AppLocalizations.of(context)!.battery,
+                          '${contact.telemetry!.batteryPercentage!.toStringAsFixed(1)}%',
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    // Decimal Degrees (DD)
-                    _detailRowWithCopy(
-                      context,
-                      'DD',
-                      '${contact.displayLocation!.latitude.toStringAsFixed(6)}, ${contact.displayLocation!.longitude.toStringAsFixed(6)}',
-                    ),
-                    // Degrees Minutes Seconds (DMS)
-                    _detailRowWithCopy(
-                      context,
-                      'DMS',
-                      _convertToDMS(
-                        contact.displayLocation!.latitude,
-                        contact.displayLocation!.longitude,
+                      if (contact.telemetry!.temperature != null)
+                        _detailRow(
+                          AppLocalizations.of(context)!.temperature,
+                          '${contact.telemetry!.temperature!.toStringAsFixed(1)}°C',
+                        ),
+                      if (contact.telemetry!.humidity != null)
+                        _detailRow(
+                          AppLocalizations.of(context)!.humidity,
+                          '${contact.telemetry!.humidity!.toStringAsFixed(1)}%',
+                        ),
+                      if (contact.telemetry!.pressure != null)
+                        _detailRow(
+                          AppLocalizations.of(context)!.pressure,
+                          '${contact.telemetry!.pressure!.toStringAsFixed(1)} hPa',
+                        ),
+                      if (contact.telemetry!.gpsLocation != null)
+                        _detailRow(
+                          AppLocalizations.of(context)!.gpsTelemetry,
+                          '${contact.telemetry!.gpsLocation!.latitude.toStringAsFixed(6)}, ${contact.telemetry!.gpsLocation!.longitude.toStringAsFixed(6)}',
+                        ),
+                      _detailRow(
+                        AppLocalizations.of(context)!.updated,
+                        '${_formatTimestamp(contact.telemetry!.timestamp)} (${_formatTimeAgo(contact.telemetry!.timestamp)})',
                       ),
-                    ),
-                    // Degrees Decimal Minutes (DDM)
-                    _detailRowWithCopy(
-                      context,
-                      'DDM',
-                      _convertToDDM(
-                        contact.displayLocation!.latitude,
-                        contact.displayLocation!.longitude,
+                    ],
+                    if (!currentContact.isChannel) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Route',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                       ),
-                    ),
-                    // MGRS (Military Grid Reference System)
-                    _detailRowWithCopy(
-                      context,
-                      'MGRS',
-                      _convertToMGRS(
-                        contact.displayLocation!.latitude,
-                        contact.displayLocation!.longitude,
-                      ),
-                    ),
-                    // Google Plus Code
-                    _detailRowWithCopy(
-                      context,
-                      'Plus Code',
-                      _convertToPlusCode(
-                        contact.displayLocation!.latitude,
-                        contact.displayLocation!.longitude,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (contact.telemetry != null) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${AppLocalizations.of(context)!.telemetry}:',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                      const SizedBox(height: 8),
+                      _detailRow('Mode', currentContact.routeSummary),
+                      if (currentContact.routeHopCount > 0)
+                        _detailRow('Route', currentContact.routeCanonicalText),
+                      if (currentContact.routeHopCount > 0)
+                        _detailRow(
+                          'Descriptor',
+                          '0x${currentContact.routeEncodedPathLen.toRadixString(16).padLeft(2, '0').toUpperCase()}',
+                        ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () =>
+                                  _showSetRouteDialog(context, currentContact),
+                              icon: const Icon(Icons.route),
+                              label: const Text('Set Route'),
+                            ),
                           ),
-                        ),
-                        TextButton.icon(
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: currentContact.isPublicChannel
+                                  ? null
+                                  : () async {
+                                      contactsProvider.resetContactRouteLocal(
+                                        currentContact.publicKey,
+                                      );
+                                      try {
+                                        await connectionProvider.resetPath(
+                                          currentContact.publicKey,
+                                        );
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                AppLocalizations.of(
+                                                  context,
+                                                )!.pathResetInfo(
+                                                  currentContact.displayName,
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      } catch (_) {
+                                        contactsProvider.setContactRouteLocal(
+                                          currentContact.publicKey,
+                                          signedEncodedPathLen:
+                                              currentContact.routeSignedPathLen,
+                                          paddedPathBytes:
+                                              currentContact.outPath,
+                                        );
+                                        if (context.mounted) {
+                                          ToastLogger.error(
+                                            context,
+                                            'Failed to reset route.',
+                                          );
+                                        }
+                                      }
+                                    },
+                              icon: const Icon(Icons.refresh),
+                              label: Text(
+                                AppLocalizations.of(context)!.resetPath,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    // Room Login button for room contacts (except Public Channel)
+                    if (contact.type == ContactType.room &&
+                        !contact.isPublicChannel) ...[
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
                           onPressed: () {
-                            final connectionProvider = context
-                                .read<ConnectionProvider>();
-                            connectionProvider.requestTelemetry(
-                              contact.publicKey,
-                              zeroHop: true,
-                            );
+                            Navigator.pop(context); // Close details first
+                            _showRoomLoginDialog(context, contact);
                           },
-                          icon: const Icon(Icons.refresh, size: 18),
-                          label: Text(AppLocalizations.of(context)!.refresh),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
+                          icon: const Icon(Icons.login),
+                          label: Text(
+                            roomLoginState?.isLoggedIn == true
+                                ? AppLocalizations.of(context)!.reLoginToRoom
+                                : AppLocalizations.of(context)!.loginToRoom,
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            backgroundColor: _getTypeColor(
+                              contact.type,
+                              context,
                             ),
+                            foregroundColor: Colors.white,
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (contact.telemetry!.batteryMilliVolts != null)
-                      _detailRow(
-                        AppLocalizations.of(context)!.voltage,
-                        '${(contact.telemetry!.batteryMilliVolts! / 1000).toStringAsFixed(3)}V'
-                        '${contact.telemetry!.batteryPercentage != null ? ' (${contact.telemetry!.batteryPercentage!.toStringAsFixed(1)}%)' : ''}',
-                      )
-                    else if (contact.telemetry!.batteryPercentage != null)
-                      _detailRow(
-                        AppLocalizations.of(context)!.battery,
-                        '${contact.telemetry!.batteryPercentage!.toStringAsFixed(1)}%',
                       ),
-                    if (contact.telemetry!.temperature != null)
-                      _detailRow(
-                        AppLocalizations.of(context)!.temperature,
-                        '${contact.telemetry!.temperature!.toStringAsFixed(1)}°C',
-                      ),
-                    if (contact.telemetry!.humidity != null)
-                      _detailRow(
-                        AppLocalizations.of(context)!.humidity,
-                        '${contact.telemetry!.humidity!.toStringAsFixed(1)}%',
-                      ),
-                    if (contact.telemetry!.pressure != null)
-                      _detailRow(
-                        AppLocalizations.of(context)!.pressure,
-                        '${contact.telemetry!.pressure!.toStringAsFixed(1)} hPa',
-                      ),
-                    if (contact.telemetry!.gpsLocation != null)
-                      _detailRow(
-                        AppLocalizations.of(context)!.gpsTelemetry,
-                        '${contact.telemetry!.gpsLocation!.latitude.toStringAsFixed(6)}, ${contact.telemetry!.gpsLocation!.longitude.toStringAsFixed(6)}',
-                      ),
-                    _detailRow(
-                      AppLocalizations.of(context)!.updated,
-                      '${_formatTimestamp(contact.telemetry!.timestamp)} (${_formatTimeAgo(contact.telemetry!.timestamp)})',
-                    ),
-                  ],
-                  // Direct Message button for chat contacts
-                  if (contact.type == ContactType.chat) ...[
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context); // Close details first
-                          _showDirectMessageDialog(context, contact);
-                        },
-                        icon: const Icon(Icons.message),
-                        label: Text(
-                          AppLocalizations.of(context)!.sendDirectMessage,
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          backgroundColor: _getTypeColor(contact.type, context),
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          connectionProvider.resetPath(contact.publicKey);
-                        },
-                        icon: const Icon(Icons.route),
-                        label: Text(AppLocalizations.of(context)!.resetPath),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: BorderSide(
-                            color: _getTypeColor(contact.type, context),
+                    ],
+                    // Delete Contact button (for all contact types except Public Channel)
+                    if (!contact.isPublicChannel) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () =>
+                              _showDeleteConfirmation(context, contact),
+                          icon: const Icon(Icons.delete_outline),
+                          label: Text(
+                            AppLocalizations.of(context)!.deleteContact,
                           ),
-                          foregroundColor: _getTypeColor(contact.type, context),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: const BorderSide(color: Colors.red),
+                            foregroundColor: Colors.red,
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
-                  // Room Login button for room contacts (except Public Channel)
-                  if (contact.type == ContactType.room &&
-                      !contact.isPublicChannel) ...[
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context); // Close details first
-                          _showRoomLoginDialog(context, contact);
-                        },
-                        icon: const Icon(Icons.login),
-                        label: Text(
-                          roomLoginState?.isLoggedIn == true
-                              ? AppLocalizations.of(context)!.reLoginToRoom
-                              : AppLocalizations.of(context)!.loginToRoom,
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          backgroundColor: _getTypeColor(contact.type, context),
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                  // Delete Contact button (for all contact types except Public Channel)
-                  if (!contact.isPublicChannel) ...[
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            _showDeleteConfirmation(context, contact),
-                        icon: const Icon(Icons.delete_outline),
-                        label: Text(
-                          AppLocalizations.of(context)!.deleteContact,
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: const BorderSide(color: Colors.red),
-                          foregroundColor: Colors.red,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          );
+        },
       ),
     );
+  }
+
+  Future<void> _showSetRouteDialog(
+    BuildContext context,
+    Contact contact,
+  ) async {
+    final contactsProvider = context.read<ContactsProvider>();
+    final connectionProvider = context.read<ConnectionProvider>();
+    final availableContacts = contactsProvider.contacts
+        .where((candidate) => candidate.publicKeyHex != contact.publicKeyHex)
+        .toList();
+
+    final parsedRoute = await ContactRouteDialog.show(
+      context,
+      contact: contact,
+      availableContacts: availableContacts,
+    );
+    if (parsedRoute == null || !context.mounted) {
+      return;
+    }
+
+    final previousSignedPathLen = contact.routeSignedPathLen;
+    final previousPathBytes = Uint8List.fromList(contact.outPath);
+    contactsProvider.setContactRouteLocal(
+      contact.publicKey,
+      signedEncodedPathLen: parsedRoute.signedEncodedPathLen,
+      paddedPathBytes: parsedRoute.paddedPathBytes,
+    );
+
+    try {
+      await connectionProvider.setContactRoute(
+        contact,
+        signedEncodedPathLen: parsedRoute.signedEncodedPathLen,
+        paddedPathBytes: parsedRoute.paddedPathBytes,
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Route set: ${parsedRoute.canonicalText}')),
+        );
+      }
+    } catch (error) {
+      contactsProvider.setContactRouteLocal(
+        contact.publicKey,
+        signedEncodedPathLen: previousSignedPathLen,
+        paddedPathBytes: previousPathBytes,
+      );
+      if (context.mounted) {
+        ToastLogger.error(context, 'Failed to set route: $error');
+      }
+    }
   }
 
   Widget _detailRow(String label, String value) {
@@ -1111,34 +1251,6 @@ class ContactTile extends StatelessWidget {
     // Simplified - just show zone designation
     // Full MGRS would require UTM conversion library
     return '$zone$letter (approximate)';
-  }
-
-  /// Convert to Google Plus Code format
-  /// Simplified implementation - returns approximate code
-  String _convertToPlusCode(double lat, double lon) {
-    // This is a simplified version - full Plus Code requires the open_location_code package
-    // For now, return a placeholder that shows it's not fully implemented
-    const base = '23456789CFGHJMPQRVWX';
-
-    // Normalize coordinates
-    lat = (lat + 90) / 180; // 0 to 1
-    lon = (lon + 180) / 360; // 0 to 1
-
-    String code = '';
-    for (int i = 0; i < 8; i++) {
-      if (i == 4) code += '+';
-
-      int latDigit = (lat * 20).floor() % 20;
-      int lonDigit = (lon * 20).floor() % 20;
-
-      code += base[latDigit];
-      code += base[lonDigit];
-
-      lat = (lat * 20) % 1;
-      lon = (lon * 20) % 1;
-    }
-
-    return code;
   }
 
   IconData _getTypeIcon(ContactType type) {
