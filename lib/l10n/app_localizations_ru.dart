@@ -169,9 +169,6 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get italian => 'Итальянский';
-  
-  @override
-  String get russian => 'Русский';
 
   @override
   String get locationBroadcasting => 'Трансляция местоположения';
@@ -588,18 +585,19 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String accuracyMeters(int accuracy) {
-    return 'Точность: ±${accuracy}м';
+    return 'Точность: ±$accuracyм';
   }
 
   @override
   String get notesOptional => 'Заметки (необязательно)';
 
   @override
-  String get addAdditionalInformation => 'Добавьте дополнительную информацию...';
+  String get addAdditionalInformation =>
+      'Добавьте дополнительную информацию...';
 
   @override
   String lowAccuracyWarning(int accuracy) {
-    return 'Точность геолокации: ±${accuracy}м. Этого может быть недостаточно для операций SAR.\n\nПродолжить всё равно?';
+    return 'Точность геолокации: ±$accuracyм. Этого может быть недостаточно для операций SAR.\n\nПродолжить всё равно?';
   }
 
   @override
@@ -1057,7 +1055,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get sarAlert => 'ТРЕВОГА SAR';
 
   @override
-  String get messageSentToPublicChannel => 'Сообщение отправлено в публичный канал';
+  String get messageSentToPublicChannel =>
+      'Сообщение отправлено в публичный канал';
 
   @override
   String get pleaseSelectRoomToSendSar =>
@@ -1074,7 +1073,8 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get notConnectedCannotSync => 'Нет подключения — синхронизация невозможна';
+  String get notConnectedCannotSync =>
+      'Нет подключения — синхронизация невозможна';
 
   @override
   String syncedMessageCount(int count) {
@@ -1160,22 +1160,22 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String minutesAgo(int minutes) {
-    return '${minutes}м назад';
+    return '$minutesм назад';
   }
 
   @override
   String hoursAgo(int hours) {
-    return '${hours}ч назад';
+    return '$hoursч назад';
   }
 
   @override
   String daysAgo(int days) {
-    return '${days}д назад';
+    return '$daysд назад';
   }
 
   @override
   String secondsAgo(int seconds) {
-    return '${seconds}с назад';
+    return '$secondsс назад';
   }
 
   @override
@@ -1189,7 +1189,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String deliveredWithTime(int time) {
-    return 'Доставлено (${time}мс)';
+    return 'Доставлено ($timeмс)';
   }
 
   @override
@@ -1515,7 +1515,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get nameBroadcastInMesh => 'Имя, транслируемое в mesh-объявлениях';
 
   @override
-  String get telemetryAndLocationSharing => 'Телеметрия и передача местоположения';
+  String get telemetryAndLocationSharing =>
+      'Телеметрия и передача местоположения';
 
   @override
   String get lat => 'Ш';
@@ -1796,7 +1797,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get sampleObjectBackpack => ' Найден рюкзак синего цвета';
 
   @override
-  String get sampleObjectVehicle => ' Брошенный автомобиль — установить владельца';
+  String get sampleObjectVehicle =>
+      ' Брошенный автомобиль — установить владельца';
 
   @override
   String get sampleObjectCamping => ' Обнаружено туристическое снаряжение';
@@ -2200,8 +2202,7 @@ class AppLocalizationsRu extends AppLocalizations {
       'Транслируйте сообщения всем участникам канала — идеально для общих объявлений и координации команды.';
 
   @override
-  String get wizardChannelFeature1 =>
-      'Публичный канал для общей связи команды';
+  String get wizardChannelFeature1 => 'Публичный канал для общей связи команды';
 
   @override
   String get wizardChannelFeature2 =>
@@ -2244,8 +2245,7 @@ class AppLocalizationsRu extends AppLocalizations {
       'GPS-отслеживание членов команды в реальном времени';
 
   @override
-  String get wizardMapFeature3 =>
-      'Загрузка офлайн-карт для отдалённых районов';
+  String get wizardMapFeature3 => 'Загрузка офлайн-карт для отдалённых районов';
 
   @override
   String get wizardMapFeature4 =>

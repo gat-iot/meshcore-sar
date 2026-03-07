@@ -15,6 +15,7 @@ class LocalePreferences {
     Locale('fr'), // French
     Locale('it'), // Italian
     Locale('el'), // Greek
+    Locale('ru'), // Russian
     Locale('zh'), // Chinese
   ];
 
@@ -65,6 +66,8 @@ class LocalePreferences {
         return 'Italiano';
       case 'el':
         return 'Greek';
+      case 'ru':
+        return 'Русский';
       case 'zh':
         return '简体中文';
       default:
@@ -91,6 +94,8 @@ class LocalePreferences {
         return 'Italiano';
       case 'el':
         return 'Ελληνικά';
+      case 'ru':
+        return 'Русский';
       case 'zh':
         return '简体中文';
       default:

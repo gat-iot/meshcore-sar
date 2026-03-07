@@ -128,7 +128,7 @@
   "clearAllDrawings": "Удалить все рисунки",
   "completeLine": "Завершить линию",
   "broadcastDrawingsToTeam": "Транслировать {count} рисун{plural} команде",
-  "removeAllDrawings": "Удалить все {count} рисун{plural}"
+  "removeAllDrawings": "Удалить все {count} рисун{plural}",
   "deleteAllDrawingsConfirm": "Удалить все {count} рисун{plural} с карты?",
   "drawing": "Рисунок",
   "shareDrawingsCount": "Поделиться {count} рисун{plural}",

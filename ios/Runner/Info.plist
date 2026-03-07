@@ -46,6 +46,8 @@
 	<string>100</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>MeshCore SAR needs Bluetooth to communicate with MeshCore devices for Search &amp; Rescue operations</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
