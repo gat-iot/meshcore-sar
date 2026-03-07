@@ -1616,19 +1616,13 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Widget _buildChannelEchoStatus(BuildContext context, Message message) {
-    final statusColor = _getDeliveryStatusColor(message.deliveryStatus);
     final hasEcho = message.echoCount > 0;
 
     if (!hasEcho) {
-      return Text(
-        message.getLocalizedDeliveryStatus(context),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: statusColor,
-          fontStyle: FontStyle.italic,
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
+    final statusColor = _getDeliveryStatusColor(message.deliveryStatus);
     final rssi = message.lastEchoRssiDbm;
     final snr = message.lastEchoSnrRaw != null
         ? message.lastEchoSnrRaw!.toSigned(8) / 4.0
@@ -1789,6 +1783,40 @@ class _MessageBubbleState extends State<MessageBubble> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDirectHeaderCounterpart(
+    BuildContext context, {
+    required bool isOwnMessage,
+    required String label,
+  }) {
+    final textColor = Theme.of(
+      context,
+    ).textTheme.labelSmall?.color?.withValues(alpha: 0.75);
+
+    return Row(
+      children: [
+        Icon(
+          isOwnMessage ? Icons.arrow_forward : Icons.arrow_back,
+          size: 12,
+          color: Theme.of(
+            context,
+          ).textTheme.labelSmall?.color?.withValues(alpha: 0.7),
+        ),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: textColor,
+              fontStyle: FontStyle.italic,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 
@@ -2097,6 +2125,9 @@ class _MessageBubbleState extends State<MessageBubble> {
         isOwnMessage && message.isChannelMessage && recipientDisplayName != null
         ? '${l10n.channel}: $recipientDisplayName'
         : recipientDisplayName;
+    final directCounterpartLabel = !message.isChannelMessage
+        ? (isOwnMessage ? recipientSubtitle : l10n.you)
+        : null;
     final receivedChannelSubtitle =
         !isOwnMessage && message.isChannelMessage && channelDisplayName != null
         ? '${l10n.channel}: $channelDisplayName'
@@ -2293,7 +2324,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                   Expanded(
                     child: Row(
                       children: [
-                        Flexible(
+                        Expanded(
                           child: Text(
                             displayName,
                             style: Theme.of(context).textTheme.labelMedium
@@ -2309,10 +2340,12 @@ class _MessageBubbleState extends State<MessageBubble> {
                         ),
                         if (!widget.isCompact &&
                             (recipientSubtitle != null ||
+                                directCounterpartLabel != null ||
                                 receivedChannelSubtitle != null)) ...[
                           const SizedBox(width: 8),
                           if (message.isChannelMessage)
-                            Flexible(
+                            Align(
+                              alignment: Alignment.centerRight,
                               child: _buildChannelHeaderPill(
                                 context,
                                 label: isOwnMessage
@@ -2322,41 +2355,10 @@ class _MessageBubbleState extends State<MessageBubble> {
                             )
                           else
                             Expanded(
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    isOwnMessage
-                                        ? Icons.arrow_forward
-                                        : Icons.arrow_back,
-                                    size: 12,
-                                    color: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.color
-                                        ?.withValues(alpha: 0.7),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      isOwnMessage
-                                          ? recipientSubtitle!
-                                          : receivedChannelSubtitle!,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(
-                                            color: Theme.of(context)
-                                                .textTheme
-                                                .labelSmall
-                                                ?.color
-                                                ?.withValues(alpha: 0.75),
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
+                              child: _buildDirectHeaderCounterpart(
+                                context,
+                                isOwnMessage: isOwnMessage,
+                                label: directCounterpartLabel!,
                               ),
                             ),
                         ],
@@ -2838,7 +2840,8 @@ class _MessageBubbleState extends State<MessageBubble> {
                   ),
                 ]
                 // Show single message delivery status
-                else
+                else if (!message.isChannelMessage ||
+                    message.deliveryStatus == MessageDeliveryStatus.failed)
                   Row(
                     mainAxisSize: MainAxisSize.max,
                     children: [

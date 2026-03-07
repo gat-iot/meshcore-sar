@@ -51,7 +51,7 @@ class MessagesComposer extends StatelessWidget {
           SafeArea(
             top: false,
             child: Padding(
-              padding: EdgeInsets.fromLTRB(10, 10, 10, bottomPadding),
+              padding: EdgeInsets.fromLTRB(10, 4, 10, bottomPadding),
               child: Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surfaceContainerLow,

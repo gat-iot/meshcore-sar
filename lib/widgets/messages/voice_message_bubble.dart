@@ -281,12 +281,29 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
         .sublist(0, 6)
         .map((b) => b.toRadixString(16).padLeft(2, '0'))
         .join('');
-    final request = VoiceFetchRequest(
+    final missing = voiceProvider.missingPacketIndices(sessionId);
+    final totalPackets = sessionPacketCount(
+      voiceProvider: voiceProvider,
       sessionId: sessionId,
-      requesterKey6: requesterKey6,
-      timestampSec: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      version: 2,
+      envelope: envelope,
     );
+    final isPartialResume =
+        missing.isNotEmpty && totalPackets > 0 && missing.length < totalPackets;
+    final request = isPartialResume
+        ? VoiceFetchRequest(
+            sessionId: sessionId,
+            want: 'missing',
+            missingIndices: missing,
+            requesterKey6: requesterKey6,
+            timestampSec: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            version: 2,
+          )
+        : VoiceFetchRequest(
+            sessionId: sessionId,
+            requesterKey6: requesterKey6,
+            timestampSec: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            version: 2,
+          );
 
     setState(() {
       _isRequesting = true;
@@ -309,11 +326,18 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     final effectivePathLen = sender.outPathLen >= 0
         ? sender.outPathLen
         : pathLen;
+    final estimatedDurationMs =
+        envelope != null &&
+            totalPackets > 0 &&
+            missing.isNotEmpty &&
+            missing.length < totalPackets
+        ? ((envelope.durationMs * missing.length) / totalPackets).round()
+        : envelope?.durationMs;
     final txEstimate = envelope != null
         ? estimateVoiceTransmitDuration(
-            packetCount: envelope.total,
+            packetCount: isPartialResume ? missing.length : envelope.total,
             mode: envelope.mode,
-            durationMs: envelope.durationMs,
+            durationMs: estimatedDurationMs ?? envelope.durationMs,
             pathLen: effectivePathLen,
             radioBw: radioBw,
             radioSf: radioSf,
@@ -329,6 +353,14 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
         }
       },
     );
+  }
+
+  int sessionPacketCount({
+    required VoiceProvider voiceProvider,
+    required String sessionId,
+    required VoiceEnvelope? envelope,
+  }) {
+    return voiceProvider.session(sessionId)?.total ?? envelope?.total ?? 0;
   }
 
   void _setUnavailable() {
