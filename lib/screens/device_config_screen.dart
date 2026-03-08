@@ -398,26 +398,51 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
   Widget build(BuildContext context) {
     final deviceInfo = context.watch<ConnectionProvider>().deviceInfo;
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final locationSet =
+        (deviceInfo.advLat != null && deviceInfo.advLat != 0) ||
+        (deviceInfo.advLon != null && deviceInfo.advLon != 0);
 
     return Scaffold(
       appBar: AppBar(title: Text(AppLocalizations.of(context)!.settings)),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Device Info Card
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            _ConfigHeroCard(
+              title: deviceInfo.selfName ?? deviceInfo.deviceName ?? 'MeshCore',
+              subtitle:
+                  '${_getDeviceTypeString(context, deviceInfo.deviceType)} • ${deviceInfo.semanticVersion ?? deviceInfo.manufacturerModel ?? AppLocalizations.of(context)!.unknown}',
+              chips: [
+                _StatusChipData(
+                  icon: Icons.bluetooth,
+                  label:
+                      '${AppLocalizations.of(context)!.bleName}: ${deviceInfo.deviceName ?? AppLocalizations.of(context)!.unknown}',
+                ),
+                _StatusChipData(
+                  icon: Icons.my_location,
+                  label: locationSet ? 'Location ready' : 'Location off',
+                  emphasized: locationSet,
+                ),
+                _StatusChipData(
+                  icon: Icons.settings_input_antenna,
+                  label: '${_freqController.text} MHz • $_selectedBandwidth',
+                ),
+                _StatusChipData(
+                  icon: Icons.key,
+                  label: 'FW v${deviceInfo.firmwareVersion?.toString() ?? "?"}',
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _ConfigSectionCard(
+              title: AppLocalizations.of(context)!.deviceInformation,
+              subtitle:
+                  '${deviceInfo.manufacturerModel ?? AppLocalizations.of(context)!.unknown} • ${deviceInfo.firmwareBuildDate ?? AppLocalizations.of(context)!.unknown}',
+              icon: Icons.memory_rounded,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    AppLocalizations.of(context)!.deviceInformation,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   _InfoRow(
                     AppLocalizations.of(context)!.bleName,
                     deviceInfo.deviceName ??
@@ -467,42 +492,75 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                 ],
               ),
             ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Public Info Section
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
+            const SizedBox(height: 20),
+            _ConfigSectionCard(
+              title: AppLocalizations.of(context)!.publicInfo,
+              subtitle: AppLocalizations.of(context)!.nameBroadcastInMesh,
+              icon: Icons.public_rounded,
+              trailing: FilledButton.icon(
+                onPressed: _savePublicInfo,
+                icon: const Icon(Icons.save_outlined),
+                label: Text(AppLocalizations.of(context)!.save),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        AppLocalizations.of(context)!.publicInfo,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest.withValues(
+                        alpha: 0.45,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _telemetryEnabled
+                              ? Icons.travel_explore
+                              : Icons.location_disabled,
+                          color: _telemetryEnabled
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
                         ),
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(width: 8),
-                          IconButton.filled(
-                            onPressed: _savePublicInfo,
-                            icon: const Icon(Icons.save),
-                            tooltip: AppLocalizations.of(context)!.save,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                AppLocalizations.of(
+                                  context,
+                                )!.telemetryAndLocationSharing,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _telemetryEnabled
+                                    ? 'This device advertises position data to the mesh.'
+                                    : 'Position broadcasting is currently disabled.',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                        const SizedBox(width: 12),
+                        Switch(
+                          value: _telemetryEnabled,
+                          onChanged: (value) {
+                            setState(() {
+                              _telemetryEnabled = value;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
-
-                  // Mesh Network Name
+                  const SizedBox(height: 18),
                   TextField(
                     controller: _nameController,
                     decoration: InputDecoration(
@@ -513,62 +571,21 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                       )!.nameBroadcastInMesh,
                     ),
                   ),
-                  const SizedBox(height: 8),
-
-                  // Telemetry Toggle - Compact version
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          AppLocalizations.of(
-                            context,
-                          )!.telemetryAndLocationSharing,
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                      ),
-                      Switch(
-                        value: _telemetryEnabled,
-                        onChanged: (value) {
-                          setState(() {
-                            _telemetryEnabled = value;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-
-                  // GPS Coordinates (only show if telemetry enabled)
                   if (_telemetryEnabled) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     Row(
                       children: [
                         Expanded(
-                          child: TextField(
+                          child: _CompactCoordinateField(
                             controller: _latController,
-                            decoration: InputDecoration(
-                              labelText: AppLocalizations.of(context)!.lat,
-                              border: const OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                              signed: true,
-                            ),
+                            label: AppLocalizations.of(context)!.lat,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: TextField(
+                          child: _CompactCoordinateField(
                             controller: _lonController,
-                            decoration: InputDecoration(
-                              labelText: AppLocalizations.of(context)!.lon,
-                              border: const OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                              signed: true,
-                            ),
+                            label: AppLocalizations.of(context)!.lon,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -585,36 +602,45 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                 ],
               ),
             ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Radio Settings Section
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
+            const SizedBox(height: 20),
+            _ConfigSectionCard(
+              title: AppLocalizations.of(context)!.radioSettings,
+              subtitle:
+                  '${_freqController.text} MHz • SF$_selectedSpreadingFactor • CR$_selectedCodingRate',
+              icon: Icons.settings_input_antenna_rounded,
+              trailing: FilledButton.icon(
+                onPressed: _saveRadioSettings,
+                icon: const Icon(Icons.save_outlined),
+                label: Text(AppLocalizations.of(context)!.save),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        AppLocalizations.of(context)!.radioSettings,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+                      Expanded(
+                        child: _RadioMetricTile(
+                          label: AppLocalizations.of(context)!.bandwidth,
+                          value: _selectedBandwidth,
                         ),
                       ),
-                      IconButton.filled(
-                        onPressed: _saveRadioSettings,
-                        icon: const Icon(Icons.save),
-                        tooltip: AppLocalizations.of(context)!.save,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _RadioMetricTile(
+                          label: AppLocalizations.of(context)!.spreadingFactor,
+                          value: 'SF$_selectedSpreadingFactor',
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _RadioMetricTile(
+                          label: AppLocalizations.of(context)!.codingRate,
+                          value: 'CR$_selectedCodingRate',
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
-
-                  // LoRa Frequency
                   TextField(
                     controller: _freqController,
                     decoration: InputDecoration(
@@ -629,8 +655,6 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Bandwidth
                   DropdownButtonFormField<String>(
                     initialValue: _selectedBandwidth,
                     decoration: InputDecoration(
@@ -652,8 +676,6 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-
-                  // Spreading Factor
                   DropdownButtonFormField<int>(
                     initialValue: _selectedSpreadingFactor,
                     decoration: InputDecoration(
@@ -677,8 +699,6 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-
-                  // Coding Rate
                   DropdownButtonFormField<int>(
                     initialValue: _selectedCodingRate,
                     decoration: InputDecoration(
@@ -702,8 +722,6 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-
-                  // TX Power
                   TextField(
                     controller: _txPowerController,
                     decoration: InputDecoration(
@@ -715,37 +733,42 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                     ),
                     keyboardType: TextInputType.number,
                   ),
-
-                  // Repeat Mode (firmware v9+)
                   if (deviceInfo.clientRepeat != null) ...[
-                    const SizedBox(height: 8),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Client Repeat Mode'),
-                      subtitle:
-                          deviceInfo.allowedRepeatFreqRanges != null &&
-                              deviceInfo.allowedRepeatFreqRanges!.isNotEmpty
-                          ? Text(
-                              'Allowed: ${deviceInfo.allowedRepeatFreqRanges!.map((r) => r.lower == r.upper ? '${(r.lower / 1000).toStringAsFixed(3)} MHz' : '${(r.lower / 1000).toStringAsFixed(3)}–${(r.upper / 1000).toStringAsFixed(3)} MHz').join(', ')}',
-                            )
-                          : const Text(
-                              'Repeat packets on behalf of nearby nodes',
-                            ),
-                      value: _repeatEnabled,
-                      onChanged: (value) {
-                        setState(() {
-                          _repeatEnabled = value;
-                        });
-                      },
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHighest.withValues(
+                          alpha: 0.45,
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Client Repeat Mode'),
+                        subtitle:
+                            deviceInfo.allowedRepeatFreqRanges != null &&
+                                deviceInfo.allowedRepeatFreqRanges!.isNotEmpty
+                            ? Text(
+                                'Allowed: ${deviceInfo.allowedRepeatFreqRanges!.map((r) => r.lower == r.upper ? '${(r.lower / 1000).toStringAsFixed(3)} MHz' : '${(r.lower / 1000).toStringAsFixed(3)}–${(r.upper / 1000).toStringAsFixed(3)} MHz').join(', ')}',
+                              )
+                            : const Text(
+                                'Repeat packets on behalf of nearby nodes',
+                              ),
+                        value: _repeatEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            _repeatEnabled = value;
+                          });
+                        },
+                      ),
                     ),
                   ],
                 ],
               ),
             ),
-          ),
-
-          const SizedBox(height: 24),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -769,6 +792,276 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
   String _getPublicKeyHex(List<int>? publicKey) {
     if (publicKey == null || publicKey.isEmpty) return 'N/A';
     return publicKey.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
+  }
+}
+
+class _ConfigHeroCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final List<_StatusChipData> chips;
+
+  const _ConfigHeroCard({
+    required this.title,
+    required this.subtitle,
+    required this.chips,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            colorScheme.primaryContainer,
+            colorScheme.surfaceContainerHighest,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: colorScheme.onPrimaryContainer.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(
+                  Icons.tune_rounded,
+                  color: colorScheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onPrimaryContainer.withValues(
+                          alpha: 0.82,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: chips.map(_StatusChip.new).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConfigSectionCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Widget child;
+  final Widget? trailing;
+
+  const _ConfigSectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.child,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: colorScheme.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+              ],
+            ),
+            const SizedBox(height: 18),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusChipData {
+  final IconData icon;
+  final String label;
+  final bool emphasized;
+
+  const _StatusChipData({
+    required this.icon,
+    required this.label,
+    this.emphasized = false,
+  });
+}
+
+class _StatusChip extends StatelessWidget {
+  final _StatusChipData data;
+
+  const _StatusChip(this.data);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final chipColor = data.emphasized
+        ? colorScheme.primary.withValues(alpha: 0.14)
+        : colorScheme.onPrimaryContainer.withValues(alpha: 0.10);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: chipColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(data.icon, size: 16, color: colorScheme.onPrimaryContainer),
+          const SizedBox(width: 8),
+          Text(
+            data.label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: colorScheme.onPrimaryContainer,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactCoordinateField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+
+  const _CompactCoordinateField({
+    required this.controller,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        isDense: true,
+      ),
+      keyboardType: const TextInputType.numberWithOptions(
+        decimal: true,
+        signed: true,
+      ),
+    );
+  }
+}
+
+class _RadioMetricTile extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _RadioMetricTile({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

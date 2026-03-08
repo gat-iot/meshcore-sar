@@ -11,6 +11,7 @@ import 'contacts_provider.dart';
 enum SensorRefreshState { idle, refreshing, success, timeout, unavailable }
 
 class SensorsProvider with ChangeNotifier {
+  static const Duration _successStateRetention = Duration(minutes: 1);
   static const String _watchedSensorsKey = 'watched_sensor_keys';
   static const String _visibleSensorMetricsKey = 'visible_sensor_metrics';
   static const String _fieldSpanKey = 'sensor_field_spans';
@@ -26,6 +27,7 @@ class SensorsProvider with ChangeNotifier {
   final List<String> _watchedSensorKeys = <String>[];
   final Map<String, SensorRefreshState> _refreshStates =
       <String, SensorRefreshState>{};
+  final Map<String, DateTime> _refreshStateUpdatedAt = <String, DateTime>{};
   final Map<String, Set<String>> _visibleFieldsBySensor =
       <String, Set<String>>{};
   final Map<String, Map<String, int>> _fieldSpansBySensor =
@@ -189,6 +191,7 @@ class SensorsProvider with ChangeNotifier {
   Future<void> removeSensor(String publicKeyHex) async {
     _watchedSensorKeys.remove(publicKeyHex);
     _refreshStates.remove(publicKeyHex);
+    _refreshStateUpdatedAt.remove(publicKeyHex);
     _visibleFieldsBySensor.remove(publicKeyHex);
     _fieldSpansBySensor.remove(publicKeyHex);
     await _persistWatchedSensors();
@@ -246,22 +249,52 @@ class SensorsProvider with ChangeNotifier {
     }
 
     if (contact == null) {
-      _refreshStates[publicKeyHex] = SensorRefreshState.unavailable;
-      notifyListeners();
+      _setRefreshState(publicKeyHex, SensorRefreshState.unavailable);
       return;
     }
 
-    _refreshStates[publicKeyHex] = SensorRefreshState.refreshing;
-    notifyListeners();
+    _setRefreshState(publicKeyHex, SensorRefreshState.refreshing);
 
     final result = await connectionProvider.smartPing(
       contactPublicKey: contact.publicKey,
       hasPath: contact.hasPath,
     );
 
-    _refreshStates[publicKeyHex] = result.success
-        ? SensorRefreshState.success
-        : SensorRefreshState.timeout;
+    _setRefreshState(
+      publicKeyHex,
+      result.success ? SensorRefreshState.success : SensorRefreshState.timeout,
+    );
+  }
+
+  void clearExpiredRefreshStates({DateTime? now}) {
+    final cutoff = (now ?? DateTime.now()).subtract(_successStateRetention);
+    final keysToClear = <String>[];
+
+    for (final entry in _refreshStates.entries) {
+      if (entry.value != SensorRefreshState.success) {
+        continue;
+      }
+
+      final updatedAt = _refreshStateUpdatedAt[entry.key];
+      if (updatedAt == null || !updatedAt.isAfter(cutoff)) {
+        keysToClear.add(entry.key);
+      }
+    }
+
+    if (keysToClear.isEmpty) {
+      return;
+    }
+
+    for (final key in keysToClear) {
+      _refreshStates.remove(key);
+      _refreshStateUpdatedAt.remove(key);
+    }
+    notifyListeners();
+  }
+
+  void _setRefreshState(String publicKeyHex, SensorRefreshState state) {
+    _refreshStates[publicKeyHex] = state;
+    _refreshStateUpdatedAt[publicKeyHex] = DateTime.now();
     notifyListeners();
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart' as flutter_map;
 import 'package:latlong2/latlong.dart';
@@ -10,8 +12,52 @@ import '../providers/contacts_provider.dart';
 import '../providers/sensors_provider.dart';
 import '../utils/location_formats.dart';
 
-class SensorsTab extends StatelessWidget {
+class SensorsTab extends StatefulWidget {
   const SensorsTab({super.key});
+
+  @override
+  State<SensorsTab> createState() => _SensorsTabState();
+}
+
+class _SensorsTabState extends State<SensorsTab> {
+  Timer? _minuteTicker;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleMinuteTicker();
+  }
+
+  @override
+  void dispose() {
+    _minuteTicker?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleMinuteTicker() {
+    _minuteTicker?.cancel();
+
+    final now = DateTime.now();
+    final nextMinute = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute + 1,
+    );
+    final delay = nextMinute.difference(now);
+
+    _minuteTicker = Timer(delay, () {
+      if (!mounted) return;
+      context.read<SensorsProvider>().clearExpiredRefreshStates();
+      setState(() {});
+      _minuteTicker = Timer.periodic(const Duration(minutes: 1), (_) {
+        if (!mounted) return;
+        context.read<SensorsProvider>().clearExpiredRefreshStates();
+        setState(() {});
+      });
+    });
+  }
 
   Future<void> _showAddSensorSheet(BuildContext context) async {
     final sensorsProvider = context.read<SensorsProvider>();
@@ -588,7 +634,7 @@ class _SensorCard extends StatelessWidget {
 
   String _formatTelemetryTime(DateTime timestamp) {
     final diff = DateTime.now().difference(timestamp);
-    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 1) return 'now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
@@ -688,49 +734,33 @@ class _MetricTile extends StatelessWidget {
     final location = data.mapLocation;
     if (location == null) return;
 
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return Dialog(
-          insetPadding: const EdgeInsets.all(16),
-          clipBehavior: Clip.antiAlias,
-          child: SizedBox(
-            height: 420,
-            child: Column(
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (pageContext) {
+          return Scaffold(
+            appBar: AppBar(
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(data.label),
+                  Text(
+                    data.value,
+                    style: Theme.of(pageContext).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            body: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              data.label,
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              data.value,
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                            if (data.secondaryValue != null)
-                              Text(
-                                data.secondaryValue!,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
+                if (data.secondaryValue != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Text(
+                      data.secondaryValue!,
+                      style: Theme.of(pageContext).textTheme.bodyMedium,
+                    ),
                   ),
-                ),
                 Expanded(
                   child: flutter_map.FlutterMap(
                     options: flutter_map.MapOptions(
@@ -763,9 +793,10 @@ class _MetricTile extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        );
-      },
+          );
+        },
+        fullscreenDialog: true,
+      ),
     );
   }
 
