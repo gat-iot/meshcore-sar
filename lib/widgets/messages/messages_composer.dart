@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../providers/app_provider.dart';
 
 class MessagesComposer extends StatelessWidget {
   final TextEditingController textController;
@@ -253,6 +255,10 @@ class _MessageInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final messageFontScale = context.watch<AppProvider>().messageFontScale;
+    const baseFontSize = 15.0;
+    final resolvedFontSize = baseFontSize * messageFontScale;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       constraints: const BoxConstraints(minHeight: 46, maxHeight: 132),
@@ -286,12 +292,12 @@ class _MessageInput extends StatelessWidget {
           maxLines: 4,
           keyboardType: TextInputType.multiline,
           inputFormatters: [messageByteLimiter],
-          style: const TextStyle(fontSize: 15),
+          style: TextStyle(fontSize: resolvedFontSize),
           textAlignVertical: TextAlignVertical.center,
           decoration: InputDecoration(
             hintText: AppLocalizations.of(context)!.typeYourMessage,
             hintStyle: TextStyle(
-              fontSize: 15,
+              fontSize: resolvedFontSize,
               color: Theme.of(
                 context,
               ).colorScheme.onSurfaceVariant.withValues(alpha: 0.9),

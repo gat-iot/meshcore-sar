@@ -1023,6 +1023,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: const Text('Delete all stored message history'),
               onTap: _clearMessages,
             ),
+            Consumer<AppProvider>(
+              builder: (context, appProvider, child) => ListTile(
+                leading: const Icon(Icons.format_size),
+                title: const Text('Message font size'),
+                subtitle: Text(
+                  '${(appProvider.messageFontScale * 100).round()}% of default',
+                ),
+                trailing: SizedBox(
+                  width: 150,
+                  child: Slider(
+                    value: appProvider.messageFontScale,
+                    min: 0.85,
+                    max: 1.4,
+                    divisions: 11,
+                    label: '${(appProvider.messageFontScale * 100).round()}%',
+                    onChanged: (value) {
+                      appProvider.setMessageFontScale(value);
+                    },
+                  ),
+                ),
+              ),
+            ),
           ]),
 
           _buildSectionHeader('Voice'),

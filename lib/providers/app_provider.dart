@@ -90,6 +90,8 @@ class AppProvider with ChangeNotifier {
   bool get isVoiceCompressorEnabled => _isVoiceCompressorEnabled;
   bool _isVoiceLimiterEnabled = true;
   bool get isVoiceLimiterEnabled => _isVoiceLimiterEnabled;
+  double _messageFontScale = 1.0;
+  double get messageFontScale => _messageFontScale;
   bool _autoAddDiscoveredContacts = false;
   bool get autoAddDiscoveredContacts => _autoAddDiscoveredContacts;
   bool _autoRouteRotationEnabled =
@@ -144,6 +146,7 @@ class AppProvider with ChangeNotifier {
     _loadVoiceBandPassFilterEnabled();
     _loadVoiceCompressorEnabled();
     _loadVoiceLimiterEnabled();
+    _loadMessageFontScale();
     _loadAutoAddDiscoveredContacts();
     _loadMessagingRouteSettings();
     unawaited(_pathHistoryService.initialize());
@@ -428,6 +431,30 @@ class AppProvider with ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Error saving voice limiter setting: $e');
+    }
+  }
+
+  Future<void> _loadMessageFontScale() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _messageFontScale = (prefs.getDouble('message_font_scale') ?? 1.0).clamp(
+        0.85,
+        1.4,
+      );
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading message font scale setting: $e');
+    }
+  }
+
+  Future<void> setMessageFontScale(double scale) async {
+    try {
+      _messageFontScale = scale.clamp(0.85, 1.4);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble('message_font_scale', _messageFontScale);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error saving message font scale setting: $e');
     }
   }
 

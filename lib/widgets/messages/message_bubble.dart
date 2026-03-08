@@ -13,6 +13,7 @@ import '../../providers/connection_provider.dart';
 import '../../providers/drawing_provider.dart';
 import '../../providers/voice_provider.dart';
 import '../../providers/image_provider.dart' as ip;
+import '../../providers/app_provider.dart';
 import '../drawing_minimap_preview.dart';
 import '../../models/ble_packet_log.dart';
 import '../../services/sar_template_service.dart';
@@ -1649,6 +1650,36 @@ class _MessageBubbleState extends State<MessageBubble> {
     return null;
   }
 
+  Widget _buildDirectMessageStatusIndicator(
+    BuildContext context,
+    Message message,
+  ) {
+    switch (message.deliveryStatus) {
+      case MessageDeliveryStatus.delivered:
+        return Icon(
+          Icons.done_all,
+          size: 16,
+          color: Theme.of(context).colorScheme.primary,
+        );
+      case MessageDeliveryStatus.sent:
+        return Icon(
+          Icons.done,
+          size: 16,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        );
+      case MessageDeliveryStatus.sending:
+        return Icon(Icons.schedule, size: 15, color: Colors.orange);
+      case MessageDeliveryStatus.failed:
+        return const Icon(Icons.error_outline, size: 15, color: Colors.red);
+      case MessageDeliveryStatus.received:
+        return Icon(
+          Icons.done_all,
+          size: 16,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Display system messages with minimal styling
@@ -1666,6 +1697,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     }
     final isSarMarker = message.isSarMarker;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final messageFontScale = context.watch<AppProvider>().messageFontScale;
 
     // Determine if this is own message
     final connectionProvider = context.read<ConnectionProvider>();
@@ -1779,6 +1811,9 @@ class _MessageBubbleState extends State<MessageBubble> {
         : null;
 
     final shouldFloatBubble = widget.isCompact;
+    final baseBodyStyle = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(fontSize: 14 * messageFontScale);
     final bubble = ConstrainedBox(
       constraints: BoxConstraints(
         maxWidth: shouldFloatBubble
@@ -2197,10 +2232,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                     );
 
                     if (drawing == null) {
-                      return Text(
-                        message.text,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      );
+                      return Text(message.text, style: baseBodyStyle);
                     }
 
                     final String drawingTypeLabel;
@@ -2286,10 +2318,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 )
               // Regular message content
               else if (!message.isDrawing || widget.isCompact)
-                Text(
-                  message.text,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
+                Text(message.text, style: baseBodyStyle),
 
               if (!widget.isCompact &&
                   !isSarMarker &&
@@ -2509,33 +2538,42 @@ class _MessageBubbleState extends State<MessageBubble> {
                           Row(
                             mainAxisSize: MainAxisSize.max,
                             children: [
-                              Icon(
-                                getDeliveryStatusIcon(message.deliveryStatus),
-                                size: 12,
-                                color: getDeliveryStatusColor(
-                                  message.deliveryStatus,
-                                ),
-                              ),
-                              const SizedBox(width: 3),
-                              Expanded(
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    message.getLocalizedDeliveryStatus(context),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.copyWith(
-                                          color: getDeliveryStatusColor(
-                                            message.deliveryStatus,
-                                          ),
-                                          fontStyle: FontStyle.italic,
-                                        ),
+                              if (message.isContactMessage)
+                                _buildDirectMessageStatusIndicator(
+                                  context,
+                                  message,
+                                )
+                              else ...[
+                                Icon(
+                                  getDeliveryStatusIcon(message.deliveryStatus),
+                                  size: 12,
+                                  color: getDeliveryStatusColor(
+                                    message.deliveryStatus,
                                   ),
                                 ),
-                              ),
+                                const SizedBox(width: 3),
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      message.getLocalizedDeliveryStatus(
+                                        context,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: getDeliveryStatusColor(
+                                              message.deliveryStatus,
+                                            ),
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                               // Show retry button for failed messages
                               if (message.deliveryStatus ==
                                   MessageDeliveryStatus.failed) ...[
