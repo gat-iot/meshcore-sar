@@ -371,6 +371,7 @@ class _SensorCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final telemetry = contact?.telemetry;
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final metrics = contact == null || telemetry == null
         ? const <_MetricCardData>[]
         : _buildMetricCards(l10n, telemetry, contact!);
@@ -378,16 +379,23 @@ class _SensorCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(28),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colorScheme.surfaceContainerLow,
+            colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
+          ],
+        ),
         border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.14),
+          color: colorScheme.outlineVariant.withValues(alpha: 0.35),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: 0.045),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),

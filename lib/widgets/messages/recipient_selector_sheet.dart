@@ -192,7 +192,8 @@ class _RecipientSelectorSheetState extends State<RecipientSelectorSheet> {
                             ? l10n.broadcastToAllNearby
                             : '${l10n.channel} ${channel.publicKey[1]}', // Show slot number
                         unreadCount:
-                            widget.unreadCountsByPublicKey[channel.publicKeyHex] ??
+                            widget.unreadCountsByPublicKey[channel
+                                .publicKeyHex] ??
                             0,
                         isSelected: _isSelected('channel', channel),
                         onTap: () {
@@ -240,7 +241,8 @@ class _RecipientSelectorSheetState extends State<RecipientSelectorSheet> {
                         title: contact.displayName,
                         subtitle: contact.publicKeyShort,
                         unreadCount:
-                            widget.unreadCountsByPublicKey[contact.publicKeyHex] ??
+                            widget.unreadCountsByPublicKey[contact
+                                .publicKeyHex] ??
                             0,
                         isSelected: _isSelected('contact', contact),
                         onTap: () {
@@ -288,7 +290,8 @@ class _RecipientSelectorSheetState extends State<RecipientSelectorSheet> {
                         title: room.displayName,
                         subtitle: room.publicKeyShort,
                         unreadCount:
-                            widget.unreadCountsByPublicKey[room.publicKeyHex] ?? 0,
+                            widget.unreadCountsByPublicKey[room.publicKeyHex] ??
+                            0,
                         isSelected: _isSelected('room', room),
                         onTap: () {
                           widget.onSelect('room', room);

@@ -24,8 +24,6 @@ class ContactTile extends StatelessWidget {
   final String Function(double)? formatDistance;
   final VoidCallback? onNavigateToMap;
   final VoidCallback? onNavigateToMessages;
-  final int messageCount;
-  final int unreadMessageCount;
 
   const ContactTile({
     super.key,
@@ -35,8 +33,6 @@ class ContactTile extends StatelessWidget {
     this.formatDistance,
     this.onNavigateToMap,
     this.onNavigateToMessages,
-    this.messageCount = 0,
-    this.unreadMessageCount = 0,
   });
 
   /// Get localized time since last seen
@@ -240,13 +236,6 @@ class ContactTile extends StatelessWidget {
                               ],
                             ),
                           ),
-                          if (messageCount > 0) ...[
-                            const SizedBox(width: 8),
-                            _MessageCountBadge(
-                              totalCount: messageCount,
-                              unreadCount: unreadMessageCount,
-                            ),
-                          ],
                           const SizedBox(width: 8),
                           Text(timeAgoText, style: timeAgoStyle),
                           if (isPingInProgress) ...[
@@ -321,21 +310,22 @@ class ContactTile extends StatelessWidget {
                   _showSetRouteDialog(context, contact);
                 },
               ),
-            ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: Text(
-                contact.isChannel ? l10n.deleteChannel : l10n.deleteContact,
-                style: const TextStyle(color: Colors.red),
+            if (!contact.isPublicChannel)
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: Text(
+                  contact.isChannel ? l10n.deleteChannel : l10n.deleteContact,
+                  style: const TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  if (contact.isChannel) {
+                    _showDeleteChannelDialog(context, contact);
+                  } else {
+                    _showDeleteConfirmation(context, contact);
+                  }
+                },
               ),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                if (contact.isChannel) {
-                  _showDeleteChannelDialog(context, contact);
-                } else {
-                  _showDeleteConfirmation(context, contact);
-                }
-              },
-            ),
           ],
         ),
       ),
@@ -373,7 +363,11 @@ class ContactTile extends StatelessWidget {
     );
   }
 
-  void _showDeleteConfirmation(BuildContext context, Contact contact) {
+  void _showDeleteConfirmation(
+    BuildContext context,
+    Contact contact, {
+    bool closeDetailsSheetOnDelete = false,
+  }) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -391,7 +385,9 @@ class ContactTile extends StatelessWidget {
           TextButton(
             onPressed: () async {
               Navigator.pop(context); // Close confirmation dialog
-              Navigator.pop(context); // Close contact details sheet
+              if (closeDetailsSheetOnDelete) {
+                Navigator.pop(context); // Close contact details sheet
+              }
               await _deleteContact(context, contact);
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
@@ -895,7 +891,11 @@ class ContactTile extends StatelessWidget {
                               return;
                             }
 
-                            _showDeleteConfirmation(context, contact);
+                            _showDeleteConfirmation(
+                              context,
+                              contact,
+                              closeDetailsSheetOnDelete: true,
+                            );
                           },
                           icon: const Icon(Icons.delete_outline),
                           label: Text(
@@ -1256,6 +1256,10 @@ class ContactTile extends StatelessWidget {
     Contact contact, {
     bool closeDetailsSheetOnDelete = false,
   }) {
+    if (contact.isPublicChannel) {
+      return;
+    }
+
     final l10n = AppLocalizations.of(context)!;
 
     showDialog(
@@ -1383,62 +1387,6 @@ class ContactTile extends StatelessWidget {
                 context,
               ).textTheme.labelSmall?.color?.withValues(alpha: 0.82),
               fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MessageCountBadge extends StatelessWidget {
-  final int totalCount;
-  final int unreadCount;
-
-  const _MessageCountBadge({
-    required this.totalCount,
-    required this.unreadCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final hasUnread = unreadCount > 0;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: hasUnread
-            ? colorScheme.primaryContainer
-            : colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: hasUnread
-              ? colorScheme.primary.withValues(alpha: 0.35)
-              : colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (hasUnread) ...[
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: colorScheme.primary,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 5),
-          ],
-          Text(
-            hasUnread ? '$unreadCount/$totalCount' : '$totalCount',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: hasUnread
-                  ? colorScheme.onPrimaryContainer
-                  : colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w800,
             ),
           ),
         ],

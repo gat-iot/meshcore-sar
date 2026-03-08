@@ -1,0 +1,74 @@
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:meshcore_sar_app/l10n/app_localizations.dart';
+import 'package:meshcore_sar_app/models/contact.dart';
+import 'package:meshcore_sar_app/widgets/messages/recipient_selector_sheet.dart';
+
+void main() {
+  Contact buildContact({
+    required String name,
+    required ContactType type,
+    int secondByte = 0,
+  }) {
+    final publicKey = Uint8List(32);
+    publicKey[1] = secondByte;
+
+    return Contact(
+      publicKey: publicKey,
+      type: type,
+      flags: 0,
+      outPathLen: 0,
+      outPath: Uint8List(0),
+      advName: name,
+      lastAdvert: 0,
+      advLat: 0,
+      advLon: 0,
+      lastMod: 0,
+    );
+  }
+
+  Future<void> pumpSheet(WidgetTester tester) async {
+    final channel = buildContact(
+      name: 'Ops',
+      type: ContactType.channel,
+      secondByte: 3,
+    );
+    final contact = buildContact(name: 'John Smith', type: ContactType.chat);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: RecipientSelectorSheet(
+            contacts: [contact],
+            rooms: const [],
+            channels: [channel],
+            unreadCount: 11,
+            unreadCountsByPublicKey: {
+              channel.publicKeyHex: 7,
+              contact.publicKeyHex: 3,
+            },
+            currentDestinationType: 'all',
+            onSelect: (_, __) {},
+          ),
+        ),
+      ),
+    );
+  }
+
+  testWidgets('renders unread badges for all and destination filters', (
+    tester,
+  ) async {
+    await pumpSheet(tester);
+
+    expect(find.byKey(const Key('unread-badge-11')), findsOneWidget);
+    expect(find.byKey(const Key('unread-badge-7')), findsOneWidget);
+    expect(find.byKey(const Key('unread-badge-3')), findsOneWidget);
+    expect(find.text('11'), findsOneWidget);
+    expect(find.text('7'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+  });
+}
