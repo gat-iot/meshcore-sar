@@ -232,7 +232,7 @@ extension ContactLocalization on Contact {
 
   String get routeSummary {
     if (routeIsUnknown) {
-      return 'Unknown';
+      return 'Flood/Unknown';
     }
     if (!routeHasPath || routeHopCount == 0) {
       return 'Direct';
