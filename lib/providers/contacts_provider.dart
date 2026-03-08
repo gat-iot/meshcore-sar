@@ -283,62 +283,16 @@ class ContactsProvider with ChangeNotifier {
     }
 
     // Check if this is a new contact
-    final isNewContact = !_contacts.containsKey(contact.publicKeyHex);
+    final existingContact = _contacts[contact.publicKeyHex];
+    final isNewContact = existingContact == null;
     debugPrint(
       '   isNew: $isNewContact, total contacts before: ${_contacts.length}',
     );
 
-    Contact updatedContact;
-    if (isNewContact) {
-      // New contact - add initial location to history if available
-      updatedContact = contact.copyWith(isNew: true);
-      if (contact.advertLocation != null) {
-        final timestamp = DateTime.fromMillisecondsSinceEpoch(
-          contact.lastAdvert * 1000,
-        );
-        updatedContact = updatedContact.addAdvertLocation(
-          contact.advertLocation!,
-          timestamp,
-        );
-      }
-    } else {
-      // Existing contact - preserve history and isNew status
-      final existingContact = _contacts[contact.publicKeyHex]!;
-      final mergedTelemetry = _mergeTelemetryForContact(
-        existingTelemetry: existingContact.telemetry,
-        incomingTelemetry: contact.telemetry,
-      );
-      final incomingAdvertLocation = contact.advertLocation;
-      final existingAdvertLocation = existingContact.advertLocation;
-
-      // Start with existing contact
-      updatedContact = contact.copyWith(
-        isNew: existingContact.isNew,
-        advertHistory: existingContact.advertHistory,
-        telemetry: mergedTelemetry,
-        advLat: incomingAdvertLocation != null
-            ? contact.advLat
-            : existingAdvertLocation != null
-            ? existingContact.advLat
-            : contact.advLat,
-        advLon: incomingAdvertLocation != null
-            ? contact.advLon
-            : existingAdvertLocation != null
-            ? existingContact.advLon
-            : contact.advLon,
-      );
-
-      // Add new location to history if location has changed
-      if (contact.advertLocation != null) {
-        final timestamp = DateTime.fromMillisecondsSinceEpoch(
-          contact.lastAdvert * 1000,
-        );
-        updatedContact = updatedContact.addAdvertLocation(
-          contact.advertLocation!,
-          timestamp,
-        );
-      }
-    }
+    final updatedContact = _mergeIncomingContact(
+      incomingContact: contact,
+      existingContact: existingContact,
+    );
 
     _contacts[contact.publicKeyHex] = updatedContact;
     _pendingAdverts.remove(contact.publicKeyHex);
@@ -364,7 +318,11 @@ class ContactsProvider with ChangeNotifier {
         excluded++;
         continue;
       }
-      _contacts[contact.publicKeyHex] = contact;
+      final existingContact = _contacts[contact.publicKeyHex];
+      _contacts[contact.publicKeyHex] = _mergeIncomingContact(
+        incomingContact: contact,
+        existingContact: existingContact,
+      );
       _pendingAdverts.remove(contact.publicKeyHex);
     }
     if (excluded > 0) {
@@ -374,6 +332,60 @@ class ContactsProvider with ChangeNotifier {
     }
     _persistContacts();
     notifyListeners();
+  }
+
+  Contact _mergeIncomingContact({
+    required Contact incomingContact,
+    Contact? existingContact,
+  }) {
+    if (existingContact == null) {
+      var newContact = incomingContact.copyWith(isNew: true);
+      if (incomingContact.advertLocation != null) {
+        final timestamp = DateTime.fromMillisecondsSinceEpoch(
+          incomingContact.lastAdvert * 1000,
+        );
+        newContact = newContact.addAdvertLocation(
+          incomingContact.advertLocation!,
+          timestamp,
+        );
+      }
+      return newContact;
+    }
+
+    final mergedTelemetry = _mergeTelemetryForContact(
+      existingTelemetry: existingContact.telemetry,
+      incomingTelemetry: incomingContact.telemetry,
+    );
+    final incomingAdvertLocation = incomingContact.advertLocation;
+    final existingAdvertLocation = existingContact.advertLocation;
+
+    var updatedContact = incomingContact.copyWith(
+      isNew: existingContact.isNew,
+      advertHistory: existingContact.advertHistory,
+      telemetry: mergedTelemetry,
+      advLat: incomingAdvertLocation != null
+          ? incomingContact.advLat
+          : existingAdvertLocation != null
+          ? existingContact.advLat
+          : incomingContact.advLat,
+      advLon: incomingAdvertLocation != null
+          ? incomingContact.advLon
+          : existingAdvertLocation != null
+          ? existingContact.advLon
+          : incomingContact.advLon,
+    );
+
+    if (incomingAdvertLocation != null) {
+      final timestamp = DateTime.fromMillisecondsSinceEpoch(
+        incomingContact.lastAdvert * 1000,
+      );
+      updatedContact = updatedContact.addAdvertLocation(
+        incomingAdvertLocation,
+        timestamp,
+      );
+    }
+
+    return updatedContact;
   }
 
   /// Update contact telemetry
@@ -541,6 +553,8 @@ class ContactsProvider with ChangeNotifier {
       return existingTelemetry;
     }
 
+    // Telemetry packets and contact refreshes are often sparse. Preserve the
+    // last known reading for any field that is omitted in the incoming update.
     final incomingGps = _getValidGpsOrNull(incomingTelemetry.gpsLocation);
     final previousGps = _getValidGpsOrNull(existingTelemetry?.gpsLocation);
     final mergedExtraSensorData = <String, dynamic>{

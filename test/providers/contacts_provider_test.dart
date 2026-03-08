@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:meshcore_sar_app/models/contact.dart';
 import 'package:meshcore_sar_app/providers/contacts_provider.dart';
 import 'package:meshcore_sar_app/services/cayenne_lpp_parser.dart';
@@ -241,6 +242,129 @@ void main() {
         expect(updated.displayLocation!.longitude, closeTo(13.8765, 0.0001));
       },
     );
+
+    test('retains existing telemetry when contact refresh omits telemetry', () {
+      final initialTelemetry = ContactTelemetry(
+        gpsLocation: const LatLng(45.1234, 13.8765),
+        batteryPercentage: 76.5,
+        batteryMilliVolts: 3890,
+        temperature: 21.5,
+        timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
+        humidity: 62.0,
+        pressure: 1008.4,
+        extraSensorData: const {'co2': 415.0},
+      );
+
+      provider.addOrUpdateContact(
+        createContact(
+          key: publicKey,
+          type: ContactType.chat,
+        ).copyWith(telemetry: initialTelemetry),
+      );
+
+      provider.addOrUpdateContact(
+        Contact(
+          publicKey: publicKey,
+          type: ContactType.chat,
+          flags: 0,
+          outPathLen: 0,
+          outPath: Uint8List(64),
+          advName: 'Test Contact Refreshed',
+          lastAdvert: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          advLat: 0,
+          advLon: 0,
+          lastMod: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        ),
+      );
+
+      final updated = provider.findContactByKey(publicKey)!;
+      expect(updated.telemetry, isNotNull);
+      expect(updated.telemetry!.gpsLocation, const LatLng(45.1234, 13.8765));
+      expect(updated.telemetry!.batteryPercentage, equals(76.5));
+      expect(updated.telemetry!.batteryMilliVolts, equals(3890));
+      expect(updated.telemetry!.temperature, equals(21.5));
+      expect(updated.telemetry!.humidity, equals(62.0));
+      expect(updated.telemetry!.pressure, equals(1008.4));
+      expect(updated.telemetry!.extraSensorData, containsPair('co2', 415.0));
+    });
+
+    test('retains existing telemetry during bulk contacts sync', () {
+      final initialTelemetry = ContactTelemetry(
+        gpsLocation: const LatLng(45.1234, 13.8765),
+        batteryPercentage: 76.5,
+        batteryMilliVolts: 3890,
+        temperature: 21.5,
+        timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
+        humidity: 62.0,
+        pressure: 1008.4,
+        extraSensorData: const {'co2': 415.0},
+      );
+
+      provider.addOrUpdateContact(
+        createContact(
+          key: publicKey,
+          type: ContactType.chat,
+        ).copyWith(telemetry: initialTelemetry),
+      );
+
+      provider.addContacts([
+        Contact(
+          publicKey: publicKey,
+          type: ContactType.chat,
+          flags: 0,
+          outPathLen: 0,
+          outPath: Uint8List(64),
+          advName: 'Synced Contact',
+          lastAdvert: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          advLat: 0,
+          advLon: 0,
+          lastMod: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        ),
+      ]);
+
+      final updated = provider.findContactByKey(publicKey)!;
+      expect(updated.telemetry, isNotNull);
+      expect(updated.telemetry!.gpsLocation, const LatLng(45.1234, 13.8765));
+      expect(updated.telemetry!.batteryPercentage, equals(76.5));
+      expect(updated.telemetry!.batteryMilliVolts, equals(3890));
+      expect(updated.telemetry!.temperature, equals(21.5));
+      expect(updated.telemetry!.humidity, equals(62.0));
+      expect(updated.telemetry!.pressure, equals(1008.4));
+      expect(updated.telemetry!.extraSensorData, containsPair('co2', 415.0));
+    });
+
+    test('retains prior telemetry fields across sparse telemetry updates', () {
+      final fullTelemetry = ContactTelemetry(
+        gpsLocation: const LatLng(46.0569, 14.5058),
+        batteryPercentage: 54.0,
+        batteryMilliVolts: 3780,
+        temperature: 19.5,
+        timestamp: DateTime.now().subtract(const Duration(minutes: 2)),
+        humidity: 58.0,
+        pressure: 1011.2,
+        extraSensorData: const {'pm25': 8.0},
+      );
+
+      provider.addOrUpdateContact(
+        createContact(
+          key: publicKey,
+          type: ContactType.chat,
+        ).copyWith(telemetry: fullTelemetry),
+      );
+
+      final batteryOnly = CayenneLppParser.createBatteryData(3.95);
+      provider.updateTelemetry(publicKey.sublist(0, 6), batteryOnly);
+
+      final updated = provider.findContactByKey(publicKey)!;
+      expect(updated.telemetry, isNotNull);
+      expect(updated.telemetry!.gpsLocation, const LatLng(46.0569, 14.5058));
+      expect(updated.telemetry!.batteryMilliVolts, isNotNull);
+      expect(updated.telemetry!.batteryPercentage, isNotNull);
+      expect(updated.telemetry!.temperature, equals(19.5));
+      expect(updated.telemetry!.humidity, equals(58.0));
+      expect(updated.telemetry!.pressure, equals(1011.2));
+      expect(updated.telemetry!.extraSensorData, containsPair('pm25', 8.0));
+    });
 
     test('builds message snapshot from latest valid telemetry', () {
       final telemetryData = CayenneLppParser.createGpsData(

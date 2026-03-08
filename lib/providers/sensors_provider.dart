@@ -220,35 +220,48 @@ class SensorsProvider with ChangeNotifier {
 
     try {
       for (final key in _watchedSensorKeys) {
-        Contact? contact;
-        for (final entry in contactsProvider.contacts) {
-          if (entry.publicKeyHex == key) {
-            contact = entry;
-            break;
-          }
-        }
-        if (contact == null) {
-          _refreshStates[key] = SensorRefreshState.unavailable;
-          notifyListeners();
-          continue;
-        }
-
-        _refreshStates[key] = SensorRefreshState.refreshing;
-        notifyListeners();
-
-        final result = await connectionProvider.smartPing(
-          contactPublicKey: contact.publicKey,
-          hasPath: contact.hasPath,
+        await refreshSensor(
+          publicKeyHex: key,
+          contactsProvider: contactsProvider,
+          connectionProvider: connectionProvider,
         );
-
-        _refreshStates[key] = result.success
-            ? SensorRefreshState.success
-            : SensorRefreshState.timeout;
-        notifyListeners();
       }
     } finally {
       _isRefreshingAll = false;
       notifyListeners();
     }
+  }
+
+  Future<void> refreshSensor({
+    required String publicKeyHex,
+    required ContactsProvider contactsProvider,
+    required ConnectionProvider connectionProvider,
+  }) async {
+    Contact? contact;
+    for (final entry in contactsProvider.contacts) {
+      if (entry.publicKeyHex == publicKeyHex) {
+        contact = entry;
+        break;
+      }
+    }
+
+    if (contact == null) {
+      _refreshStates[publicKeyHex] = SensorRefreshState.unavailable;
+      notifyListeners();
+      return;
+    }
+
+    _refreshStates[publicKeyHex] = SensorRefreshState.refreshing;
+    notifyListeners();
+
+    final result = await connectionProvider.smartPing(
+      contactPublicKey: contact.publicKey,
+      hasPath: contact.hasPath,
+    );
+
+    _refreshStates[publicKeyHex] = result.success
+        ? SensorRefreshState.success
+        : SensorRefreshState.timeout;
+    notifyListeners();
   }
 }

@@ -209,6 +209,11 @@ class SensorsTab extends StatelessWidget {
                       },
                       onCustomize: () =>
                           _showMetricSelector(context, key, contact),
+                      onRefresh: () => sensorsProvider.refreshSensor(
+                        publicKeyHex: key,
+                        contactsProvider: contactsProvider,
+                        connectionProvider: context.read<ConnectionProvider>(),
+                      ),
                     );
                   }),
               ],
@@ -302,6 +307,7 @@ class _SensorCard extends StatelessWidget {
   final Set<String> visibleFields;
   final Map<String, int> fieldSpans;
   final Future<void> Function() onRemove;
+  final Future<void> Function() onRefresh;
   final VoidCallback onCustomize;
 
   const _SensorCard({
@@ -310,6 +316,7 @@ class _SensorCard extends StatelessWidget {
     required this.visibleFields,
     required this.fieldSpans,
     required this.onRemove,
+    required this.onRefresh,
     required this.onCustomize,
   });
 
@@ -404,18 +411,24 @@ class _SensorCard extends StatelessWidget {
                 ),
                 PopupMenuButton<String>(
                   onSelected: (value) async {
-                    if (value == 'remove') {
+                    if (value == 'refresh') {
+                      await onRefresh();
+                    } else if (value == 'remove') {
                       await onRemove();
                     } else if (value == 'customize') {
                       onCustomize();
                     }
                   },
-                  itemBuilder: (context) => const [
+                  itemBuilder: (context) => [
                     PopupMenuItem<String>(
+                      value: 'refresh',
+                      child: Text(l10n.refresh),
+                    ),
+                    const PopupMenuItem<String>(
                       value: 'customize',
                       child: Text('Customize fields'),
                     ),
-                    PopupMenuItem<String>(
+                    const PopupMenuItem<String>(
                       value: 'remove',
                       child: Text('Remove'),
                     ),
@@ -429,7 +442,9 @@ class _SensorCard extends StatelessWidget {
                 'This node is no longer available in the contact list.',
               )
             else if (telemetry == null)
-              const Text('No telemetry received yet. Pull down to fetch it.')
+              const Text(
+                'No telemetry received yet. Use Refresh from the menu or pull down to fetch it.',
+              )
             else if (metrics.isEmpty)
               const Text(
                 'All fields are hidden. Use Visible fields to choose what to show.',
