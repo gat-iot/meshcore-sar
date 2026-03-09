@@ -1,6 +1,5 @@
-import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, debugPrint, kIsWeb;
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 
 /// Service for accessing build information from native platform code
 /// Currently supports Android only - returns "unknown" for other platforms
@@ -25,7 +24,7 @@ class BuildInfoService {
     }
 
     // Only Android has the platform channel implementation
-    if (!Platform.isAndroid) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       debugPrint('[BuildInfoService] Not on Android platform, returning "unknown"');
       _cachedCommitHash = 'unknown';
       return _cachedCommitHash!;

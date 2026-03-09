@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -25,6 +26,10 @@ class _ConnectionModeSelectorState extends State<ConnectionModeSelector> {
   }
 
   Future<void> _loadLocalIPs() async {
+    if (kIsWeb) {
+      return;
+    }
+
     final Set<String> ipsSet = {};
 
     try {

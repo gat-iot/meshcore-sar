@@ -1,5 +1,5 @@
-import 'dart:io' show Platform;
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_avif/flutter_avif.dart';
 import 'package:image_picker/image_picker.dart';
@@ -470,7 +470,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Check for app updates and show notification or dialog
   Future<void> _checkForUpdates() async {
     // Only on Android
-    if (!Platform.isAndroid) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1213,8 +1213,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ]),
 
-          _buildSectionHeader('Network Sharing'),
-          const ConnectionModeSelector(),
+          if (!kIsWeb) ...[
+            _buildSectionHeader('Network Sharing'),
+            const ConnectionModeSelector(),
+          ],
 
           _buildSectionHeader(AppLocalizations.of(context)!.permissionsSection),
           _buildSettingsCard([
@@ -1320,7 +1322,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => _showAboutDialog(),
             ),
           ]),
-          if (Platform.isAndroid)
+          if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: FilledButton.icon(

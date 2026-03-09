@@ -1,4 +1,4 @@
-import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -158,7 +158,7 @@ class _MeshCoreSarAppState extends State<MeshCoreSarApp> {
   /// Shows notification if update is available
   Future<void> _checkForUpdates() async {
     // Only check for updates on Android
-    if (!Platform.isAndroid) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       debugPrint('[UpdateChecker] Skipping update check (not Android)');
       return;
     }
@@ -324,7 +324,7 @@ class _MeshCoreSarAppState extends State<MeshCoreSarApp> {
 
         // Wrap in SafeArea for Android only to fix navigation bar overlap (API ≥36)
         // iOS doesn't need SafeArea wrapping (causes extra black space at bottom)
-        if (Platform.isAndroid) {
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
           return SafeArea(
             left: false,
             right: false,
