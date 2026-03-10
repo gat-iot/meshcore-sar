@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/contact.dart';
+import '../../models/location_trail.dart';
 import '../../providers/map_provider.dart';
 import '../../providers/contacts_provider.dart';
+import '../../services/gpx_service.dart';
 import '../../services/trail_color_service.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -66,6 +69,31 @@ class TrailControls extends StatelessWidget {
                 const Divider(),
                 const SizedBox(height: 8),
 
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => _importTrail(context, mapProvider),
+                      icon: const Icon(Icons.file_upload_outlined),
+                      label: Text(l10n.importFromClipboard),
+                    ),
+                    if (mapProvider.currentTrail != null &&
+                        mapProvider.currentTrail!.points.length >= 2)
+                      OutlinedButton.icon(
+                        onPressed: () => _exportTrail(
+                          context,
+                          mapProvider.currentTrail!,
+                          customName: 'My Trail',
+                        ),
+                        icon: const Icon(Icons.file_download_outlined),
+                        label: Text(l10n.exportToClipboard),
+                      ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
                 // Trail stats
                 if (mapProvider.currentTrail != null &&
                     mapProvider.currentTrail!.points.isNotEmpty)
@@ -103,8 +131,6 @@ class TrailControls extends StatelessWidget {
                       ],
                     ),
                   ),
-
-                const SizedBox(height: 16),
 
                 // Clear trail button
                 if (mapProvider.currentTrail != null &&
@@ -238,7 +264,17 @@ class TrailControls extends StatelessWidget {
                             ),
                           ],
                         ),
-                        title: Text(contact.displayName),
+                        title: Row(
+                          children: [
+                            Expanded(child: Text(contact.displayName)),
+                            IconButton(
+                              tooltip: l10n.exportToClipboard,
+                              icon: const Icon(Icons.file_download_outlined),
+                              onPressed: () =>
+                                  _exportContactTrail(context, contact),
+                            ),
+                          ],
+                        ),
                         subtitle: Text(
                           '${contact.advertHistory.length} points',
                         ),
@@ -263,6 +299,92 @@ class TrailControls extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _importTrail(
+    BuildContext context,
+    MapProvider mapProvider,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+
+    try {
+      final importedTrail = await GpxService.importTrailFromFile();
+      if (importedTrail == null || !context.mounted) {
+        return;
+      }
+
+      mapProvider.replaceCurrentTrailWithImport(importedTrail);
+      mapProvider.clearImportedTrail();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${l10n.locationTrail}: ${importedTrail.points.length} ${l10n.points.toLowerCase()}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.importFailed(error.toString()))),
+      );
+    }
+  }
+
+  Future<void> _exportTrail(
+    BuildContext context,
+    LocationTrail trail, {
+    String? customName,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+
+    try {
+      final success = await GpxService.exportTrailToFile(
+        trail,
+        customName: customName,
+      );
+      if (!success && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.exportFailed('unable to share GPX'))),
+        );
+      }
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.exportFailed(error.toString()))),
+      );
+    }
+  }
+
+  Future<void> _exportContactTrail(BuildContext context, Contact contact) async {
+    await _exportTrail(
+      context,
+      _buildContactTrail(contact),
+      customName: '${contact.displayName} Trail',
+    );
+  }
+
+  LocationTrail _buildContactTrail(Contact contact) {
+    final sortedHistory = [...contact.advertHistory]
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    return LocationTrail(
+      id: 'contact_${contact.publicKeyHex}',
+      isActive: false,
+      startTime: sortedHistory.first.timestamp,
+      endTime: sortedHistory.last.timestamp,
+      points: sortedHistory
+          .map(
+            (advert) => TrailPoint(
+              position: advert.location,
+              timestamp: advert.timestamp,
+            ),
+          )
+          .toList(),
     );
   }
 

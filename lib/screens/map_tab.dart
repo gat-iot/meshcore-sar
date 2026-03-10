@@ -27,6 +27,7 @@ import '../widgets/map_debug_info.dart';
 import '../widgets/map/compass_widget.dart';
 import '../widgets/map/detailed_compass_dialog.dart';
 import '../widgets/map/drawing_layer.dart';
+import '../widgets/map/drawing_toolbar.dart';
 import '../widgets/map/location_trail_layer.dart';
 import '../widgets/map/trail_controls.dart';
 import '../widgets/map/map_message_overlay.dart';
@@ -2131,6 +2132,8 @@ class _MapTabState extends State<MapTab> with AutomaticKeepAliveClientMixin {
                 right: 16,
                 child: Column(
                   children: [
+                    const DrawingToolbar(),
+                    const SizedBox(height: 8),
                     // Hide other buttons when in drawing mode
                     if (!drawingProvider.isDrawing) ...[
                       // Current Location - always center to GPS
