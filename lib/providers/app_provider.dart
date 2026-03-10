@@ -128,6 +128,9 @@ class AppProvider with ChangeNotifier {
   Timer? _packetCaptureFlushTimer;
   String? _lastPersistedPacketSignature;
   bool _isPersistingPacketCapture = false;
+  bool _wasDeviceConnected = false;
+  bool _hasCompletedConnectionBootstrap = false;
+  bool _isReconnectSyncInProgress = false;
 
   AppProvider({
     required this.connectionProvider,
@@ -139,6 +142,7 @@ class AppProvider with ChangeNotifier {
     required this.imageProvider,
   }) {
     _setupCallbacks();
+    _wasDeviceConnected = connectionProvider.deviceInfo.isConnected;
     _initializeLocationTracking();
     _loadMapEnabled();
     _loadContactsEnabled();
@@ -1659,9 +1663,39 @@ class AppProvider with ChangeNotifier {
       );
       messagesProvider.syncDrawingsWithProvider(drawingProvider);
 
+      _hasCompletedConnectionBootstrap = true;
+      _wasDeviceConnected = connectionProvider.deviceInfo.isConnected;
       notifyListeners();
     } catch (e) {
       debugPrint('Initialization error: $e');
+    }
+  }
+
+  Future<void> _syncAfterReconnect() async {
+    if (_isReconnectSyncInProgress ||
+        !connectionProvider.deviceInfo.isConnected) {
+      return;
+    }
+
+    _isReconnectSyncInProgress = true;
+    try {
+      debugPrint(
+        '🔄 [AppProvider] Device reconnected - syncing contacts and missed messages',
+      );
+
+      await contactsProvider.initialize(
+        devicePublicKey: connectionProvider.deviceInfo.publicKey,
+      );
+      await connectionProvider.getContacts();
+
+      final messageCount = await connectionProvider.syncAllMessages();
+      debugPrint(
+        '📥 [AppProvider] Reconnect sync retrieved $messageCount message(s)',
+      );
+    } catch (e) {
+      debugPrint('❌ [AppProvider] Reconnect sync error: $e');
+    } finally {
+      _isReconnectSyncInProgress = false;
     }
   }
 
@@ -2637,6 +2671,8 @@ class AppProvider with ChangeNotifier {
   /// Handle connection state changes to manage location tracking
   void _handleConnectionStateChange() {
     final isConnected = connectionProvider.deviceInfo.isConnected;
+    final wasConnected = _wasDeviceConnected;
+    _wasDeviceConnected = isConnected;
     final wasTracking = locationTrackingService.isTracking;
 
     // Only stop tracking on disconnect - DON'T start on connect
@@ -2647,6 +2683,10 @@ class AppProvider with ChangeNotifier {
         '🔴 [AppProvider] BLE disconnected - stopping location tracking',
       );
       _stopLocationTracking();
+    }
+
+    if (isConnected && !wasConnected && _hasCompletedConnectionBootstrap) {
+      unawaited(_syncAfterReconnect());
     }
   }
 
