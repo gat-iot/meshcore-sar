@@ -19,6 +19,8 @@ class MessageStorageService {
       'stored_message_transfer_details';
   static const String _messageRouteMetadataKey =
       'stored_message_route_metadata';
+  static const String _embeddedReceptionDetailsKey = 'storedReceptionDetails';
+  static const String _legacyPathBytesKey = 'storedPathBytes';
   static const int _maxStoredMessages = 1000; // Store up to 1000 messages
 
   /// Save messages to persistent storage
@@ -32,8 +34,16 @@ class MessageStorageService {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Convert messages to JSON
-      final jsonList = messages.map((msg) => _messageToJson(msg)).toList();
+      // Convert messages to JSON and embed path bytes as a fallback so they
+      // survive restore even if the sidecar reception-details entry is absent.
+      final jsonList = messages
+          .map(
+            (msg) => _messageToJson(
+              msg,
+              receptionDetails: messageReceptionDetails[msg.id],
+            ),
+          )
+          .toList();
 
       // Limit to max stored messages (keep most recent)
       final limitedList = jsonList.length > _maxStoredMessages
@@ -129,24 +139,36 @@ class MessageStorageService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonString = prefs.getString(_messageReceptionDetailsKey);
-      if (jsonString == null || jsonString.isEmpty) {
-        return const {};
-      }
-
-      final decoded = jsonDecode(jsonString);
-      if (decoded is! Map<String, dynamic>) {
-        return const {};
-      }
-
       final result = <String, MessageReceptionDetails>{};
-      for (final entry in decoded.entries) {
-        final value = entry.value;
-        if (value is! Map<String, dynamic>) continue;
-        final snapshot = MessageReceptionDetails.fromJson(value);
-        if (snapshot != null) {
-          result[entry.key] = snapshot;
+      if (jsonString != null && jsonString.isNotEmpty) {
+        final decoded = jsonDecode(jsonString);
+        if (decoded is Map<String, dynamic>) {
+          for (final entry in decoded.entries) {
+            final value = entry.value;
+            if (value is! Map<String, dynamic>) continue;
+            final snapshot = MessageReceptionDetails.fromJson(value);
+            if (snapshot != null) {
+              result[entry.key] = snapshot;
+            }
+          }
         }
       }
+
+      final embeddedReceptionDetails = await _loadEmbeddedReceptionDetails();
+      embeddedReceptionDetails.forEach((messageId, snapshot) {
+        result.putIfAbsent(messageId, () => snapshot);
+      });
+
+      final fallbackPathBytes = await _loadLegacyPathBytesFromMessages();
+      fallbackPathBytes.forEach((messageId, pathBytes) {
+        result.putIfAbsent(
+          messageId,
+          () => MessageReceptionDetails(
+            capturedAt: DateTime.fromMillisecondsSinceEpoch(0),
+            pathBytes: pathBytes,
+          ),
+        );
+      });
       return result;
     } catch (e) {
       debugPrint('❌ [MessageStorage] Error loading reception details: $e');
@@ -278,7 +300,10 @@ class MessageStorageService {
   }
 
   /// Convert Message to JSON
-  Map<String, dynamic> _messageToJson(Message message) {
+  Map<String, dynamic> _messageToJson(
+    Message message, {
+    MessageReceptionDetails? receptionDetails,
+  }) {
     return {
       'id': message.id,
       'messageType': message.messageType.name,
@@ -338,7 +363,65 @@ class MessageStorageService {
             },
           )
           .toList(),
+      if (receptionDetails != null)
+        _embeddedReceptionDetailsKey: receptionDetails.toJson(),
+      if (receptionDetails?.pathBytes case final pathBytes?)
+        _legacyPathBytesKey: List<int>.from(pathBytes),
     };
+  }
+
+  Future<Map<String, MessageReceptionDetails>>
+  _loadEmbeddedReceptionDetails() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString(_messagesKey);
+    if (jsonString == null || jsonString.isEmpty) {
+      return const {};
+    }
+
+    final decoded = jsonDecode(jsonString);
+    if (decoded is! List) {
+      return const {};
+    }
+
+    final result = <String, MessageReceptionDetails>{};
+    for (final entry in decoded) {
+      if (entry is! Map<String, dynamic>) continue;
+      final messageId = entry['id'];
+      final embedded = entry[_embeddedReceptionDetailsKey];
+      if (messageId is! String || embedded is! Map<String, dynamic>) continue;
+      final snapshot = MessageReceptionDetails.fromJson(embedded);
+      if (snapshot == null) continue;
+      result[messageId] = snapshot;
+    }
+    return result;
+  }
+
+  Future<Map<String, List<int>>> _loadLegacyPathBytesFromMessages() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString(_messagesKey);
+    if (jsonString == null || jsonString.isEmpty) {
+      return const {};
+    }
+
+    final decoded = jsonDecode(jsonString);
+    if (decoded is! List) {
+      return const {};
+    }
+
+    final result = <String, List<int>>{};
+    for (final entry in decoded) {
+      if (entry is! Map<String, dynamic>) continue;
+      final messageId = entry['id'];
+      final pathBytes = entry[_legacyPathBytesKey];
+      if (messageId is! String || pathBytes is! List) continue;
+      final normalized = pathBytes
+          .whereType<num>()
+          .map((b) => b.toInt())
+          .toList();
+      if (normalized.isEmpty) continue;
+      result[messageId] = normalized;
+    }
+    return result;
   }
 
   /// Convert JSON to Message

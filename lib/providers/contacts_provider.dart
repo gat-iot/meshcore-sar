@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/contact.dart';
@@ -55,6 +56,7 @@ class _RetainedRoute {
 
 /// Contacts Provider - manages contact list and telemetry
 class ContactsProvider with ChangeNotifier {
+  static const double _firstHopFallbackOffsetMeters = 100.0;
   final Map<String, Contact> _contacts = {};
   final Map<String, PendingAdvert> _pendingAdverts = {};
   final ContactStorageService _storageService = ContactStorageService();
@@ -367,13 +369,36 @@ class ContactsProvider with ChangeNotifier {
       incomingContact: incomingContact,
       existingContact: existingContact,
     );
+    final mergedTelemetry = _mergeTelemetryForContact(
+      existingTelemetry: existingContact?.telemetry,
+      incomingTelemetry: incomingContact.telemetry,
+    );
+    final inferredFallbackLocation = _inferFirstHopFallbackLocation(
+      incomingContact: incomingContact,
+      existingContact: existingContact,
+      retainedRoute: retainedRoute,
+      mergedTelemetry: mergedTelemetry,
+    );
+    final inferredFallbackAdvLat = inferredFallbackLocation != null
+        ? _coordinateToAdvertMicrodegrees(inferredFallbackLocation.latitude)
+        : null;
+    final inferredFallbackAdvLon = inferredFallbackLocation != null
+        ? _coordinateToAdvertMicrodegrees(inferredFallbackLocation.longitude)
+        : null;
 
     if (existingContact == null) {
       var newContact = incomingContact.copyWith(
         isNew: true,
+        telemetry: mergedTelemetry,
         outPathLen:
             retainedRoute?.signedEncodedPathLen ?? incomingContact.outPathLen,
         outPath: retainedRoute?.paddedPathBytes ?? incomingContact.outPath,
+        advLat: incomingContact.advertLocation != null
+            ? incomingContact.advLat
+            : inferredFallbackAdvLat ?? incomingContact.advLat,
+        advLon: incomingContact.advertLocation != null
+            ? incomingContact.advLon
+            : inferredFallbackAdvLon ?? incomingContact.advLon,
       );
       if (incomingContact.advertLocation != null) {
         final timestamp = DateTime.fromMillisecondsSinceEpoch(
@@ -387,10 +412,6 @@ class ContactsProvider with ChangeNotifier {
       return newContact;
     }
 
-    final mergedTelemetry = _mergeTelemetryForContact(
-      existingTelemetry: existingContact.telemetry,
-      incomingTelemetry: incomingContact.telemetry,
-    );
     final incomingAdvertLocation = incomingContact.advertLocation;
     final existingAdvertLocation = existingContact.advertLocation;
 
@@ -405,12 +426,12 @@ class ContactsProvider with ChangeNotifier {
           ? incomingContact.advLat
           : existingAdvertLocation != null
           ? existingContact.advLat
-          : incomingContact.advLat,
+          : inferredFallbackAdvLat ?? incomingContact.advLat,
       advLon: incomingAdvertLocation != null
           ? incomingContact.advLon
           : existingAdvertLocation != null
           ? existingContact.advLon
-          : incomingContact.advLon,
+          : inferredFallbackAdvLon ?? incomingContact.advLon,
     );
 
     if (incomingAdvertLocation != null) {
@@ -455,6 +476,114 @@ class ContactsProvider with ChangeNotifier {
     }
 
     return null;
+  }
+
+  LatLng? _inferFirstHopFallbackLocation({
+    required Contact incomingContact,
+    required Contact? existingContact,
+    required _RetainedRoute? retainedRoute,
+    required ContactTelemetry? mergedTelemetry,
+  }) {
+    if (_getValidGpsOrNull(mergedTelemetry?.gpsLocation) != null) {
+      return null;
+    }
+    if (incomingContact.advertLocation != null ||
+        existingContact?.advertLocation != null) {
+      return null;
+    }
+
+    final routeBytes =
+        retainedRoute?.paddedPathBytes ??
+        (incomingContact.routeHasPath
+            ? incomingContact.routePathBytes
+            : existingContact?.routeHasPath == true
+            ? existingContact!.routePathBytes
+            : null);
+    final routeHashSize = retainedRoute != null
+        ? ((ContactRouteCodec.toUnsignedDescriptor(
+                    retainedRoute.signedEncodedPathLen,
+                  ) >>
+                  6) +
+              1)
+        : incomingContact.routeHasPath
+        ? incomingContact.routeHashSize
+        : existingContact?.routeHasPath == true
+        ? existingContact!.routeHashSize
+        : 0;
+    if (routeBytes == null ||
+        routeHashSize <= 0 ||
+        routeBytes.length < routeHashSize) {
+      return null;
+    }
+
+    final firstHopHex = routeBytes
+        .sublist(0, routeHashSize)
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
+    final repeaterCandidates = _contacts.values.where((candidate) {
+      if (!candidate.isRepeater ||
+          candidate.publicKeyHex == incomingContact.publicKeyHex) {
+        return false;
+      }
+      final location = candidate.displayLocation;
+      return location != null && candidate.publicKeyHex.startsWith(firstHopHex);
+    }).toList()..sort((a, b) => b.lastAdvert.compareTo(a.lastAdvert));
+    if (repeaterCandidates.isEmpty) {
+      return null;
+    }
+
+    final repeaterLocation = repeaterCandidates.first.displayLocation;
+    if (repeaterLocation == null) {
+      return null;
+    }
+
+    final bearingDegrees = _stableFallbackBearingDegrees(incomingContact);
+    return _offsetFromLocation(
+      repeaterLocation,
+      distanceMeters: _firstHopFallbackOffsetMeters,
+      bearingDegrees: bearingDegrees,
+    );
+  }
+
+  double _stableFallbackBearingDegrees(Contact contact) {
+    if (contact.publicKey.length < 2) {
+      return 90.0;
+    }
+    final seed = (contact.publicKey[0] << 8) | contact.publicKey[1];
+    return (seed % 360).toDouble();
+  }
+
+  LatLng _offsetFromLocation(
+    LatLng origin, {
+    required double distanceMeters,
+    required double bearingDegrees,
+  }) {
+    const earthRadiusMeters = 6371000.0;
+    final angularDistance = distanceMeters / earthRadiusMeters;
+    final bearingRadians = bearingDegrees * 3.1415926535897932 / 180.0;
+    final lat1 = origin.latitude * 3.1415926535897932 / 180.0;
+    final lon1 = origin.longitude * 3.1415926535897932 / 180.0;
+
+    final sinLat1 = sin(lat1);
+    final cosLat1 = cos(lat1);
+    final sinAngularDistance = sin(angularDistance);
+    final cosAngularDistance = cos(angularDistance);
+
+    final lat2 = asin(
+      sinLat1 * cosAngularDistance +
+          cosLat1 * sinAngularDistance * cos(bearingRadians),
+    );
+    final lon2 =
+        lon1 +
+        atan2(
+          sin(bearingRadians) * sinAngularDistance * cosLat1,
+          cosAngularDistance - sinLat1 * sin(lat2),
+        );
+
+    return LatLng(
+      lat2 * 180.0 / 3.1415926535897932,
+      ((lon2 * 180.0 / 3.1415926535897932 + 540.0) % 360.0) - 180.0,
+    );
   }
 
   /// Update contact telemetry

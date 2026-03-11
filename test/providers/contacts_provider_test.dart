@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:meshcore_sar_app/models/contact.dart';
@@ -521,6 +522,58 @@ void main() {
         ),
         isEmpty,
       );
+    });
+
+    test('infers a fallback location 100m from first-hop repeater', () {
+      final repeaterKey = Uint8List.fromList([
+        0xAA,
+        0xBB,
+        0x10,
+        0x11,
+        0x12,
+        0x13,
+        ...List<int>.generate(26, (index) => index + 20),
+      ]);
+      provider.addOrUpdateContact(
+        createContact(
+          key: repeaterKey,
+          type: ContactType.repeater,
+          name: 'Relay Alpha',
+        ),
+      );
+
+      final targetKey = createPublicKey(120);
+      final route = ContactRouteCodec.parse('AABB,CCDD');
+      provider.addOrUpdateContact(
+        Contact(
+          publicKey: targetKey,
+          type: ContactType.chat,
+          flags: 0,
+          outPathLen: route.signedEncodedPathLen,
+          outPath: route.paddedPathBytes,
+          advName: 'No GPS',
+          lastAdvert: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          advLat: 0,
+          advLon: 0,
+          lastMod: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        ),
+      );
+
+      final updated = provider.findContactByKey(targetKey)!;
+      final inferred = updated.displayLocation;
+      final repeater = provider.findContactByKey(repeaterKey)!;
+      final repeaterLocation = repeater.displayLocation;
+
+      expect(inferred, isNotNull);
+      expect(repeaterLocation, isNotNull);
+
+      final distanceMeters = Geolocator.distanceBetween(
+        repeaterLocation!.latitude,
+        repeaterLocation.longitude,
+        inferred!.latitude,
+        inferred.longitude,
+      );
+      expect(distanceMeters, closeTo(100.0, 8.0));
     });
   });
 
