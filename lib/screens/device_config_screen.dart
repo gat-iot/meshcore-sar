@@ -170,6 +170,12 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
   bool _telemetryEnabled = false;
   bool _repeatEnabled = false;
   bool _showCustomRadioSettings = false;
+  bool _isSavingPublicInfo = false;
+  bool _isSavingRadioSettings = false;
+  bool _publicInfoSaved = false;
+  bool _radioSettingsSaved = false;
+  String? _publicInfoError;
+  String? _radioSettingsError;
   String _selectedBandwidth = '62.5 kHz';
   int _selectedSpreadingFactor = 8;
   int _selectedCodingRate = 8;
@@ -336,10 +342,34 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
     });
   }
 
+  void _markPublicInfoDirty() {
+    if (_publicInfoSaved || _publicInfoError != null) {
+      setState(() {
+        _publicInfoSaved = false;
+        _publicInfoError = null;
+      });
+    }
+  }
+
+  void _markRadioSettingsDirty() {
+    if (_radioSettingsSaved || _radioSettingsError != null) {
+      setState(() {
+        _radioSettingsSaved = false;
+        _radioSettingsError = null;
+      });
+    }
+  }
+
   Future<void> _savePublicInfo() async {
     final connectionProvider = context.read<ConnectionProvider>();
     final deviceInfo = connectionProvider.deviceInfo;
     final validator = ValidationService();
+
+    setState(() {
+      _isSavingPublicInfo = true;
+      _publicInfoSaved = false;
+      _publicInfoError = null;
+    });
 
     try {
       // Save name
@@ -353,12 +383,10 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
         final latResult = validator.parseLatitude(_latController.text);
         if (!latResult.isSuccess) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(latResult.errorMessage!),
-                backgroundColor: Colors.red,
-              ),
-            );
+            setState(() {
+              _publicInfoError = latResult.errorMessage!;
+              _isSavingPublicInfo = false;
+            });
           }
           return;
         }
@@ -366,12 +394,10 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
         final lonResult = validator.parseLongitude(_lonController.text);
         if (!lonResult.isSuccess) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(lonResult.errorMessage!),
-                backgroundColor: Colors.red,
-              ),
-            );
+            setState(() {
+              _publicInfoError = lonResult.errorMessage!;
+              _isSavingPublicInfo = false;
+            });
           }
           return;
         }
@@ -405,23 +431,19 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
       await connectionProvider.refreshDeviceInfo();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.save),
-            backgroundColor: Colors.green,
-          ),
-        );
+        setState(() {
+          _isSavingPublicInfo = false;
+          _publicInfoSaved = true;
+        });
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.failedToSave(e.toString()),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() {
+          _isSavingPublicInfo = false;
+          _publicInfoError = AppLocalizations.of(
+            context,
+          )!.failedToSave(e.toString());
+        });
       }
     }
   }
@@ -431,17 +453,21 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
     final validator = ValidationService();
     final deviceInfo = connectionProvider.deviceInfo;
 
+    setState(() {
+      _isSavingRadioSettings = true;
+      _radioSettingsSaved = false;
+      _radioSettingsError = null;
+    });
+
     try {
       // Parse and validate frequency
       final freqResult = validator.parseFrequency(_freqController.text);
       if (!freqResult.isSuccess) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(freqResult.errorMessage!),
-              backgroundColor: Colors.red,
-            ),
-          );
+          setState(() {
+            _radioSettingsError = freqResult.errorMessage!;
+            _isSavingRadioSettings = false;
+          });
         }
         return;
       }
@@ -453,12 +479,10 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
       );
       if (!txPowerResult.isSuccess) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(txPowerResult.errorMessage!),
-              backgroundColor: Colors.red,
-            ),
-          );
+          setState(() {
+            _radioSettingsError = txPowerResult.errorMessage!;
+            _isSavingRadioSettings = false;
+          });
         }
         return;
       }
@@ -481,23 +505,19 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
       await connectionProvider.refreshDeviceInfo();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.save),
-            backgroundColor: Colors.green,
-          ),
-        );
+        setState(() {
+          _isSavingRadioSettings = false;
+          _radioSettingsSaved = true;
+        });
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.failedToSave(e.toString()),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() {
+          _isSavingRadioSettings = false;
+          _radioSettingsError = AppLocalizations.of(
+            context,
+          )!.failedToSave(e.toString());
+        });
       }
     }
   }
@@ -698,9 +718,7 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                       title: AppLocalizations.of(
                         context,
                       )!.telemetryAndLocationSharing,
-                      description: _telemetryEnabled
-                          ? 'Your location is shared with nearby devices.'
-                          : 'Your location is not being shared.',
+                      description: 'Share your location with nearby devices.',
                       accentColor: _telemetryEnabled
                           ? colorScheme.primary
                           : colorScheme.onSurfaceVariant,
@@ -709,6 +727,8 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                         onChanged: (value) {
                           setState(() {
                             _telemetryEnabled = value;
+                            _publicInfoSaved = false;
+                            _publicInfoError = null;
                           });
                         },
                       ),
@@ -716,6 +736,7 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                     const SizedBox(height: 18),
                     TextField(
                       controller: _nameController,
+                      onChanged: (_) => _markPublicInfoDirty(),
                       decoration: InputDecoration(
                         labelText: 'Device name',
                         border: OutlineInputBorder(
@@ -763,6 +784,7 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                                   child: _CompactCoordinateField(
                                     controller: _latController,
                                     label: 'Latitude',
+                                    onChanged: (_) => _markPublicInfoDirty(),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -770,6 +792,7 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                                   child: _CompactCoordinateField(
                                     controller: _lonController,
                                     label: 'Longitude',
+                                    onChanged: (_) => _markPublicInfoDirty(),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -787,12 +810,22 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                       ),
                     ],
                     const SizedBox(height: 18),
+                    if (_publicInfoError != null) ...[
+                      Text(
+                        _publicInfoError!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.error,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     SizedBox(
                       width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: _savePublicInfo,
-                        icon: const Icon(Icons.save_outlined),
-                        label: const Text('Save public info'),
+                      child: _SaveActionButton(
+                        onPressed: _isSavingPublicInfo ? null : _savePublicInfo,
+                        isSaving: _isSavingPublicInfo,
+                        isSaved: _publicInfoSaved,
+                        label: 'Save public info',
                       ),
                     ),
                   ],
@@ -839,10 +872,13 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                           setState(() {
                             _selectedRadioPreset = null;
                             _showCustomRadioSettings = true;
+                            _radioSettingsSaved = false;
+                            _radioSettingsError = null;
                           });
                           return;
                         }
                         _applyRadioPreset(preset);
+                        _markRadioSettingsDirty();
                       },
                     ),
                     const SizedBox(height: 16),
@@ -900,6 +936,7 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                                   _selectedRadioPreset = null;
                                 });
                               }
+                              _markRadioSettingsDirty();
                             },
                           ),
                           const SizedBox(height: 16),
@@ -927,6 +964,7 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                                   _selectedBandwidth = newValue;
                                   _selectedRadioPreset = null;
                                 });
+                                _markRadioSettingsDirty();
                               }
                             },
                           ),
@@ -957,6 +995,7 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                                   _selectedSpreadingFactor = newValue;
                                   _selectedRadioPreset = null;
                                 });
+                                _markRadioSettingsDirty();
                               }
                             },
                           ),
@@ -987,12 +1026,14 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                                   _selectedCodingRate = newValue;
                                   _selectedRadioPreset = null;
                                 });
+                                _markRadioSettingsDirty();
                               }
                             },
                           ),
                           const SizedBox(height: 16),
                           TextField(
                             controller: _txPowerController,
+                            onChanged: (_) => _markRadioSettingsDirty(),
                             decoration: InputDecoration(
                               labelText: AppLocalizations.of(
                                 context,
@@ -1027,18 +1068,32 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
                           onChanged: (value) {
                             setState(() {
                               _repeatEnabled = value;
+                              _radioSettingsSaved = false;
+                              _radioSettingsError = null;
                             });
                           },
                         ),
                       ),
                     ],
                     const SizedBox(height: 18),
+                    if (_radioSettingsError != null) ...[
+                      Text(
+                        _radioSettingsError!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.error,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     SizedBox(
                       width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: _saveRadioSettings,
-                        icon: const Icon(Icons.save_outlined),
-                        label: const Text('Save radio settings'),
+                      child: _SaveActionButton(
+                        onPressed: _isSavingRadioSettings
+                            ? null
+                            : _saveRadioSettings,
+                        isSaving: _isSavingRadioSettings,
+                        isSaved: _radioSettingsSaved,
+                        label: 'Save radio settings',
                       ),
                     ),
                   ],
@@ -1381,16 +1436,19 @@ class _StorageStat extends StatelessWidget {
 class _CompactCoordinateField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
+  final ValueChanged<String>? onChanged;
 
   const _CompactCoordinateField({
     required this.controller,
     required this.label,
+    this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
@@ -1507,6 +1565,53 @@ class _SelectedPresetCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SaveActionButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final bool isSaving;
+  final bool isSaved;
+  final String label;
+
+  const _SaveActionButton({
+    required this.onPressed,
+    required this.isSaving,
+    required this.isSaved,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton(
+      onPressed: onPressed,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 180),
+        child: isSaving
+            ? Row(
+                key: const ValueKey('saving'),
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2.2),
+                  ),
+                  SizedBox(width: 10),
+                  Text('Saving...'),
+                ],
+              )
+            : Row(
+                key: ValueKey(isSaved ? 'saved' : 'idle'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(isSaved ? Icons.check_rounded : Icons.save_outlined),
+                  const SizedBox(width: 8),
+                  Text(isSaved ? 'Saved' : label),
+                ],
+              ),
       ),
     );
   }
