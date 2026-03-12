@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../models/device_info.dart';
@@ -15,6 +14,153 @@ class DeviceConfigScreen extends StatefulWidget {
 }
 
 class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
+  static const List<_RadioPreset> _radioPresets = [
+    _RadioPreset(
+      id: 'australia',
+      label: 'Australia',
+      summary: '915.800 MHz, BW 250 kHz, SF10, CR5',
+      frequencyKhz: 915800,
+      bandwidth: 8,
+      spreadingFactor: 10,
+      codingRate: 5,
+    ),
+    _RadioPreset(
+      id: 'australia_narrow',
+      label: 'Australia (Narrow)',
+      summary: '916.575 MHz, BW 62.5 kHz, SF7, CR8',
+      frequencyKhz: 916575,
+      bandwidth: 6,
+      spreadingFactor: 7,
+      codingRate: 8,
+    ),
+    _RadioPreset(
+      id: 'australia_sa_wa',
+      label: 'Australia: SA, WA',
+      summary: '923.125 MHz, BW 62.5 kHz, SF8, CR8',
+      frequencyKhz: 923125,
+      bandwidth: 6,
+      spreadingFactor: 8,
+      codingRate: 8,
+    ),
+    _RadioPreset(
+      id: 'australia_qld',
+      label: 'Australia: QLD',
+      summary: '923.125 MHz, BW 62.5 kHz, SF8, CR5',
+      frequencyKhz: 923125,
+      bandwidth: 6,
+      spreadingFactor: 8,
+      codingRate: 5,
+    ),
+    _RadioPreset(
+      id: 'eu_uk_narrow',
+      label: 'EU/UK (Narrow)',
+      summary: '869.618 MHz, BW 62.5 kHz, SF8, CR8',
+      frequencyKhz: 869618,
+      bandwidth: 6,
+      spreadingFactor: 8,
+      codingRate: 8,
+    ),
+    _RadioPreset(
+      id: 'eu_uk_deprecated',
+      label: 'EU/UK (Deprecated)',
+      summary: '869.525 MHz, BW 250 kHz, SF11, CR5',
+      frequencyKhz: 869525,
+      bandwidth: 8,
+      spreadingFactor: 11,
+      codingRate: 5,
+    ),
+    _RadioPreset(
+      id: 'czech_republic_narrow',
+      label: 'Czech Republic (Narrow)',
+      summary: '869.432 MHz, BW 62.5 kHz, SF7, CR5',
+      frequencyKhz: 869432,
+      bandwidth: 6,
+      spreadingFactor: 7,
+      codingRate: 5,
+    ),
+    _RadioPreset(
+      id: 'eu_433_long_range',
+      label: 'EU 433MHz (Long Range)',
+      summary: '433.650 MHz, BW 250 kHz, SF11, CR5',
+      frequencyKhz: 433650,
+      bandwidth: 8,
+      spreadingFactor: 11,
+      codingRate: 5,
+    ),
+    _RadioPreset(
+      id: 'new_zealand',
+      label: 'New Zealand',
+      summary: '917.375 MHz, BW 250 kHz, SF11, CR5',
+      frequencyKhz: 917375,
+      bandwidth: 8,
+      spreadingFactor: 11,
+      codingRate: 5,
+    ),
+    _RadioPreset(
+      id: 'new_zealand_narrow',
+      label: 'New Zealand (Narrow)',
+      summary: '917.375 MHz, BW 62.5 kHz, SF7, CR5',
+      frequencyKhz: 917375,
+      bandwidth: 6,
+      spreadingFactor: 7,
+      codingRate: 5,
+    ),
+    _RadioPreset(
+      id: 'portugal_433',
+      label: 'Portugal 433',
+      summary: '433.375 MHz, BW 62.5 kHz, SF9, CR6',
+      frequencyKhz: 433375,
+      bandwidth: 6,
+      spreadingFactor: 9,
+      codingRate: 6,
+    ),
+    _RadioPreset(
+      id: 'portugal_868',
+      label: 'Portugal 868',
+      summary: '869.618 MHz, BW 62.5 kHz, SF7, CR6',
+      frequencyKhz: 869618,
+      bandwidth: 6,
+      spreadingFactor: 7,
+      codingRate: 6,
+    ),
+    _RadioPreset(
+      id: 'switzerland',
+      label: 'Switzerland',
+      summary: '869.618 MHz, BW 62.5 kHz, SF8, CR8',
+      frequencyKhz: 869618,
+      bandwidth: 6,
+      spreadingFactor: 8,
+      codingRate: 8,
+    ),
+    _RadioPreset(
+      id: 'usa_canada_recommended',
+      label: 'USA/Canada (Recommended)',
+      summary: '910.525 MHz, BW 62.5 kHz, SF7, CR5',
+      frequencyKhz: 910525,
+      bandwidth: 6,
+      spreadingFactor: 7,
+      codingRate: 5,
+    ),
+    _RadioPreset(
+      id: 'vietnam_narrow',
+      label: 'Vietnam (Narrow)',
+      summary: '920.250 MHz, BW 62.5 kHz, SF8, CR5',
+      frequencyKhz: 920250,
+      bandwidth: 6,
+      spreadingFactor: 8,
+      codingRate: 5,
+    ),
+    _RadioPreset(
+      id: 'vietnam_deprecated',
+      label: 'Vietnam (Deprecated)',
+      summary: '920.250 MHz, BW 250 kHz, SF11, CR5',
+      frequencyKhz: 920250,
+      bandwidth: 8,
+      spreadingFactor: 11,
+      codingRate: 5,
+    ),
+  ];
+
   late TextEditingController _nameController;
   late TextEditingController _latController;
   late TextEditingController _lonController;
@@ -23,9 +169,11 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
 
   bool _telemetryEnabled = false;
   bool _repeatEnabled = false;
+  bool _showCustomRadioSettings = false;
   String _selectedBandwidth = '62.5 kHz';
   int _selectedSpreadingFactor = 8;
   int _selectedCodingRate = 8;
+  _RadioPreset? _selectedRadioPreset;
 
   final List<String> _bandwidthOptions = [
     '7.8 kHz',
@@ -82,6 +230,14 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
         deviceInfo.radioCr! <= 8) {
       _selectedCodingRate = deviceInfo.radioCr!;
     }
+
+    _selectedRadioPreset = _matchRadioPreset(
+      frequencyKhz: deviceInfo.radioFreq,
+      bandwidth: deviceInfo.radioBw,
+      spreadingFactor: deviceInfo.radioSf,
+      codingRate: deviceInfo.radioCr,
+    );
+    _showCustomRadioSettings = _selectedRadioPreset == null;
 
     // Check if telemetry is enabled (check if lat/lon are set and not zero)
     _telemetryEnabled =
@@ -143,6 +299,41 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
 
   int _bandwidthToValue(String bw) {
     return _bandwidthOptions.indexOf(bw);
+  }
+
+  _RadioPreset? _matchRadioPreset({
+    int? frequencyKhz,
+    int? bandwidth,
+    int? spreadingFactor,
+    int? codingRate,
+  }) {
+    if (frequencyKhz == null ||
+        bandwidth == null ||
+        spreadingFactor == null ||
+        codingRate == null) {
+      return null;
+    }
+
+    for (final preset in _radioPresets) {
+      if (preset.frequencyKhz == frequencyKhz &&
+          preset.bandwidth == bandwidth &&
+          preset.spreadingFactor == spreadingFactor &&
+          preset.codingRate == codingRate) {
+        return preset;
+      }
+    }
+    return null;
+  }
+
+  void _applyRadioPreset(_RadioPreset preset) {
+    setState(() {
+      _selectedRadioPreset = preset;
+      _freqController.text = (preset.frequencyKhz / 1000).toStringAsFixed(3);
+      _selectedBandwidth = _bandwidthFromValue(preset.bandwidth);
+      _selectedSpreadingFactor = preset.spreadingFactor;
+      _selectedCodingRate = preset.codingRate;
+      _showCustomRadioSettings = false;
+    });
   }
 
   Future<void> _savePublicInfo() async {
@@ -410,389 +601,451 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(AppLocalizations.of(context)!.settings)),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
-            _ConfigHeroCard(
-              title: deviceInfo.selfName ?? deviceInfo.deviceName ?? 'MeshCore',
-              subtitle:
-                  '${_getDeviceTypeString(context, deviceInfo.deviceType)} • ${deviceInfo.semanticVersion ?? deviceInfo.manufacturerModel ?? AppLocalizations.of(context)!.unknown}',
-              chips: [
-                _StatusChipData(
-                  icon: Icons.bluetooth,
-                  label:
-                      '${AppLocalizations.of(context)!.bleName}: ${deviceInfo.deviceName ?? AppLocalizations.of(context)!.unknown}',
-                ),
-                _StatusChipData(
-                  icon: Icons.my_location,
-                  label: locationSet ? 'Location ready' : 'Location off',
-                  emphasized: locationSet,
-                ),
-                _StatusChipData(
-                  icon: Icons.settings_input_antenna,
-                  label: '${_freqController.text} MHz • $_selectedBandwidth',
-                ),
-                _StatusChipData(
-                  icon: Icons.key,
-                  label: 'FW v${deviceInfo.firmwareVersion?.toString() ?? "?"}',
-                ),
-                if (deviceInfo.storageUsedKb != null &&
-                    deviceInfo.storageTotalKb != null)
-                  _StatusChipData(
-                    icon: Icons.storage_rounded,
-                    label:
-                        '${_formatStorage(deviceInfo.storageUsedKb!)} / ${_formatStorage(deviceInfo.storageTotalKb!)}',
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              colorScheme.primaryContainer.withValues(alpha: 0.55),
+              colorScheme.surface,
+              colorScheme.surface,
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: const [0.0, 0.22, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: [
+              _ConfigHeroCard(
+                title:
+                    deviceInfo.selfName ?? deviceInfo.deviceName ?? 'MeshCore',
+                subtitle:
+                    '${_getDeviceTypeString(context, deviceInfo.deviceType)} • ${deviceInfo.semanticVersion ?? deviceInfo.manufacturerModel ?? AppLocalizations.of(context)!.unknown}',
+                stats: [
+                  _HeroStatData(
+                    label: 'Location',
+                    value: locationSet ? 'Shared' : 'Hidden',
+                    icon: Icons.my_location_rounded,
+                    emphasized: locationSet,
                   ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _ConfigSectionCard(
-              title: AppLocalizations.of(context)!.deviceInformation,
-              subtitle:
-                  '${deviceInfo.manufacturerModel ?? AppLocalizations.of(context)!.unknown} • ${deviceInfo.firmwareBuildDate ?? AppLocalizations.of(context)!.unknown}',
-              icon: Icons.memory_rounded,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _InfoRow(
-                    AppLocalizations.of(context)!.bleName,
-                    deviceInfo.deviceName ??
+                  _HeroStatData(
+                    label: 'Frequency',
+                    value: '${_freqController.text} MHz',
+                    icon: Icons.settings_input_antenna_rounded,
+                  ),
+                  _HeroStatData(
+                    label: 'Bandwidth',
+                    value: _selectedBandwidth,
+                    icon: Icons.width_normal_rounded,
+                  ),
+                  _HeroStatData(
+                    label: 'Model',
+                    value:
+                        deviceInfo.manufacturerModel ??
                         AppLocalizations.of(context)!.unknown,
-                  ),
-                  _InfoRow(
-                    AppLocalizations.of(context)!.meshName,
-                    deviceInfo.selfName ?? AppLocalizations.of(context)!.notSet,
-                  ),
-                  _InfoRow(
-                    AppLocalizations.of(context)!.type,
-                    _getDeviceTypeString(context, deviceInfo.deviceType),
-                  ),
-                  _InfoRow(
-                    AppLocalizations.of(context)!.model,
-                    deviceInfo.manufacturerModel ??
-                        AppLocalizations.of(context)!.unknown,
-                  ),
-                  _InfoRow(
-                    AppLocalizations.of(context)!.version,
-                    deviceInfo.semanticVersion ??
-                        AppLocalizations.of(context)!.unknown,
-                  ),
-                  _InfoRow(
-                    AppLocalizations.of(context)!.buildDate,
-                    deviceInfo.firmwareBuildDate ??
-                        AppLocalizations.of(context)!.unknown,
-                  ),
-                  _InfoRow(
-                    AppLocalizations.of(context)!.firmware,
-                    'v${deviceInfo.firmwareVersion?.toString() ?? "?"}',
-                  ),
-                  _InfoRow(
-                    AppLocalizations.of(context)!.maxContacts,
-                    deviceInfo.maxContacts?.toString() ??
-                        AppLocalizations.of(context)!.unknown,
-                  ),
-                  _InfoRow(
-                    AppLocalizations.of(context)!.maxChannels,
-                    deviceInfo.maxChannels?.toString() ??
-                        AppLocalizations.of(context)!.unknown,
-                  ),
-                  _InfoRow(
-                    'Storage used',
-                    _formatStorageValue(deviceInfo.storageUsedKb),
-                  ),
-                  _InfoRow(
-                    'Storage limit',
-                    _formatStorageValue(deviceInfo.storageTotalKb),
-                  ),
-                  _InfoRow('Storage status', _formatStorageStatus(deviceInfo)),
-                  if (deviceInfo.storageUsedPercent != null) ...[
-                    const SizedBox(height: 10),
-                    _StorageUsageMeter(deviceInfo: deviceInfo),
-                  ],
-                  _CopyableInfoRow(
-                    AppLocalizations.of(context)!.publicKey,
-                    _getPublicKeyHex(deviceInfo.publicKey),
+                    icon: Icons.memory_rounded,
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
-            _ConfigSectionCard(
-              title: AppLocalizations.of(context)!.publicInfo,
-              subtitle: AppLocalizations.of(context)!.nameBroadcastInMesh,
-              icon: Icons.public_rounded,
-              trailing: FilledButton.icon(
-                onPressed: _savePublicInfo,
-                icon: const Icon(Icons.save_outlined),
-                label: Text(AppLocalizations.of(context)!.save),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest.withValues(
-                        alpha: 0.45,
-                      ),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _telemetryEnabled
-                              ? Icons.travel_explore
-                              : Icons.location_disabled,
-                          color: _telemetryEnabled
-                              ? colorScheme.primary
-                              : colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                AppLocalizations.of(
-                                  context,
-                                )!.telemetryAndLocationSharing,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _telemetryEnabled
-                                    ? 'This device advertises position data to the mesh.'
-                                    : 'Position broadcasting is currently disabled.',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Switch(
-                          value: _telemetryEnabled,
-                          onChanged: (value) {
-                            setState(() {
-                              _telemetryEnabled = value;
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  TextField(
-                    controller: _nameController,
-                    decoration: InputDecoration(
-                      labelText: AppLocalizations.of(context)!.meshNetworkName,
-                      border: const OutlineInputBorder(),
-                      helperText: AppLocalizations.of(
-                        context,
-                      )!.nameBroadcastInMesh,
-                    ),
-                  ),
-                  if (_telemetryEnabled) ...[
-                    const SizedBox(height: 16),
+              const SizedBox(height: 20),
+              _ConfigSectionCard(
+                title: 'Storage',
+                subtitle: 'Available space on this device.',
+                icon: Icons.storage_rounded,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
                       children: [
                         Expanded(
-                          child: _CompactCoordinateField(
-                            controller: _latController,
-                            label: AppLocalizations.of(context)!.lat,
+                          child: _StorageStat(
+                            label: 'Used',
+                            value: _formatStorage(
+                              deviceInfo.storageUsedKb ?? 0,
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: _CompactCoordinateField(
-                            controller: _lonController,
-                            label: AppLocalizations.of(context)!.lon,
+                          child: _StorageStat(
+                            label: 'Total',
+                            value: deviceInfo.storageTotalKb != null
+                                ? _formatStorage(deviceInfo.storageTotalKb!)
+                                : AppLocalizations.of(context)!.unknown,
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton.filled(
-                          onPressed: _useCurrentLocation,
-                          icon: const Icon(Icons.my_location, size: 20),
-                          tooltip: AppLocalizations.of(
-                            context,
-                          )!.useCurrentLocation,
                         ),
                       ],
                     ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            _ConfigSectionCard(
-              title: AppLocalizations.of(context)!.radioSettings,
-              subtitle:
-                  '${_freqController.text} MHz • SF$_selectedSpreadingFactor • CR$_selectedCodingRate',
-              icon: Icons.settings_input_antenna_rounded,
-              trailing: FilledButton.icon(
-                onPressed: _saveRadioSettings,
-                icon: const Icon(Icons.save_outlined),
-                label: Text(AppLocalizations.of(context)!.save),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _RadioMetricTile(
-                          label: AppLocalizations.of(context)!.bandwidth,
-                          value: _selectedBandwidth,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _RadioMetricTile(
-                          label: AppLocalizations.of(context)!.spreadingFactor,
-                          value: 'SF$_selectedSpreadingFactor',
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _RadioMetricTile(
-                          label: AppLocalizations.of(context)!.codingRate,
-                          value: 'CR$_selectedCodingRate',
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _freqController,
-                    decoration: InputDecoration(
-                      labelText: AppLocalizations.of(context)!.frequencyMHz,
-                      border: const OutlineInputBorder(),
-                      helperText: AppLocalizations.of(
-                        context,
-                      )!.frequencyExample,
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedBandwidth,
-                    decoration: InputDecoration(
-                      labelText: AppLocalizations.of(context)!.bandwidth,
-                      border: const OutlineInputBorder(),
-                    ),
-                    items: _bandwidthOptions.map((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }).toList(),
-                    onChanged: (String? newValue) {
-                      if (newValue != null) {
-                        setState(() {
-                          _selectedBandwidth = newValue;
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<int>(
-                    initialValue: _selectedSpreadingFactor,
-                    decoration: InputDecoration(
-                      labelText: AppLocalizations.of(context)!.spreadingFactor,
-                      border: const OutlineInputBorder(),
-                    ),
-                    items: List.generate(6, (index) => index + 7).map((
-                      int value,
-                    ) {
-                      return DropdownMenuItem<int>(
-                        value: value,
-                        child: Text(value.toString()),
-                      );
-                    }).toList(),
-                    onChanged: (int? newValue) {
-                      if (newValue != null) {
-                        setState(() {
-                          _selectedSpreadingFactor = newValue;
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<int>(
-                    initialValue: _selectedCodingRate,
-                    decoration: InputDecoration(
-                      labelText: AppLocalizations.of(context)!.codingRate,
-                      border: const OutlineInputBorder(),
-                    ),
-                    items: List.generate(4, (index) => index + 5).map((
-                      int value,
-                    ) {
-                      return DropdownMenuItem<int>(
-                        value: value,
-                        child: Text(value.toString()),
-                      );
-                    }).toList(),
-                    onChanged: (int? newValue) {
-                      if (newValue != null) {
-                        setState(() {
-                          _selectedCodingRate = newValue;
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _txPowerController,
-                    decoration: InputDecoration(
-                      labelText: AppLocalizations.of(context)!.txPowerDbm,
-                      border: const OutlineInputBorder(),
-                      helperText: AppLocalizations.of(
-                        context,
-                      )!.maxPowerDbm(deviceInfo.maxTxPower ?? 22),
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  if (deviceInfo.clientRepeat != null) ...[
                     const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerHighest.withValues(
-                          alpha: 0.45,
-                        ),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Client Repeat Mode'),
-                        subtitle:
-                            deviceInfo.allowedRepeatFreqRanges != null &&
-                                deviceInfo.allowedRepeatFreqRanges!.isNotEmpty
-                            ? Text(
-                                'Allowed: ${deviceInfo.allowedRepeatFreqRanges!.map((r) => r.lower == r.upper ? '${(r.lower / 1000).toStringAsFixed(3)} MHz' : '${(r.lower / 1000).toStringAsFixed(3)}–${(r.upper / 1000).toStringAsFixed(3)} MHz').join(', ')}',
-                              )
-                            : const Text(
-                                'Repeat packets on behalf of nearby nodes',
-                              ),
-                        value: _repeatEnabled,
+                    _StorageUsageMeter(deviceInfo: deviceInfo),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              _ConfigSectionCard(
+                title: AppLocalizations.of(context)!.publicInfo,
+                subtitle: 'Choose the name and location this device shares.',
+                icon: Icons.public_rounded,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SettingHighlightCard(
+                      icon: _telemetryEnabled
+                          ? Icons.travel_explore
+                          : Icons.location_disabled,
+                      title: AppLocalizations.of(
+                        context,
+                      )!.telemetryAndLocationSharing,
+                      description: _telemetryEnabled
+                          ? 'Your location is shared with nearby devices.'
+                          : 'Your location is not being shared.',
+                      accentColor: _telemetryEnabled
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                      trailing: Switch(
+                        value: _telemetryEnabled,
                         onChanged: (value) {
                           setState(() {
-                            _repeatEnabled = value;
+                            _telemetryEnabled = value;
                           });
                         },
                       ),
                     ),
+                    const SizedBox(height: 18),
+                    TextField(
+                      controller: _nameController,
+                      decoration: InputDecoration(
+                        labelText: 'Device name',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerLowest,
+                        helperText:
+                            'This is the name other devices will see on the mesh.',
+                      ),
+                    ),
+                    if (_telemetryEnabled) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.7,
+                            ),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Shared location',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Set coordinates manually or use your current location.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _CompactCoordinateField(
+                                    controller: _latController,
+                                    label: 'Latitude',
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _CompactCoordinateField(
+                                    controller: _lonController,
+                                    label: 'Longitude',
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton.filledTonal(
+                                  onPressed: _useCurrentLocation,
+                                  icon: const Icon(Icons.my_location, size: 20),
+                                  tooltip: AppLocalizations.of(
+                                    context,
+                                  )!.useCurrentLocation,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _savePublicInfo,
+                        icon: const Icon(Icons.save_outlined),
+                        label: const Text('Save public info'),
+                      ),
+                    ),
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+              _ConfigSectionCard(
+                title: AppLocalizations.of(context)!.radioSettings,
+                subtitle: 'Choose a preset or fine-tune custom radio settings.',
+                icon: Icons.settings_input_antenna_rounded,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DropdownButtonFormField<_RadioPreset?>(
+                      initialValue: _selectedRadioPreset,
+                      decoration: InputDecoration(
+                        labelText: 'Radio preset',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerLowest,
+                        helperText:
+                            'Start with an official preset, or switch to custom settings below.',
+                      ),
+                      isExpanded: true,
+                      items: [
+                        const DropdownMenuItem<_RadioPreset?>(
+                          value: null,
+                          child: Text('Custom'),
+                        ),
+                        ..._radioPresets.map(
+                          (preset) => DropdownMenuItem<_RadioPreset?>(
+                            value: preset,
+                            child: Text(
+                              preset.label,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (preset) {
+                        if (preset == null) {
+                          setState(() {
+                            _selectedRadioPreset = null;
+                            _showCustomRadioSettings = true;
+                          });
+                          return;
+                        }
+                        _applyRadioPreset(preset);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    if (_selectedRadioPreset != null)
+                      _SelectedPresetCard(preset: _selectedRadioPreset!),
+                    const SizedBox(height: 8),
+                    Theme(
+                      data: theme.copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: EdgeInsets.zero,
+                        initiallyExpanded: _showCustomRadioSettings,
+                        onExpansionChanged: (expanded) {
+                          setState(() {
+                            _showCustomRadioSettings = expanded;
+                            if (expanded) {
+                              _selectedRadioPreset = null;
+                            }
+                          });
+                        },
+                        title: Text(
+                          'Custom settings',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Adjust frequency, bandwidth, spreading factor, coding rate, and power.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        children: [
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _freqController,
+                            decoration: InputDecoration(
+                              labelText: AppLocalizations.of(
+                                context,
+                              )!.frequencyMHz,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              filled: true,
+                              fillColor: colorScheme.surfaceContainerLowest,
+                              helperText:
+                                  'Enter the channel frequency, for example 869.618.',
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            onChanged: (_) {
+                              if (_selectedRadioPreset != null) {
+                                setState(() {
+                                  _selectedRadioPreset = null;
+                                });
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<String>(
+                            initialValue: _selectedBandwidth,
+                            decoration: InputDecoration(
+                              labelText: AppLocalizations.of(
+                                context,
+                              )!.bandwidth,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              filled: true,
+                              fillColor: colorScheme.surfaceContainerLowest,
+                            ),
+                            items: _bandwidthOptions.map((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(value),
+                              );
+                            }).toList(),
+                            onChanged: (String? newValue) {
+                              if (newValue != null) {
+                                setState(() {
+                                  _selectedBandwidth = newValue;
+                                  _selectedRadioPreset = null;
+                                });
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<int>(
+                            initialValue: _selectedSpreadingFactor,
+                            decoration: InputDecoration(
+                              labelText: AppLocalizations.of(
+                                context,
+                              )!.spreadingFactor,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              filled: true,
+                              fillColor: colorScheme.surfaceContainerLowest,
+                            ),
+                            items: List.generate(6, (index) => index + 7).map((
+                              int value,
+                            ) {
+                              return DropdownMenuItem<int>(
+                                value: value,
+                                child: Text(value.toString()),
+                              );
+                            }).toList(),
+                            onChanged: (int? newValue) {
+                              if (newValue != null) {
+                                setState(() {
+                                  _selectedSpreadingFactor = newValue;
+                                  _selectedRadioPreset = null;
+                                });
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<int>(
+                            initialValue: _selectedCodingRate,
+                            decoration: InputDecoration(
+                              labelText: AppLocalizations.of(
+                                context,
+                              )!.codingRate,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              filled: true,
+                              fillColor: colorScheme.surfaceContainerLowest,
+                            ),
+                            items: List.generate(4, (index) => index + 5).map((
+                              int value,
+                            ) {
+                              return DropdownMenuItem<int>(
+                                value: value,
+                                child: Text(value.toString()),
+                              );
+                            }).toList(),
+                            onChanged: (int? newValue) {
+                              if (newValue != null) {
+                                setState(() {
+                                  _selectedCodingRate = newValue;
+                                  _selectedRadioPreset = null;
+                                });
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _txPowerController,
+                            decoration: InputDecoration(
+                              labelText: AppLocalizations.of(
+                                context,
+                              )!.txPowerDbm,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              filled: true,
+                              fillColor: colorScheme.surfaceContainerLowest,
+                              helperText: AppLocalizations.of(
+                                context,
+                              )!.maxPowerDbm(deviceInfo.maxTxPower ?? 22),
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (deviceInfo.clientRepeat != null) ...[
+                      const SizedBox(height: 16),
+                      _SettingHighlightCard(
+                        icon: Icons.repeat_rounded,
+                        title: 'Repeat nearby traffic',
+                        description:
+                            deviceInfo.allowedRepeatFreqRanges != null &&
+                                deviceInfo.allowedRepeatFreqRanges!.isNotEmpty
+                            ? 'Available on: ${deviceInfo.allowedRepeatFreqRanges!.map((r) => r.lower == r.upper ? '${(r.lower / 1000).toStringAsFixed(3)} MHz' : '${(r.lower / 1000).toStringAsFixed(3)}–${(r.upper / 1000).toStringAsFixed(3)} MHz').join(', ')}'
+                            : 'Help extend range by repeating packets for nearby devices.',
+                        accentColor: colorScheme.secondary,
+                        trailing: Switch(
+                          value: _repeatEnabled,
+                          onChanged: (value) {
+                            setState(() {
+                              _repeatEnabled = value;
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _saveRadioSettings,
+                        icon: const Icon(Icons.save_outlined),
+                        label: const Text('Save radio settings'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -814,30 +1067,6 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
     }
   }
 
-  String _getPublicKeyHex(List<int>? publicKey) {
-    if (publicKey == null || publicKey.isEmpty) return 'N/A';
-    return publicKey.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
-  }
-
-  String _formatStorageValue(int? storageKb) {
-    if (storageKb == null) {
-      return AppLocalizations.of(context)!.unknown;
-    }
-    return _formatStorage(storageKb);
-  }
-
-  String _formatStorageStatus(DeviceInfo deviceInfo) {
-    final used = deviceInfo.storageUsedKb;
-    final total = deviceInfo.storageTotalKb;
-    final percent = deviceInfo.storageUsedPercent;
-
-    if (used == null || total == null || percent == null) {
-      return AppLocalizations.of(context)!.unknown;
-    }
-
-    return '${percent.toStringAsFixed(0)}% full (${_formatStorage(total - used)} free)';
-  }
-
   String _formatStorage(int storageKb) {
     if (storageKb >= 1024 * 1024) {
       return '${(storageKb / (1024 * 1024)).toStringAsFixed(2)} GB';
@@ -852,12 +1081,12 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
 class _ConfigHeroCard extends StatelessWidget {
   final String title;
   final String subtitle;
-  final List<_StatusChipData> chips;
+  final List<_HeroStatData> stats;
 
   const _ConfigHeroCard({
     required this.title,
     required this.subtitle,
-    required this.chips,
+    required this.stats,
   });
 
   @override
@@ -866,17 +1095,28 @@ class _ConfigHeroCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
             colorScheme.primaryContainer,
+            colorScheme.primary.withValues(alpha: 0.14),
             colorScheme.surfaceContainerHighest,
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: colorScheme.onPrimaryContainer.withValues(alpha: 0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.primary.withValues(alpha: 0.10),
+            blurRadius: 26,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -884,8 +1124,8 @@ class _ConfigHeroCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: 56,
+                height: 56,
                 decoration: BoxDecoration(
                   color: colorScheme.onPrimaryContainer.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(18),
@@ -900,6 +1140,26 @@ class _ConfigHeroCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.onPrimaryContainer.withValues(
+                          alpha: 0.10,
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        'Device settings',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     Text(
                       title,
                       style: theme.textTheme.headlineSmall?.copyWith(
@@ -914,6 +1174,7 @@ class _ConfigHeroCard extends StatelessWidget {
                         color: colorScheme.onPrimaryContainer.withValues(
                           alpha: 0.82,
                         ),
+                        height: 1.35,
                       ),
                     ),
                   ],
@@ -921,11 +1182,83 @@ class _ConfigHeroCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: chips.map(_StatusChip.new).toList(),
+            children: stats.map(_HeroStat.new).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroStatData {
+  final String label;
+  final String value;
+  final IconData icon;
+  final bool emphasized;
+
+  const _HeroStatData({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.emphasized = false,
+  });
+}
+
+class _HeroStat extends StatelessWidget {
+  final _HeroStatData data;
+
+  const _HeroStat(this.data);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final background = data.emphasized
+        ? colorScheme.primary.withValues(alpha: 0.18)
+        : colorScheme.onPrimaryContainer.withValues(alpha: 0.10);
+
+    return Container(
+      constraints: const BoxConstraints(minWidth: 140),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colorScheme.onPrimaryContainer.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(data.icon, size: 18, color: colorScheme.onPrimaryContainer),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  data.label,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colorScheme.onPrimaryContainer.withValues(
+                      alpha: 0.76,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  data.value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -938,14 +1271,12 @@ class _ConfigSectionCard extends StatelessWidget {
   final String subtitle;
   final IconData icon;
   final Widget child;
-  final Widget? trailing;
 
   const _ConfigSectionCard({
     required this.title,
     required this.subtitle,
     required this.icon,
     required this.child,
-    this.trailing,
   });
 
   @override
@@ -954,7 +1285,9 @@ class _ConfigSectionCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Card(
+      elevation: 0,
       clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
@@ -988,12 +1321,12 @@ class _ConfigSectionCard extends StatelessWidget {
                         subtitle,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
+                          height: 1.35,
                         ),
                       ),
                     ],
                   ),
                 ),
-                if (trailing != null) ...[const SizedBox(width: 12), trailing!],
               ],
             ),
             const SizedBox(height: 18),
@@ -1005,47 +1338,38 @@ class _ConfigSectionCard extends StatelessWidget {
   }
 }
 
-class _StatusChipData {
-  final IconData icon;
+class _StorageStat extends StatelessWidget {
   final String label;
-  final bool emphasized;
+  final String value;
 
-  const _StatusChipData({
-    required this.icon,
-    required this.label,
-    this.emphasized = false,
-  });
-}
-
-class _StatusChip extends StatelessWidget {
-  final _StatusChipData data;
-
-  const _StatusChip(this.data);
+  const _StorageStat({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final chipColor = data.emphasized
-        ? colorScheme.primary.withValues(alpha: 0.14)
-        : colorScheme.onPrimaryContainer.withValues(alpha: 0.10);
-
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: chipColor,
-        borderRadius: BorderRadius.circular(999),
+        color: colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(data.icon, size: 16, color: colorScheme.onPrimaryContainer),
-          const SizedBox(width: 8),
           Text(
-            data.label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: colorScheme.onPrimaryContainer,
-              fontWeight: FontWeight.w700,
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: colorScheme.onSurface,
             ),
           ),
         ],
@@ -1069,149 +1393,14 @@ class _CompactCoordinateField extends StatelessWidget {
       controller: controller,
       decoration: InputDecoration(
         labelText: label,
-        border: const OutlineInputBorder(),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
+        filled: true,
+        fillColor: Theme.of(context).colorScheme.surfaceContainerLowest,
         isDense: true,
       ),
       keyboardType: const TextInputType.numberWithOptions(
         decimal: true,
         signed: true,
-      ),
-    );
-  }
-}
-
-class _RadioMetricTile extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _RadioMetricTile({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _InfoRow(this.label, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.grey,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CopyableInfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _CopyableInfoRow(this.label, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.grey,
-              ),
-            ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: value));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      AppLocalizations.of(
-                        context,
-                      )!.copiedToClipboardShort(label),
-                    ),
-                    duration: const Duration(seconds: 2),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              },
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      value,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'monospace',
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.copy, size: 16, color: Colors.grey),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1234,8 +1423,16 @@ class _StorageUsageMeter extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        gradient: LinearGradient(
+          colors: [
+            colorScheme.surfaceContainerHighest.withValues(alpha: 0.65),
+            colorScheme.surfaceContainer,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1245,7 +1442,7 @@ class _StorageUsageMeter extends StatelessWidget {
               Icon(Icons.storage_rounded, color: colorScheme.primary, size: 18),
               const SizedBox(width: 8),
               Text(
-                'Device storage',
+                'Storage usage',
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
@@ -1263,7 +1460,7 @@ class _StorageUsageMeter extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            '${(deviceInfo.storageUsedPercent ?? 0).toStringAsFixed(0)}% used',
+            '${(deviceInfo.storageUsedPercent ?? 0).toStringAsFixed(0)}% of storage used',
             style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w700,
             ),
@@ -1272,4 +1469,141 @@ class _StorageUsageMeter extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SelectedPresetCard extends StatelessWidget {
+  final _RadioPreset preset;
+
+  const _SelectedPresetCard({required this.preset});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            preset.label,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            preset.summary,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingHighlightCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+  final Color accentColor;
+  final Widget trailing;
+
+  const _SettingHighlightCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.accentColor,
+    required this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            accentColor.withValues(alpha: 0.14),
+            colorScheme.surfaceContainerHigh.withValues(alpha: 0.85),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: accentColor.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: accentColor),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          trailing,
+        ],
+      ),
+    );
+  }
+}
+
+class _RadioPreset {
+  final String id;
+  final String label;
+  final String summary;
+  final int frequencyKhz;
+  final int bandwidth;
+  final int spreadingFactor;
+  final int codingRate;
+
+  const _RadioPreset({
+    required this.id,
+    required this.label,
+    required this.summary,
+    required this.frequencyKhz,
+    required this.bandwidth,
+    required this.spreadingFactor,
+    required this.codingRate,
+  });
 }

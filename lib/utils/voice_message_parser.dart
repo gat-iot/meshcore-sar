@@ -12,8 +12,7 @@ const int _defaultLoRaExplicitHeader = 1;
 const double _defaultAirtimeBudgetFactor = 1.0; // one half duty-cycle
 
 enum VoiceCodecKind {
-  codec2(0, 'Codec2'),
-  lpcnet(1, 'LPCNet');
+  codec2(0, 'Codec2');
 
   const VoiceCodecKind(this.id, this.label);
   final int id;
@@ -29,8 +28,7 @@ enum VoicePacketMode {
   mode1300(3, '1300', VoiceCodecKind.codec2, 8000, 175, 880),
   mode1400(4, '1400', VoiceCodecKind.codec2, 8000, 175, 880),
   mode1600(5, '1600', VoiceCodecKind.codec2, 8000, 200, 800),
-  mode3200(6, '3200', VoiceCodecKind.codec2, 8000, 400, 400),
-  lpcnet1600(7, 'LPCNet', VoiceCodecKind.lpcnet, 16000, 200, 40);
+  mode3200(6, '3200', VoiceCodecKind.codec2, 8000, 400, 400);
 
   const VoicePacketMode(
     this.id,
@@ -176,8 +174,14 @@ class VoicePacket {
 
   /// Estimated audio duration of this packet in milliseconds.
   int get durationMs {
-    if (mode.bytesPerSecond == 0) return 0;
-    return (codec2Data.length * 1000 ~/ mode.bytesPerSecond).clamp(0, 1500);
+    try {
+      final bytesPerSecond = voiceModeBytesPerSecond(mode);
+      if (bytesPerSecond <= 0) return 0;
+      return (codec2Data.length * 1000 ~/ bytesPerSecond).clamp(0, 1500);
+    } catch (_) {
+      // Be permissive with stale or malformed persisted voice metadata.
+      return 0;
+    }
   }
 
   @override
@@ -257,7 +261,13 @@ class VoiceEnvelope {
 }
 
 int voiceModeBytesPerSecond(VoicePacketMode mode) => switch (mode) {
-  _ => mode.bytesPerSecond,
+  VoicePacketMode.mode700c => 100,
+  VoicePacketMode.mode1200 => 150,
+  VoicePacketMode.mode2400 => 300,
+  VoicePacketMode.mode1300 => 175,
+  VoicePacketMode.mode1400 => 175,
+  VoicePacketMode.mode1600 => 200,
+  VoicePacketMode.mode3200 => 400,
 };
 
 /// Approximate end-to-end transmit time for a voice session over MeshCore LoRa.

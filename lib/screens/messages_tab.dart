@@ -24,7 +24,6 @@ import '../widgets/messages/messages_content.dart';
 import '../widgets/common/contact_avatar.dart';
 import '../services/message_destination_preferences.dart';
 import '../services/voice_bitrate_preferences.dart';
-import '../services/voice_codec_preferences.dart';
 import '../services/voice_recorder_service.dart';
 import '../services/voice_codec_service.dart';
 import '../utils/toast_logger.dart';
@@ -72,7 +71,7 @@ class _MessagesTabState extends State<MessagesTab> {
   final VoiceRecorderService _voiceRecorder = VoiceRecorderService();
   bool _isRecording = false;
   bool _isSendingVoice = false;
-  static const Duration _maxVoiceRecordingDuration = Duration(seconds: 4);
+  static const Duration _maxVoiceRecordingDuration = Duration(seconds: 30);
   static const double _silenceRmsThreshold = 500.0;
   static const double _silencePeakThreshold = 1400.0;
   static const int _maxInteriorSilentChunks = 2;
@@ -82,7 +81,6 @@ class _MessagesTabState extends State<MessagesTab> {
   final List<Int16List> _recordedChunks = [];
   VoicePacketMode? _activeVoiceMode;
   int _selectedVoiceBitrate = VoiceBitratePreferences.defaultBitrate;
-  VoiceCodecKind _selectedVoiceCodec = VoiceCodecPreferences.defaultCodec;
 
   @override
   void initState() {
@@ -98,11 +96,9 @@ class _MessagesTabState extends State<MessagesTab> {
 
   Future<void> _loadVoiceSettings() async {
     final bitrate = await VoiceBitratePreferences.getBitrate();
-    final codec = await VoiceCodecPreferences.getCodec();
     if (!mounted) return;
     setState(() {
       _selectedVoiceBitrate = bitrate;
-      _selectedVoiceCodec = codec;
     });
   }
 
@@ -823,15 +819,12 @@ class _MessagesTabState extends State<MessagesTab> {
     debugPrint('🎙️ [Voice] _startVoiceRecording called');
     // Read fresh voice preferences so settings changes apply immediately.
     final selectedBitrate = await VoiceBitratePreferences.getBitrate();
-    final selectedCodec = await VoiceCodecPreferences.getCodec();
     if (mounted) {
       setState(() {
         _selectedVoiceBitrate = selectedBitrate;
-        _selectedVoiceCodec = selectedCodec;
       });
     } else {
       _selectedVoiceBitrate = selectedBitrate;
-      _selectedVoiceCodec = selectedCodec;
     }
     final hasPermission = await _voiceRecorder.requestPermission();
     debugPrint('🎙️ [Voice] hasPermission=$hasPermission');
@@ -859,9 +852,9 @@ class _MessagesTabState extends State<MessagesTab> {
       (_) => rng.nextInt(256),
     ).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
-    _activeVoiceMode = _selectedVoiceCodec == VoiceCodecKind.lpcnet
-        ? VoicePacketMode.lpcnet1600
-        : VoiceBitratePreferences.toVoiceMode(_selectedVoiceBitrate);
+    _activeVoiceMode = VoiceBitratePreferences.toVoiceMode(
+      _selectedVoiceBitrate,
+    );
     final packetDuration = Duration(
       milliseconds: _activeVoiceMode!.packetDurationMs,
     );
@@ -878,7 +871,6 @@ class _MessagesTabState extends State<MessagesTab> {
       final stream = _voiceRecorder.startCapture(
         chunkDuration: packetDuration,
         sampleRateHz: _activeVoiceMode!.sampleRateHz,
-        codecKind: _activeVoiceMode!.codec,
         enableBandPassFilter: appProvider.isVoiceBandPassFilterEnabled,
         enableCompressor: appProvider.isVoiceCompressorEnabled,
         enableLimiter: appProvider.isVoiceLimiterEnabled,
@@ -1021,15 +1013,10 @@ class _MessagesTabState extends State<MessagesTab> {
     debugPrint(
       '🎙️ [Voice] encoding $total packets for deferred voice fetch, mode=${mode.label}, session=$sessionId',
     );
-    final encodedChunks = mode.codec == VoiceCodecKind.lpcnet
-        ? await _encodeLpcNetChunks(codec, chunks, mode)
-        : <Uint8List>[];
     for (var i = 0; i < total; i++) {
       if (!mounted) return;
       try {
-        final codec2Data = mode.codec == VoiceCodecKind.lpcnet
-            ? encodedChunks[i]
-            : await codec.encode(chunks[i], mode);
+        final codec2Data = await codec.encode(chunks[i], mode);
         debugPrint(
           '🎙️ [Voice] packet $i/$total encoded: ${codec2Data.length} bytes',
         );
@@ -1131,36 +1118,6 @@ class _MessagesTabState extends State<MessagesTab> {
     // bubble shows "Sent" instead of "Sending" once all packets are on the wire.
     // For channels this is also set by the onMessageSent callback, but this is harmless.
     messagesProvider.markMessageSent(msgId, 0, 0);
-  }
-
-  Future<List<Uint8List>> _encodeLpcNetChunks(
-    VoiceCodecService codec,
-    List<Int16List> chunks,
-    VoicePacketMode mode,
-  ) async {
-    final totalSamples = chunks.fold<int>(
-      0,
-      (sum, chunk) => sum + chunk.length,
-    );
-    final merged = Int16List(totalSamples);
-    final encodedByteLengths = <int>[];
-    var sampleOffset = 0;
-    for (final chunk in chunks) {
-      merged.setRange(sampleOffset, sampleOffset + chunk.length, chunk);
-      sampleOffset += chunk.length;
-      encodedByteLengths.add((chunk.length ~/ 640) * 8);
-    }
-
-    final encoded = await codec.encode(merged, mode);
-    final encodedChunks = <Uint8List>[];
-    var byteOffset = 0;
-    for (final length in encodedByteLengths) {
-      encodedChunks.add(
-        Uint8List.sublistView(encoded, byteOffset, byteOffset + length),
-      );
-      byteOffset += length;
-    }
-    return encodedChunks;
   }
 
   List<Int16List> _prepareChunksForSending(

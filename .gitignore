@@ -80,6 +80,7 @@ create_feature_graphic.py
 # Tool caches and local state
 .cachebro/
 .osgrep/
+third_party/lpcnet_flutter/
 
 # Claude Code local settings (permissions, personal config)
 .claude/settings.local.json

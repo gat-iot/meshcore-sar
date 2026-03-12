@@ -19,7 +19,6 @@ import '../services/locale_preferences.dart';
 import '../services/mesh_map_nodes_service.dart';
 import '../services/update_checker_service.dart';
 import '../services/voice_bitrate_preferences.dart';
-import '../services/voice_codec_preferences.dart';
 import '../services/image_preferences.dart';
 import '../services/route_hash_preferences.dart';
 import '../services/image_codec_service.dart';
@@ -60,7 +59,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _showRxTxIndicators = true;
   bool _isCheckingForUpdates = false;
   int _voiceBitrate = VoiceBitratePreferences.defaultBitrate;
-  VoiceCodecKind _voiceCodec = VoiceCodecPreferences.defaultCodec;
   int _routeHashSize = RouteHashPreferences.defaultHashSize;
   int _imageMaxSize = ImagePreferences.defaultMaxSize;
   int _imageCompression = ImagePreferences.defaultQuality;
@@ -181,11 +179,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadVoicePreferences() async {
     final value = await VoiceBitratePreferences.getBitrate();
-    final codec = await VoiceCodecPreferences.getCodec();
     if (!mounted) return;
     setState(() {
       _voiceBitrate = value;
-      _voiceCodec = codec;
     });
   }
 
@@ -197,25 +193,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  Future<void> _saveVoiceCodecPreference(VoiceCodecKind value) async {
-    await VoiceCodecPreferences.setCodec(value);
-    if (!mounted) return;
-    setState(() {
-      _voiceCodec = value;
-    });
-  }
-
   String _voiceBitrateSubtitle(int bitrate) {
-    if (_voiceCodec == VoiceCodecKind.lpcnet) {
-      return 'Fixed 1600 bps';
-    }
     return '$bitrate bps';
-  }
-
-  String _voiceCodecSubtitle() {
-    return _voiceCodec == VoiceCodecKind.codec2
-        ? 'Selectable low-bitrate modes'
-        : 'Fixed 16 kHz / 1.6 kbps mode';
   }
 
   Future<void> _loadRouteHashSizePreference() async {
@@ -1179,7 +1158,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Consumer2<AppProvider, ConnectionProvider>(
             builder: (context, appProvider, connectionProvider, child) =>
                 _buildVoiceStatsCard(
-                  codec: _voiceCodec,
                   bitrate: _voiceBitrate,
                   connectionProvider: connectionProvider,
                   bandPassEnabled: appProvider.isVoiceBandPassFilterEnabled,
@@ -1195,21 +1173,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           _buildSettingsCard([
             ListTile(
-              leading: const Icon(Icons.record_voice_over),
-              title: const Text('Voice codec'),
-              subtitle: Text(_voiceCodecSubtitle()),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _showVoiceCodecDialog,
-            ),
-            ListTile(
               leading: const Icon(Icons.graphic_eq),
               title: const Text('Voice bitrate'),
               subtitle: Text(_voiceBitrateSubtitle(_voiceBitrate)),
               trailing: const Icon(Icons.chevron_right),
-              enabled: _voiceCodec == VoiceCodecKind.codec2,
-              onTap: _voiceCodec == VoiceCodecKind.codec2
-                  ? _showVoiceBitrateDialog
-                  : null,
+              onTap: _showVoiceBitrateDialog,
             ),
             Consumer<AppProvider>(
               builder: (context, appProvider, child) => SwitchListTile(
@@ -1797,7 +1765,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildVoiceStatsCard({
-    required VoiceCodecKind codec,
     required int bitrate,
     required ConnectionProvider connectionProvider,
     required bool bandPassEnabled,
@@ -1826,9 +1793,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final radioSf = connectionProvider.deviceInfo.radioSf;
     final radioCr = connectionProvider.deviceInfo.radioCr;
     final bwHz = _resolveBandwidthHz(radioBw);
-    final voiceMode = codec == VoiceCodecKind.lpcnet
-        ? VoicePacketMode.lpcnet1600
-        : VoiceBitratePreferences.toVoiceMode(bitrate);
+    final voiceMode = VoiceBitratePreferences.toVoiceMode(bitrate);
     const voicePreviewMs = 10000; // 10-second reference clip
     final packetDurationMs = voiceMode.packetDurationMs;
     final voicePacketCount =
@@ -1865,7 +1830,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Codec: ${voiceMode.label}${codec == VoiceCodecKind.codec2 ? ' · $bitrate bps' : ' · 1600 bps'}',
+              'Codec: ${voiceMode.label} · $bitrate bps',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 4),
@@ -2206,47 +2171,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   )
                   .toList(),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(AppLocalizations.of(context)!.cancel),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showVoiceCodecDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Voice codec'),
-        content: SingleChildScrollView(
-          child: RadioGroup<VoiceCodecKind>(
-            groupValue: _voiceCodec,
-            onChanged: (value) {
-              if (value != null) {
-                _saveVoiceCodecPreference(value);
-              }
-              Navigator.pop(context);
-            },
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                RadioListTile<VoiceCodecKind>(
-                  value: VoiceCodecKind.codec2,
-                  title: const Text('Codec2'),
-                  subtitle: const Text('Selectable ultra-low bitrate modes'),
-                ),
-                RadioListTile<VoiceCodecKind>(
-                  value: VoiceCodecKind.lpcnet,
-                  title: const Text('LPCNet'),
-                  subtitle: const Text('Fixed 16 kHz / 1.6 kbps neural mode'),
-                ),
-              ],
             ),
           ),
         ),

@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 import 'package:codec2_flutter/codec2_flutter.dart';
-import 'package:lpcnet_flutter/lpcnet_flutter.dart';
 import 'package:flutter/foundation.dart';
 import '../utils/voice_message_parser.dart';
 
@@ -20,8 +19,6 @@ Codec2Mode codec2ModeFor(VoicePacketMode pktMode) {
       return Codec2Mode.mode1300;
     case VoicePacketMode.mode2400:
       return Codec2Mode.mode2400;
-    case VoicePacketMode.lpcnet1600:
-      throw ArgumentError('LPCNet mode does not map to Codec2');
   }
 }
 
@@ -48,22 +45,12 @@ class VoiceCodecService {
 
   Future<Uint8List> encode(Int16List pcm, VoicePacketMode mode) {
     _ensureCodec2Supported();
-    switch (mode.codec) {
-      case VoiceCodecKind.codec2:
-        return Codec2.encodeInIsolate(pcm, codec2ModeFor(mode));
-      case VoiceCodecKind.lpcnet:
-        return LpcNet.encodeInIsolate(pcm);
-    }
+    return Codec2.encodeInIsolate(pcm, codec2ModeFor(mode));
   }
 
   Future<Int16List> decode(Uint8List codec2Bytes, VoicePacketMode mode) {
     _ensureCodec2Supported();
-    switch (mode.codec) {
-      case VoiceCodecKind.codec2:
-        return Codec2.decodeInIsolate(codec2Bytes, codec2ModeFor(mode));
-      case VoiceCodecKind.lpcnet:
-        return LpcNet.decodeInIsolate(codec2Bytes);
-    }
+    return Codec2.decodeInIsolate(codec2Bytes, codec2ModeFor(mode));
   }
 
   /// Decode and concatenate multiple [packets] into a single PCM Int16List.
@@ -73,9 +60,6 @@ class VoiceCodecService {
     VoicePacketMode mode,
   ) async {
     _ensureCodec2Supported();
-    if (mode.codec == VoiceCodecKind.lpcnet) {
-      return _decodeLpcNetPackets(packets, mode);
-    }
     final all = <Int16List>[];
     for (final pkt in packets) {
       if (pkt == null || pkt.codec2Data.isEmpty) {
@@ -88,40 +72,6 @@ class VoiceCodecService {
     final result = Int16List(total);
     var offset = 0;
     for (final chunk in all) {
-      result.setRange(offset, offset + chunk.length, chunk);
-      offset += chunk.length;
-    }
-    return result;
-  }
-
-  Future<Int16List> _decodeLpcNetPackets(
-    List<VoicePacket?> packets,
-    VoicePacketMode mode,
-  ) async {
-    final segments = <Int16List>[];
-    final run = <int>[];
-
-    Future<void> flushRun() async {
-      if (run.isEmpty) return;
-      final decoded = await LpcNet.decodeInIsolate(Uint8List.fromList(run));
-      segments.add(decoded);
-      run.clear();
-    }
-
-    for (final pkt in packets) {
-      if (pkt == null || pkt.codec2Data.isEmpty) {
-        await flushRun();
-        segments.add(Int16List(mode.samplesPerPacket));
-        continue;
-      }
-      run.addAll(pkt.codec2Data);
-    }
-    await flushRun();
-
-    final total = segments.fold<int>(0, (sum, chunk) => sum + chunk.length);
-    final result = Int16List(total);
-    var offset = 0;
-    for (final chunk in segments) {
       result.setRange(offset, offset + chunk.length, chunk);
       offset += chunk.length;
     }

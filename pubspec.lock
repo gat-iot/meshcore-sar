@@ -775,15 +775,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.0"
-  lpcnet_flutter:
-    dependency: "direct main"
-    description:
-      path: "."
-      ref: main
-      resolved-ref: "39fadf011552a785993657506aedff85186b968b"
-      url: "https://github.com/dz0ny/lpcnet_flutter.git"
-    source: git
-    version: "0.1.0"
   matcher:
     dependency: transitive
     description:

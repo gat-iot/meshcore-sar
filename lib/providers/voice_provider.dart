@@ -325,25 +325,7 @@ class VoiceProvider with ChangeNotifier {
   }
 
   Int16List _preparePlaybackPcm(Int16List pcm, VoicePacketMode mode) {
-    if (pcm.isEmpty) {
-      return pcm;
-    }
-
-    if (mode.codec != VoiceCodecKind.lpcnet) {
-      return pcm;
-    }
-
-    final output = Int16List(pcm.length);
-    var dc = 0.0;
-    const dcAlpha = 0.995;
-
-    for (var i = 0; i < pcm.length; i++) {
-      final sample = pcm[i].toDouble();
-      dc = (dcAlpha * dc) + ((1.0 - dcAlpha) * sample);
-      final filtered = sample - dc;
-      output[i] = filtered.clamp(-32768.0, 32767.0).round();
-    }
-    return output;
+    return pcm;
   }
 
   Future<void> clearStoredVoiceData() async {

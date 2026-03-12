@@ -60,8 +60,6 @@ Codec2Mode codec2ModeFor(VoicePacketMode pktMode) {
       return Codec2Mode.mode1300;
     case VoicePacketMode.mode2400:
       return Codec2Mode.mode2400;
-    case VoicePacketMode.lpcnet1600:
-      throw ArgumentError('LPCNet mode does not map to Codec2');
   }
 }
 
