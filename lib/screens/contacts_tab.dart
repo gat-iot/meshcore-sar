@@ -33,6 +33,12 @@ class _ContactsTabState extends State<ContactsTab> {
   Position? _currentPosition;
   final Set<String> _resolvingAdvertKeys = <String>{};
   bool _isResolvingPendingBatch = false;
+  final Map<ContactSection, String> _sectionFilters = {
+    ContactSection.teamMembers: '',
+    ContactSection.repeaters: '',
+    ContactSection.rooms: '',
+    ContactSection.channels: '',
+  };
   final Map<ContactSection, ContactSortMode> _sortModes = {
     ContactSection.teamMembers: ContactSortMode.lastSeen,
     ContactSection.repeaters: ContactSortMode.lastSeen,
@@ -168,6 +174,22 @@ class _ContactsTabState extends State<ContactsTab> {
     return l10n.daysAgo(diff.inDays);
   }
 
+  List<Contact> _filterContactsForSection(
+    List<Contact> contacts,
+    ContactSection section,
+  ) {
+    final query = (_sectionFilters[section] ?? '').trim().toLowerCase();
+    if (query.isEmpty) {
+      return contacts;
+    }
+
+    return contacts.where((contact) {
+      final name = contact.displayName.toLowerCase();
+      final advertisedName = contact.advName.toLowerCase();
+      return name.contains(query) || advertisedName.contains(query);
+    }).toList();
+  }
+
   List<Contact> _sortContacts(List<Contact> contacts, ContactSection section) {
     final sorted = List<Contact>.from(contacts);
     if (section == ContactSection.channels) {
@@ -264,20 +286,36 @@ class _ContactsTabState extends State<ContactsTab> {
         builder: (context, contactsProvider, child) {
           final messagesProvider = context.watch<MessagesProvider>();
           final connectionProvider = context.watch<ConnectionProvider>();
-          final chatContacts = _sortContacts(
+          final allChatContacts = _sortContacts(
             contactsProvider.chatContacts,
             ContactSection.teamMembers,
           );
-          final repeaters = _sortContacts(
+          final allRepeaters = _sortContacts(
             contactsProvider.repeaters,
             ContactSection.repeaters,
           );
-          final rooms = _sortContacts(
+          final allRooms = _sortContacts(
             contactsProvider.rooms,
             ContactSection.rooms,
           );
-          final channels = _sortContacts(
+          final allChannels = _sortContacts(
             contactsProvider.channels,
+            ContactSection.channels,
+          );
+          final chatContacts = _filterContactsForSection(
+            allChatContacts,
+            ContactSection.teamMembers,
+          );
+          final repeaters = _filterContactsForSection(
+            allRepeaters,
+            ContactSection.repeaters,
+          );
+          final rooms = _filterContactsForSection(
+            allRooms,
+            ContactSection.rooms,
+          );
+          final filteredChannels = _filterContactsForSection(
+            allChannels,
             ContactSection.channels,
           );
           final pendingAdverts = contactsProvider.pendingAdverts;
@@ -286,10 +324,10 @@ class _ContactsTabState extends State<ContactsTab> {
 
           // Check if there are any displayable contacts
           final hasDisplayableContacts =
-              chatContacts.isNotEmpty ||
-              repeaters.isNotEmpty ||
-              rooms.isNotEmpty ||
-              channels.isNotEmpty ||
+              allChatContacts.isNotEmpty ||
+              allRepeaters.isNotEmpty ||
+              allRooms.isNotEmpty ||
+              allChannels.isNotEmpty ||
               pendingAdverts.isNotEmpty;
 
           if (!hasDisplayableContacts) {
@@ -324,7 +362,7 @@ class _ContactsTabState extends State<ContactsTab> {
               padding: const EdgeInsets.all(8),
               children: [
                 // Team Members (Chat contacts)
-                if (chatContacts.isNotEmpty) ...[
+                if (allChatContacts.isNotEmpty) ...[
                   _SectionHeader(
                     title: l10n.teamMembers,
                     count: chatContacts.length,
@@ -334,31 +372,43 @@ class _ContactsTabState extends State<ContactsTab> {
                       ContactSection.teamMembers,
                     ),
                   ),
-                  ..._buildContactSectionItems(chatContacts),
+                  _buildSectionFilterField(context, ContactSection.teamMembers),
+                  if (chatContacts.isEmpty)
+                    _buildEmptyFilterState(context)
+                  else
+                    ..._buildContactSectionItems(chatContacts),
                   const Divider(height: 32),
                 ],
 
                 // Repeaters
-                if (repeaters.isNotEmpty) ...[
+                if (allRepeaters.isNotEmpty) ...[
                   _SectionHeader(
                     title: l10n.repeaters,
                     count: repeaters.length,
                     icon: Icons.router,
                     trailing: _buildSortMenu(context, ContactSection.repeaters),
                   ),
-                  ..._buildContactSectionItems(repeaters),
+                  _buildSectionFilterField(context, ContactSection.repeaters),
+                  if (repeaters.isEmpty)
+                    _buildEmptyFilterState(context)
+                  else
+                    ..._buildContactSectionItems(repeaters),
                   const Divider(height: 32),
                 ],
 
                 // Rooms
-                if (rooms.isNotEmpty) ...[
+                if (allRooms.isNotEmpty) ...[
                   _SectionHeader(
                     title: l10n.rooms,
                     count: rooms.length,
                     icon: Icons.tag,
                     trailing: _buildSortMenu(context, ContactSection.rooms),
                   ),
-                  ..._buildContactSectionItems(rooms),
+                  _buildSectionFilterField(context, ContactSection.rooms),
+                  if (rooms.isEmpty)
+                    _buildEmptyFilterState(context)
+                  else
+                    ..._buildContactSectionItems(rooms),
                   const Divider(height: 32),
                 ],
 
@@ -386,11 +436,14 @@ class _ContactsTabState extends State<ContactsTab> {
                 // Channels (visible in both simple and advanced mode)
                 _SectionHeader(
                   title: l10n.channels,
-                  count: channels.length,
+                  count: filteredChannels.length,
                   icon: Icons.broadcast_on_personal,
                 ),
-                if (channels.isNotEmpty) ...[
-                  ...channels.map(
+                _buildSectionFilterField(context, ContactSection.channels),
+                if (allChannels.isNotEmpty && filteredChannels.isEmpty)
+                  _buildEmptyFilterState(context),
+                if (filteredChannels.isNotEmpty) ...[
+                  ...filteredChannels.map(
                     (channel) => _ChannelActivityCard(
                       channel: channel,
                       messagesProvider: messagesProvider,
@@ -452,6 +505,54 @@ class _ContactsTabState extends State<ContactsTab> {
         onNavigateToMessages: widget.onNavigateToMessages,
       );
     }).toList();
+  }
+
+  Widget _buildSectionFilterField(
+    BuildContext context,
+    ContactSection section,
+  ) {
+    final hasFilter = (_sectionFilters[section] ?? '').isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: TextFormField(
+        key: ValueKey('${section.name}:${_sectionFilters[section] ?? ''}'),
+        initialValue: _sectionFilters[section] ?? '',
+        onChanged: (value) {
+          setState(() {
+            _sectionFilters[section] = value;
+          });
+        },
+        decoration: InputDecoration(
+          isDense: true,
+          prefixIcon: const Icon(Icons.search, size: 18),
+          hintText: 'Filter by name',
+          border: const OutlineInputBorder(),
+          suffixIcon: hasFilter
+              ? IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () {
+                    setState(() {
+                      _sectionFilters[section] = '';
+                    });
+                  },
+                )
+              : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyFilterState(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        'No matches for this filter.',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
   }
 
   Widget _buildSortMenu(BuildContext context, ContactSection section) {
