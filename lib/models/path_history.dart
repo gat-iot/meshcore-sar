@@ -1,7 +1,10 @@
+enum PathRecordSource { learned, observed }
+
 class PathRecord {
   final List<int> pathBytes;
   final int hopCount;
   final int hashSize;
+  final PathRecordSource source;
   final int successCount;
   final int failureCount;
   final int lastRoundTripTimeMs;
@@ -11,6 +14,7 @@ class PathRecord {
     required this.pathBytes,
     required this.hopCount,
     required this.hashSize,
+    required this.source,
     required this.successCount,
     required this.failureCount,
     required this.lastRoundTripTimeMs,
@@ -27,6 +31,7 @@ class PathRecord {
     List<int>? pathBytes,
     int? hopCount,
     int? hashSize,
+    PathRecordSource? source,
     int? successCount,
     int? failureCount,
     int? lastRoundTripTimeMs,
@@ -36,6 +41,7 @@ class PathRecord {
       pathBytes: pathBytes ?? this.pathBytes,
       hopCount: hopCount ?? this.hopCount,
       hashSize: hashSize ?? this.hashSize,
+      source: source ?? this.source,
       successCount: successCount ?? this.successCount,
       failureCount: failureCount ?? this.failureCount,
       lastRoundTripTimeMs: lastRoundTripTimeMs ?? this.lastRoundTripTimeMs,
@@ -48,6 +54,7 @@ class PathRecord {
       'path_bytes': pathBytes,
       'hop_count': hopCount,
       'hash_size': hashSize,
+      'source': source.name,
       'success_count': successCount,
       'failure_count': failureCount,
       'last_round_trip_time_ms': lastRoundTripTimeMs,
@@ -62,6 +69,10 @@ class PathRecord {
           .toList(),
       hopCount: json['hop_count'] as int? ?? 0,
       hashSize: json['hash_size'] as int? ?? 1,
+      source: PathRecordSource.values.firstWhere(
+        (value) => value.name == (json['source'] as String? ?? 'learned'),
+        orElse: () => PathRecordSource.learned,
+      ),
       successCount: json['success_count'] as int? ?? 0,
       failureCount: json['failure_count'] as int? ?? 0,
       lastRoundTripTimeMs: json['last_round_trip_time_ms'] as int? ?? 0,
@@ -162,6 +173,10 @@ class ContactPathHistory {
       'rotation_index': rotationIndex,
     };
   }
+
+  List<PathRecord> get observedPaths => directPaths
+      .where((record) => record.source == PathRecordSource.observed)
+      .toList();
 
   factory ContactPathHistory.fromJson(
     String contactPublicKeyHex,

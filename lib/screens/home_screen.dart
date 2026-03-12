@@ -18,6 +18,7 @@ import 'repeaters_map_screen.dart';
 import 'settings_screen.dart';
 import 'device_config_screen.dart';
 import 'packet_log_screen.dart';
+import 'live_traffic_screen.dart';
 import 'spectrum_scan_screen.dart';
 import '../utils/toast_logger.dart';
 import '../l10n/app_localizations.dart';
@@ -216,6 +217,10 @@ class _HomeScreenState extends State<HomeScreen>
     _appProvider.setFastLocationUiActive(
       _lifecycleState == AppLifecycleState.resumed && isActiveTab,
     );
+  }
+
+  void _openLiveTraffic(ConnectionProvider provider) {
+    openLiveTrafficScreen(context, provider);
   }
 
   @override
@@ -651,6 +656,41 @@ class _HomeScreenState extends State<HomeScreen>
                       PopupMenuItem(
                         child: const Row(
                           children: [
+                            Icon(Icons.radar_outlined),
+                            SizedBox(width: 8),
+                            Text('Live Traffic'),
+                          ],
+                        ),
+                        onTap: () {
+                          final navigator = Navigator.of(context);
+                          final provider = context.read<ConnectionProvider>();
+                          Future.delayed(Duration.zero, () {
+                            if (!mounted) return;
+                            navigator.push(
+                              MaterialPageRoute(
+                                builder: (_) => LiveTrafficScreen.fromProvider(
+                                  provider,
+                                  openPacketLogs: () {
+                                    navigator.push(
+                                      MaterialPageRoute(
+                                        builder: (_) => PacketLogScreen(
+                                          bleService: provider.bleService,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            );
+                          });
+                        },
+                      ),
+                    );
+
+                    items.add(
+                      PopupMenuItem(
+                        child: const Row(
+                          children: [
                             Icon(Icons.router_outlined),
                             SizedBox(width: 8),
                             Text('Repeaters Map'),
@@ -1056,6 +1096,7 @@ class _HomeScreenState extends State<HomeScreen>
                 SizedBox(width: isTight ? 8 : 12),
                 if (_showRxTxIndicators)
                   GestureDetector(
+                    onTap: () => _openLiveTraffic(provider),
                     onLongPress: () {
                       Navigator.push(
                         context,

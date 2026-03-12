@@ -357,13 +357,62 @@ class _ContactRouteDialogState extends State<ContactRouteDialog> {
     final lastSeen = MaterialLocalizations.of(
       context,
     ).formatShortDate(record.lastUsedAt);
+    final sourceLabel = switch (record.source) {
+      PathRecordSource.observed => 'Observed on mesh',
+      PathRecordSource.learned => 'Learned route',
+    };
     final successRate = attempts == 0
         ? 'No send stats yet'
         : '${(record.successRate * 100).round()}% success over $attempts send${attempts == 1 ? '' : 's'}';
     final latency = record.lastRoundTripTimeMs > 0
         ? ' • ${record.lastRoundTripTimeMs} ms'
         : '';
-    return '$successRate • Last used $lastSeen$latency';
+    return '$sourceLabel • $successRate • Last used $lastSeen$latency';
+  }
+
+  Widget _buildHistoryRecordTile(PathRecord record, {String? title}) {
+    final canonicalText = _canonicalRouteFromBytes(
+      record.pathBytes,
+      hashSize: record.hashSize,
+    );
+    return Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 10,
+        ),
+        leading: title == null ? null : const Icon(Icons.alt_route),
+        title: title == null
+            ? Text(
+                canonicalText,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 6),
+                  Text(
+                    canonicalText,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+                  ),
+                ],
+              ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(_historySubtitle(record)),
+        ),
+        trailing: FilledButton.tonal(
+          onPressed: () => _applyHistoryRecord(record),
+          child: const Text('Use'),
+        ),
+      ),
+    );
   }
 
   Widget _buildPreviewSection() {
@@ -586,41 +635,44 @@ class _ContactRouteDialogState extends State<ContactRouteDialog> {
       );
     }
 
-    return ListView.separated(
-      itemCount: records.length,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final record = records[index];
-        final canonicalText = _canonicalRouteFromBytes(
-          record.pathBytes,
-          hashSize: record.hashSize,
-        );
-        return Card(
-          margin: EdgeInsets.zero,
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 10,
-            ),
-            title: Text(
-              canonicalText,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
-            ),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(_historySubtitle(record)),
-            ),
-            trailing: FilledButton.tonal(
-              onPressed: () => _applyHistoryRecord(record),
-              child: const Text('Use'),
-            ),
+    PathRecord? observedRecord;
+    for (final record in records) {
+      if (record.source == PathRecordSource.observed) {
+        observedRecord = record;
+        break;
+      }
+    }
+    final remainingRecords = observedRecord == null
+        ? records
+        : records
+              .where((record) => !identical(record, observedRecord))
+              .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (observedRecord != null) ...[
+          _buildHistoryRecordTile(observedRecord, title: 'Observed mesh route'),
+          const SizedBox(height: 16),
+        ],
+        if (remainingRecords.isEmpty)
+          Text(
+            observedRecord == null
+                ? 'No additional route history yet.'
+                : 'Observed routes you start using will continue to build history here.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          )
+        else
+          ListView.separated(
+            itemCount: remainingRecords.length,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              return _buildHistoryRecordTile(remainingRecords[index]);
+            },
           ),
-        );
-      },
+      ],
     );
   }
 

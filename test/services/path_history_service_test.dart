@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:meshcore_sar_app/models/contact.dart';
+import 'package:meshcore_sar_app/models/path_history.dart';
 import 'package:meshcore_sar_app/models/path_selection.dart';
 import 'package:meshcore_sar_app/services/path_history_service.dart';
 
@@ -178,6 +179,31 @@ void main() {
       expect(history.directPaths.single.pathBytes, [0x03, 0x04, 0x01, 0x02]);
       expect(history.directPaths.single.hashSize, 2);
       expect(history.directPaths.single.hopCount, 2);
+      expect(history.directPaths.single.source, PathRecordSource.observed);
+    },
+  );
+
+  test(
+    'learned paths stay marked as observed after being seen on-air',
+    () async {
+      final service = PathHistoryService();
+      final contact = _buildContact(
+        seed: 3,
+        pathBytes: [0xAA, 0xBB],
+        hopCount: 2,
+        hashSize: 1,
+      );
+
+      await service.initialize();
+      await service.recordReceivedBytePath(contact.publicKeyHex, [
+        0xBB,
+        0xAA,
+      ], 1);
+      await service.recordLearnedPath(contact);
+
+      final history = service.historyFor(contact.publicKeyHex);
+      expect(history.directPaths, hasLength(1));
+      expect(history.directPaths.single.source, PathRecordSource.observed);
     },
   );
 }

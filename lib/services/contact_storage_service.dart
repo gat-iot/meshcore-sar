@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/contact.dart';
+import '../models/contact_group.dart';
 import '../utils/key_comparison.dart';
 import 'package:latlong2/latlong.dart';
 
 /// Service for persisting contacts to local storage
 class ContactStorageService {
   static const String _contactsKey = 'stored_contacts';
+  static const String _contactGroupsKey = 'stored_contact_groups';
   static const int _maxStoredContacts = 500; // Store up to 500 contacts
 
   /// Save contacts to persistent storage
@@ -87,6 +89,40 @@ class ContactStorageService {
       debugPrint('✅ [ContactStorage] Cleared all stored contacts');
     } catch (e) {
       debugPrint('❌ [ContactStorage] Error clearing contacts: $e');
+    }
+  }
+
+  Future<void> saveContactGroups(List<SavedContactGroup> groups) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = jsonEncode(
+        groups.map((group) => _contactGroupToJson(group)).toList(),
+      );
+      await prefs.setString(_contactGroupsKey, jsonString);
+      debugPrint(
+        '✅ [ContactStorage] Saved ${groups.length} contact groups to storage',
+      );
+    } catch (e) {
+      debugPrint('❌ [ContactStorage] Error saving contact groups: $e');
+    }
+  }
+
+  Future<List<SavedContactGroup>> loadContactGroups() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = prefs.getString(_contactGroupsKey);
+      if (jsonString == null || jsonString.isEmpty) {
+        return [];
+      }
+
+      final jsonList = jsonDecode(jsonString) as List<dynamic>;
+      return jsonList
+          .map((json) => _contactGroupFromJson(json as Map<String, dynamic>))
+          .whereType<SavedContactGroup>()
+          .toList();
+    } catch (e) {
+      debugPrint('❌ [ContactStorage] Error loading contact groups: $e');
+      return [];
     }
   }
 
@@ -200,6 +236,33 @@ class ContactStorageService {
       );
     } catch (e) {
       debugPrint('❌ [ContactStorage] Error parsing telemetry from JSON: $e');
+      return null;
+    }
+  }
+
+  Map<String, dynamic> _contactGroupToJson(SavedContactGroup group) {
+    return {
+      'id': group.id,
+      'sectionKey': group.sectionKey,
+      'label': group.label,
+      'query': group.query,
+      'createdAtMillis': group.createdAt.millisecondsSinceEpoch,
+    };
+  }
+
+  SavedContactGroup? _contactGroupFromJson(Map<String, dynamic> json) {
+    try {
+      return SavedContactGroup(
+        id: json['id'] as String,
+        sectionKey: json['sectionKey'] as String,
+        label: json['label'] as String,
+        query: json['query'] as String,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(
+          json['createdAtMillis'] as int,
+        ),
+      );
+    } catch (e) {
+      debugPrint('❌ [ContactStorage] Error parsing contact group: $e');
       return null;
     }
   }

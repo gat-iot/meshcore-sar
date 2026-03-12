@@ -30,6 +30,8 @@ class ResolvedNodeHash {
   final bool isOwnNode;
   final bool isUniqueMatch;
   final int matchCount;
+  final double? latitude;
+  final double? longitude;
 
   const ResolvedNodeHash({
     required this.hashHex,
@@ -37,6 +39,8 @@ class ResolvedNodeHash {
     required this.isOwnNode,
     required this.isUniqueMatch,
     required this.matchCount,
+    this.latitude,
+    this.longitude,
   });
 
   String get hexLabel => '0x${hashHex.toUpperCase()}';
@@ -179,6 +183,8 @@ class LogRxRouteDecoder {
     required Iterable<Contact> contacts,
     Uint8List? ownPublicKey,
     String? ownName,
+    double? ownLatitude,
+    double? ownLongitude,
   }) {
     final normalizedHashHex = hashHex.toLowerCase();
     final ownKeyHex = _bytesToHex(ownPublicKey);
@@ -192,6 +198,8 @@ class LogRxRouteDecoder {
         isOwnNode: true,
         isUniqueMatch: true,
         matchCount: 1,
+        latitude: ownLatitude,
+        longitude: ownLongitude,
       );
     }
 
@@ -210,12 +218,15 @@ class LogRxRouteDecoder {
     }
 
     if (matches.length == 1) {
+      final location = matches.first.displayLocation;
       return ResolvedNodeHash(
         hashHex: normalizedHashHex,
         label: matches.first.displayName,
         isOwnNode: false,
         isUniqueMatch: true,
         matchCount: 1,
+        latitude: location?.latitude,
+        longitude: location?.longitude,
       );
     }
 

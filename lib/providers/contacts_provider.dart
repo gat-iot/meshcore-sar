@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/contact.dart';
+import '../models/contact_group.dart';
 import '../models/message_contact_location.dart';
 import '../services/cayenne_lpp_parser.dart';
 import '../services/contact_storage_service.dart';
@@ -58,6 +59,7 @@ class _RetainedRoute {
 class ContactsProvider with ChangeNotifier {
   static const double _firstHopFallbackOffsetMeters = 100.0;
   final Map<String, Contact> _contacts = {};
+  final List<SavedContactGroup> _savedContactGroups = <SavedContactGroup>[];
   final Map<String, PendingAdvert> _pendingAdverts = {};
   final ContactStorageService _storageService = ContactStorageService();
   bool _isInitialized = false;
@@ -79,6 +81,7 @@ class ContactsProvider with ChangeNotifier {
         '📦 [ContactsProvider] Early loading persisted contacts (no filtering)...',
       );
       final storedContacts = await _storageService.loadContacts();
+      final storedGroups = await _storageService.loadContactGroups();
 
       // Add stored contacts (excluding any with all-zeros public key)
       const publicChannelKey =
@@ -92,8 +95,11 @@ class ContactsProvider with ChangeNotifier {
       }
 
       _isInitialized = true;
+      _savedContactGroups
+        ..clear()
+        ..addAll(storedGroups);
       debugPrint(
-        '✅ [ContactsProvider] Early loaded ${storedContacts.length} persisted contacts',
+        '✅ [ContactsProvider] Early loaded ${storedContacts.length} persisted contacts and ${storedGroups.length} groups',
       );
 
       // Ensure public channel exists after loading
@@ -123,6 +129,7 @@ class ContactsProvider with ChangeNotifier {
       final storedContacts = await _storageService.loadContacts(
         excludePublicKey: devicePublicKey,
       );
+      final storedGroups = await _storageService.loadContactGroups();
 
       // Add stored contacts (excluding any with all-zeros public key)
       const publicChannelKey =
@@ -136,8 +143,11 @@ class ContactsProvider with ChangeNotifier {
       }
 
       _isInitialized = true;
+      _savedContactGroups
+        ..clear()
+        ..addAll(storedGroups);
       debugPrint(
-        '✅ [ContactsProvider] Loaded ${storedContacts.length} persisted contacts',
+        '✅ [ContactsProvider] Loaded ${storedContacts.length} persisted contacts and ${storedGroups.length} groups',
       );
 
       // Ensure public channel exists after loading
@@ -208,9 +218,96 @@ class ContactsProvider with ChangeNotifier {
   }
 
   List<Contact> get contacts => _contacts.values.toList();
+  List<SavedContactGroup> get savedContactGroups =>
+      List<SavedContactGroup>.from(_savedContactGroups)
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   List<PendingAdvert> get pendingAdverts =>
       _pendingAdverts.values.toList()
         ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
+
+  List<SavedContactGroup> savedGroupsForSection(String sectionKey) {
+    return savedContactGroups
+        .where((group) => group.sectionKey == sectionKey)
+        .toList();
+  }
+
+  bool hasSavedGroupForFilter(String sectionKey, String query) {
+    final normalizedQuery = _normalizeGroupQuery(query);
+    if (normalizedQuery.isEmpty) {
+      return false;
+    }
+
+    return _savedContactGroups.any(
+      (group) =>
+          group.sectionKey == sectionKey &&
+          _normalizeGroupQuery(group.query) == normalizedQuery,
+    );
+  }
+
+  Future<void> addSavedGroupForFilter(
+    String sectionKey,
+    String query, {
+    String? label,
+  }) async {
+    final normalizedQuery = _normalizeGroupQuery(query);
+    if (normalizedQuery.isEmpty ||
+        hasSavedGroupForFilter(sectionKey, normalizedQuery)) {
+      return;
+    }
+
+    _savedContactGroups.add(
+      SavedContactGroup(
+        id: '${sectionKey}_${DateTime.now().microsecondsSinceEpoch}',
+        sectionKey: sectionKey,
+        label: (label ?? query).trim(),
+        query: query.trim(),
+        createdAt: DateTime.now(),
+      ),
+    );
+
+    await _persistSavedGroups();
+    notifyListeners();
+  }
+
+  Future<void> removeSavedGroupById(String id) async {
+    final beforeCount = _savedContactGroups.length;
+    _savedContactGroups.removeWhere((group) => group.id == id);
+    if (_savedContactGroups.length == beforeCount) {
+      return;
+    }
+
+    await _persistSavedGroups();
+    notifyListeners();
+  }
+
+  Future<void> removeSavedGroupForFilter(
+    String sectionKey,
+    String query,
+  ) async {
+    final normalizedQuery = _normalizeGroupQuery(query);
+    final beforeCount = _savedContactGroups.length;
+    _savedContactGroups.removeWhere(
+      (group) =>
+          group.sectionKey == sectionKey &&
+          _normalizeGroupQuery(group.query) == normalizedQuery,
+    );
+    if (_savedContactGroups.length == beforeCount) {
+      return;
+    }
+
+    await _persistSavedGroups();
+    notifyListeners();
+  }
+
+  Future<void> _persistSavedGroups() async {
+    try {
+      await _storageService.saveContactGroups(_savedContactGroups);
+    } catch (e) {
+      debugPrint('❌ [ContactsProvider] Error persisting contact groups: $e');
+    }
+  }
+
+  String _normalizeGroupQuery(String query) => query.trim().toLowerCase();
 
   List<Contact> get chatContacts =>
       contacts.where((c) => c.isChat).toList()..sort(_sortByLastSeen);

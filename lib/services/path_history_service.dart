@@ -54,6 +54,7 @@ class PathHistoryService {
       pathBytes: contact.routePathBytes.toList(),
       hopCount: contact.routeHopCount,
       hashSize: contact.routeHashSize,
+      source: existing?.source ?? PathRecordSource.learned,
       successCount: existing?.successCount ?? 0,
       failureCount: existing?.failureCount ?? 0,
       lastRoundTripTimeMs: existing?.lastRoundTripTimeMs ?? 0,
@@ -98,6 +99,7 @@ class PathHistoryService {
       pathBytes: normalizedPathBytes,
       hopCount: normalizedPathBytes.length ~/ hashSize,
       hashSize: hashSize,
+      source: PathRecordSource.observed,
       successCount: existing?.successCount ?? 0,
       failureCount: existing?.failureCount ?? 0,
       lastRoundTripTimeMs: existing?.lastRoundTripTimeMs ?? 0,
@@ -197,6 +199,7 @@ class PathHistoryService {
       pathBytes: selection.pathBytes.toList(),
       hopCount: selection.hopCount,
       hashSize: selection.hashSize,
+      source: existing?.source ?? PathRecordSource.learned,
       successCount: (existing?.successCount ?? 0) + (success ? 1 : 0),
       failureCount: (existing?.failureCount ?? 0) + (success ? 0 : 1),
       lastRoundTripTimeMs: success

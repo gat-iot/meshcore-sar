@@ -699,4 +699,39 @@ void main() {
       expect(after.advLon, equals(before.advLon));
     });
   });
+
+  group('ContactsProvider saved contact groups', () {
+    late ContactsProvider provider;
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      provider = ContactsProvider();
+    });
+
+    test('adds and removes saved groups by filter', () async {
+      expect(provider.savedContactGroups, isEmpty);
+
+      await provider.addSavedGroupForFilter('teamMembers', 'alpha');
+
+      expect(provider.savedContactGroups, hasLength(1));
+      expect(provider.hasSavedGroupForFilter('teamMembers', 'alpha'), isTrue);
+      expect(provider.hasSavedGroupForFilter('teamMembers', 'ALPHA'), isTrue);
+
+      await provider.removeSavedGroupForFilter('teamMembers', 'ALPHA');
+
+      expect(provider.savedContactGroups, isEmpty);
+      expect(provider.hasSavedGroupForFilter('teamMembers', 'alpha'), isFalse);
+    });
+
+    test('loads persisted saved groups during initialization', () async {
+      await provider.addSavedGroupForFilter('rooms', 'ops');
+
+      final restored = ContactsProvider();
+      await restored.initializeEarly();
+
+      expect(restored.savedGroupsForSection('rooms'), hasLength(1));
+      expect(restored.savedGroupsForSection('rooms').first.query, 'ops');
+      expect(restored.savedGroupsForSection('rooms').first.label, 'ops');
+    });
+  });
 }
