@@ -13,6 +13,7 @@ import '../../providers/messages_provider.dart';
 import '../../providers/sensors_provider.dart';
 import '../../services/message_destination_preferences.dart';
 import 'contact_route_dialog.dart';
+import 'contact_trace_sheet.dart';
 import 'room_login_sheet.dart';
 import '../common/contact_avatar.dart';
 import '../../utils/toast_logger.dart';
@@ -363,6 +364,15 @@ class ContactTile extends StatelessWidget {
                   _showSetRouteDialog(context, contact);
                 },
               ),
+            if (!contact.isChannel)
+              ListTile(
+                leading: const Icon(Icons.route),
+                title: const Text('Trace'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _showTraceSheet(context, contact);
+                },
+              ),
             if (!contact.isPublicChannel)
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.red),
@@ -450,6 +460,18 @@ class ContactTile extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => RoomLoginSheet(contact: contact),
+    );
+  }
+
+  void _showTraceSheet(BuildContext context, Contact contact) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => ContactTraceSheet(contact: contact),
     );
   }
 

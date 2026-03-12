@@ -1589,8 +1589,17 @@ class AppProvider with ChangeNotifier {
       return;
     }
 
+    final reversedPathBytes = LogRxRouteDecoder.reverseHopBytes(
+      decoded.pathBytes,
+      hashSize: decoded.hashSize,
+    );
+    final reversedHopHashes = LogRxRouteDecoder.splitHopHashes(
+      reversedPathBytes,
+      hashSize: decoded.hashSize,
+    );
+
     final parsedRoute = ContactRouteCodec.parse(
-      decoded.hopHashes.join(','),
+      reversedHopHashes.join(','),
       expectedHashSize: decoded.hashSize,
     );
     contactsProvider.retainReceivedRoute(

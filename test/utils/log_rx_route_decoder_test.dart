@@ -116,6 +116,21 @@ void main() {
       expect(resolved.matchCount, 2);
     });
   });
+
+  group('LogRxRouteDecoder.reverseHopBytes', () {
+    test('reverses path by hop size', () {
+      final reversed = LogRxRouteDecoder.reverseHopBytes([
+        0xc2,
+        0xba,
+        0x5f,
+        0xde,
+        0xaa,
+        0xbb,
+      ], hashSize: 2);
+
+      expect(reversed, [0xaa, 0xbb, 0x5f, 0xde, 0xc2, 0xba]);
+    });
+  });
 }
 
 Contact _contact({required String name, required List<int> keyPrefix}) {

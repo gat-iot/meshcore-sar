@@ -154,6 +154,26 @@ class LogRxRouteDecoder {
     return hops;
   }
 
+  static List<int> reverseHopBytes(
+    List<int> pathBytes, {
+    required int hashSize,
+  }) {
+    if (pathBytes.isEmpty) return const [];
+    if (hashSize < 1 || hashSize > 3 || pathBytes.length % hashSize != 0) {
+      return List<int>.from(pathBytes.reversed);
+    }
+
+    final reversed = <int>[];
+    for (
+      var index = pathBytes.length - hashSize;
+      index >= 0;
+      index -= hashSize
+    ) {
+      reversed.addAll(pathBytes.sublist(index, index + hashSize));
+    }
+    return reversed;
+  }
+
   static ResolvedNodeHash resolveHash(
     String hashHex, {
     required Iterable<Contact> contacts,

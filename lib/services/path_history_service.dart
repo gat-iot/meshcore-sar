@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/contact.dart';
 import '../models/path_history.dart';
 import '../models/path_selection.dart';
+import '../utils/log_rx_route_decoder.dart';
 
 class PathHistoryService {
   static const String _storageKey = 'contact_path_history_v1';
@@ -83,14 +84,19 @@ class PathHistoryService {
       return;
     }
 
+    final normalizedPathBytes = LogRxRouteDecoder.reverseHopBytes(
+      pathBytes,
+      hashSize: hashSize,
+    );
+
     final history = _historyFor(contactPublicKeyHex);
-    final signature = pathBytes
+    final signature = normalizedPathBytes
         .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
         .join();
     final existing = _findDirectPath(history.directPaths, signature);
     final updated = PathRecord(
-      pathBytes: List<int>.from(pathBytes),
-      hopCount: pathBytes.length ~/ hashSize,
+      pathBytes: normalizedPathBytes,
+      hopCount: normalizedPathBytes.length ~/ hashSize,
       hashSize: hashSize,
       successCount: existing?.successCount ?? 0,
       failureCount: existing?.failureCount ?? 0,
