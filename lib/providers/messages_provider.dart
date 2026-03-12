@@ -86,6 +86,7 @@ class MessagesProvider with ChangeNotifier {
 
   Future<void> Function({required Contact contact, required int failureStreak})?
   onDirectPathFailedCallback;
+  void Function(String messageId)? onManualRetryPreparedCallback;
   Future<bool> Function({
     required String messageId,
     required Contact contact,
@@ -165,8 +166,12 @@ class MessagesProvider with ChangeNotifier {
 
     final index = _messages.indexWhere((message) => message.id == messageId);
     if (index != -1) {
+      final nextPathLen = selection.hopCount > 0
+          ? selection.hopCount
+          : _messages[index].pathLen;
       _messages[index] = _messages[index].copyWith(
         usedFloodFallback: selection.usesFlood,
+        pathLen: nextPathLen,
       );
     }
 
@@ -2069,6 +2074,7 @@ class MessagesProvider with ChangeNotifier {
     _clearAckHistoryForMessage(messageId);
     _retryManager.clearRetry(messageId);
     _messageRouteMetadata.remove(messageId);
+    onManualRetryPreparedCallback?.call(messageId);
 
     _messages[index] = Message(
       id: message.id,

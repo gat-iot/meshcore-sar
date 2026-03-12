@@ -185,6 +185,7 @@ class ConnectionProvider with ChangeNotifier {
   onMessageEchoDetected;
   Function(Uint8List publicKeyPrefix, Uint8List statusData)? onStatusResponse;
   Function(Uint8List payload, int snrRaw, int rssiDbm)? onRawDataReceived;
+  Contact? Function(Uint8List contactPublicKey)? resolveContactForDmCallback;
 
   // Track pending send operations for auto-recovery
   final Map<String, _PendingSendOperation> _pendingSendOperations = {};
@@ -1164,6 +1165,7 @@ class ConnectionProvider with ChangeNotifier {
     }
 
     var effectiveContact = contact;
+    effectiveContact ??= resolveContactForDmCallback?.call(contactPublicKey);
     if (messageId != null &&
         effectiveContact != null &&
         prepareDirectMessageSendCallback != null) {

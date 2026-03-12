@@ -458,6 +458,24 @@ void main() {
       expect(updated.routeCanonicalText, 'AABB,CCDD');
     });
 
+    test('stores inferred fallback gps when route is set locally', () {
+      final route = ContactRouteCodec.parse('AABB,CCDD');
+      const fallback = LatLng(46.1001, 14.5002);
+
+      provider.setContactRouteLocal(
+        publicKey,
+        signedEncodedPathLen: route.signedEncodedPathLen,
+        paddedPathBytes: route.paddedPathBytes,
+        inferredFallbackLocation: fallback,
+      );
+
+      final updated = provider.findContactByKey(publicKey)!;
+      expect(updated.displayLocation, isNotNull);
+      expect(updated.displayLocation!.latitude, closeTo(46.1001, 0.000001));
+      expect(updated.displayLocation!.longitude, closeTo(14.5002, 0.000001));
+      expect(updated.advertHistory, isNotEmpty);
+    });
+
     test('resetContactRouteLocal clears route state', () {
       final route = ContactRouteCodec.parse('AA,BB,CC');
       provider.setContactRouteLocal(
@@ -576,46 +594,49 @@ void main() {
       expect(distanceMeters, closeTo(100.0, 8.0));
     });
 
-    test('does not infer a fallback location when the contact advertises one', () {
-      final repeaterKey = Uint8List.fromList([
-        0xCC,
-        0xDD,
-        0x10,
-        0x11,
-        0x12,
-        0x13,
-        ...List<int>.generate(26, (index) => index + 20),
-      ]);
-      provider.addOrUpdateContact(
-        createContact(
-          key: repeaterKey,
-          type: ContactType.repeater,
-          name: 'Relay Alpha',
-        ),
-      );
+    test(
+      'does not infer a fallback location when the contact advertises one',
+      () {
+        final repeaterKey = Uint8List.fromList([
+          0xCC,
+          0xDD,
+          0x10,
+          0x11,
+          0x12,
+          0x13,
+          ...List<int>.generate(26, (index) => index + 20),
+        ]);
+        provider.addOrUpdateContact(
+          createContact(
+            key: repeaterKey,
+            type: ContactType.repeater,
+            name: 'Relay Alpha',
+          ),
+        );
 
-      final targetKey = createPublicKey(121);
-      final route = ContactRouteCodec.parse('AABB,CCDD');
-      provider.addOrUpdateContact(
-        Contact(
-          publicKey: targetKey,
-          type: ContactType.chat,
-          flags: 0,
-          outPathLen: route.signedEncodedPathLen,
-          outPath: route.paddedPathBytes,
-          advName: 'Has Advert',
-          lastAdvert: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-          advLat: (45.1234 * 1e6).toInt(),
-          advLon: (13.8765 * 1e6).toInt(),
-          lastMod: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        ),
-      );
+        final targetKey = createPublicKey(121);
+        final route = ContactRouteCodec.parse('AABB,CCDD');
+        provider.addOrUpdateContact(
+          Contact(
+            publicKey: targetKey,
+            type: ContactType.chat,
+            flags: 0,
+            outPathLen: route.signedEncodedPathLen,
+            outPath: route.paddedPathBytes,
+            advName: 'Has Advert',
+            lastAdvert: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            advLat: (45.1234 * 1e6).toInt(),
+            advLon: (13.8765 * 1e6).toInt(),
+            lastMod: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          ),
+        );
 
-      final updated = provider.findContactByKey(targetKey)!;
-      expect(updated.displayLocation, isNotNull);
-      expect(updated.displayLocation!.latitude, closeTo(45.1234, 0.000001));
-      expect(updated.displayLocation!.longitude, closeTo(13.8765, 0.000001));
-    });
+        final updated = provider.findContactByKey(targetKey)!;
+        expect(updated.displayLocation, isNotNull);
+        expect(updated.displayLocation!.latitude, closeTo(45.1234, 0.000001));
+        expect(updated.displayLocation!.longitude, closeTo(13.8765, 0.000001));
+      },
+    );
   });
 
   group('ContactsProvider.updateFastGps', () {

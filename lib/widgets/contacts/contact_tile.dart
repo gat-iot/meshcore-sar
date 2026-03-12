@@ -128,6 +128,24 @@ class ContactTile extends StatelessWidget {
     final Widget subtitleWidget = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            _buildMetaPill(
+              context,
+              icon: _contactTypeIcon(contact),
+              label: contact.type.displayName,
+            ),
+            _buildMetaPill(
+              context,
+              icon: Icons.key_outlined,
+              label: contact.publicKeyShort,
+              monospace: true,
+            ),
+          ],
+        ),
         if (location != null) ...[
           const SizedBox(height: 2),
           _buildLocationLine(
@@ -591,6 +609,7 @@ class ContactTile extends StatelessWidget {
       contact.publicKey,
       signedEncodedPathLen: parsedRoute.signedEncodedPathLen,
       paddedPathBytes: parsedRoute.paddedPathBytes,
+      inferredFallbackLocation: routeResult.inferredFallbackLocation,
     );
 
     try {
@@ -669,6 +688,53 @@ class ContactTile extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildMetaPill(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    bool monospace = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              fontFamily: monospace ? 'monospace' : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _contactTypeIcon(Contact contact) {
+    switch (contact.type) {
+      case ContactType.chat:
+        return Icons.person_outline;
+      case ContactType.repeater:
+        return Icons.router_outlined;
+      case ContactType.room:
+        return Icons.meeting_room_outlined;
+      case ContactType.channel:
+        return Icons.campaign_outlined;
+      case ContactType.none:
+        return Icons.help_outline;
+    }
   }
 
   Widget _buildLocationLine(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/message.dart';
+import '../../models/message_route_metadata.dart';
 import '../../models/path_selection.dart';
 import '../../models/message_reception_details.dart';
 import '../../providers/messages_provider.dart';
@@ -209,7 +210,7 @@ Widget buildSentDirectSignalStatus(
       _techChip(
         context,
         icon: Icons.alt_route,
-        label: hopDisplayLabel(message),
+        label: hopDisplayLabelForMessage(message, routeMetadata),
         color: Colors.indigo,
       ),
       _techChip(
@@ -292,6 +293,17 @@ String hopDisplayLabel(Message message) {
   if (message.pathLen >= 255 && message.isContactMessage) return 'Direct';
   if (message.pathLen >= 255) return 'Unknown';
   return '${message.pathLen} hop${message.pathLen == 1 ? '' : 's'}';
+}
+
+String hopDisplayLabelForMessage(
+  Message message,
+  MessageRouteMetadata? routeMetadata,
+) {
+  final effectivePathLen = routeMetadata?.hopCount ?? message.pathLen;
+  if (effectivePathLen == 0) return 'Direct';
+  if (effectivePathLen >= 255 && message.isContactMessage) return 'Direct';
+  if (effectivePathLen >= 255) return 'Unknown';
+  return '$effectivePathLen hop${effectivePathLen == 1 ? '' : 's'}';
 }
 
 Widget _techChip(

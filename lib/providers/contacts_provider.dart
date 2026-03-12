@@ -844,16 +844,30 @@ class ContactsProvider with ChangeNotifier {
     Uint8List publicKey, {
     required int signedEncodedPathLen,
     required Uint8List paddedPathBytes,
+    LatLng? inferredFallbackLocation,
   }) {
     final contact = findContactByKey(publicKey);
     if (contact == null) {
       return;
     }
 
-    _contacts[contact.publicKeyHex] = contact.copyWith(
+    var updatedContact = contact.copyWith(
       outPathLen: signedEncodedPathLen,
       outPath: Uint8List.fromList(paddedPathBytes),
     );
+    if (inferredFallbackLocation != null) {
+      updatedContact = updatedContact
+          .copyWith(
+            advLat: _coordinateToAdvertMicrodegrees(
+              inferredFallbackLocation.latitude,
+            ),
+            advLon: _coordinateToAdvertMicrodegrees(
+              inferredFallbackLocation.longitude,
+            ),
+          )
+          .addAdvertLocation(inferredFallbackLocation, DateTime.now());
+    }
+    _contacts[contact.publicKeyHex] = updatedContact;
     _persistContacts();
     notifyListeners();
   }

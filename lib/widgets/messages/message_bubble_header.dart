@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/contact.dart';
 import '../../models/message.dart';
+import '../../models/message_route_metadata.dart';
 import '../../utils/avatar_label_helper.dart';
 import '../../utils/message_extensions.dart';
 import '../common/contact_avatar.dart';
@@ -59,6 +60,7 @@ Widget buildBubbleMetaFooter(
   BuildContext context, {
   required Message message,
   required bool isSarMarker,
+  MessageRouteMetadata? routeMetadata,
 }) {
   final metaColor = Theme.of(
     context,
@@ -86,12 +88,13 @@ Widget buildBubbleMetaFooter(
         ).textTheme.labelSmall?.copyWith(color: metaColor),
       ),
     ]);
-  } else if (!isSarMarker && message.pathLen < 255) {
+  } else if (!isSarMarker && _effectivePathLen(message, routeMetadata) < 255) {
+    final effectivePathLen = _effectivePathLen(message, routeMetadata);
     items.addAll([
       Icon(Icons.alt_route, size: 11, color: metaColor),
       const SizedBox(width: 3),
       Text(
-        message.pathLen == 0 ? 'direct' : '${message.pathLen}hop',
+        effectivePathLen == 0 ? 'direct' : '${effectivePathLen}hop',
         style: Theme.of(
           context,
         ).textTheme.labelSmall?.copyWith(color: metaColor),
@@ -123,6 +126,9 @@ Widget buildBubbleMetaFooter(
     ),
   );
 }
+
+int _effectivePathLen(Message message, MessageRouteMetadata? routeMetadata) =>
+    routeMetadata?.hopCount ?? message.pathLen;
 
 Widget buildChannelHeaderPill(
   BuildContext context, {

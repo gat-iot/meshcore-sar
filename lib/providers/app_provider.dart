@@ -1293,6 +1293,9 @@ class AppProvider with ChangeNotifier {
             retryAttempt: retryAttempt,
           );
         };
+    connectionProvider.resolveContactForDmCallback = (contactPublicKey) {
+      return contactsProvider.findContactByKey(contactPublicKey);
+    };
     messagesProvider.onFinalRouterFallbackCallback =
         ({required messageId, required contact, required message}) async {
           return _sendWithFinalNearestRouterFallback(
@@ -1321,6 +1324,9 @@ class AppProvider with ChangeNotifier {
             roundTripTimeMs: roundTripTimeMs,
           );
         };
+    messagesProvider.onManualRetryPreparedCallback = (messageId) {
+      _directMessageRouteSessions.remove(messageId);
+    };
   }
 
   Future<Contact> _prepareDirectMessageSend({

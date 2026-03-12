@@ -1788,6 +1788,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         receptionDetails?.rssiDbm ??
         matchedRxLog?.logRxDataInfo?.rssiDbm ??
         message.lastEchoRssiDbm;
+    final routeMetadata = messagesProvider.getMessageRouteMetadata(message.id);
 
     // Look up contact information for rich display name
     final contactsProvider = context.read<ContactsProvider>();
@@ -2515,13 +2516,22 @@ class _MessageBubbleState extends State<MessageBubble> {
                                   switch (recipient.deliveryStatus) {
                                     case MessageDeliveryStatus.delivered:
                                       statusColor = Colors.green;
-                                      statusIcon = Icons.check_circle;
+                                      statusIcon = Icons.done_all;
                                       statusText =
                                           recipient.roundTripTimeMs != null
                                           ? '${recipient.roundTripTimeMs}ms'
                                           : AppLocalizations.of(
                                               context,
                                             )!.delivered;
+                                      break;
+                                    case MessageDeliveryStatus.sent:
+                                      statusColor = Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant;
+                                      statusIcon = Icons.done;
+                                      statusText = AppLocalizations.of(
+                                        context,
+                                      )!.sent;
                                       break;
                                     case MessageDeliveryStatus.failed:
                                       statusColor = Colors.red;
@@ -2531,7 +2541,6 @@ class _MessageBubbleState extends State<MessageBubble> {
                                       )!.failed;
                                       break;
                                     case MessageDeliveryStatus.sending:
-                                    case MessageDeliveryStatus.sent:
                                     default:
                                       statusColor = Colors.orange;
                                       statusIcon = Icons.schedule;
@@ -2726,6 +2735,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           context,
           message: message,
           isSarMarker: isSarMarker,
+          routeMetadata: routeMetadata,
         ),
       ],
     );

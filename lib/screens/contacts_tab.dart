@@ -32,6 +32,7 @@ class ContactsTab extends StatefulWidget {
 class _ContactsTabState extends State<ContactsTab> {
   Position? _currentPosition;
   final Set<String> _resolvingAdvertKeys = <String>{};
+  bool _isResolvingPendingBatch = false;
   final Map<ContactSection, ContactSortMode> _sortModes = {
     ContactSection.teamMembers: ContactSortMode.lastSeen,
     ContactSection.repeaters: ContactSortMode.lastSeen,
@@ -93,6 +94,38 @@ class _ContactsTabState extends State<ContactsTab> {
         });
       }
     }
+  }
+
+  void _schedulePendingAdvertResolution(
+    List<PendingAdvert> pendingAdverts,
+    ConnectionProvider connectionProvider,
+  ) {
+    if (_isResolvingPendingBatch ||
+        !connectionProvider.deviceInfo.isConnected ||
+        pendingAdverts.isEmpty) {
+      return;
+    }
+
+    final advertsToResolve = pendingAdverts
+        .where((advert) => !_resolvingAdvertKeys.contains(advert.publicKeyHex))
+        .toList();
+    if (advertsToResolve.isEmpty) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _isResolvingPendingBatch) return;
+
+      _isResolvingPendingBatch = true;
+      try {
+        for (final advert in advertsToResolve) {
+          if (!mounted) break;
+          await _handleResolveAdvert(advert);
+        }
+      } finally {
+        _isResolvingPendingBatch = false;
+      }
+    });
   }
 
   /// Calculate distance between two points in meters
@@ -230,6 +263,7 @@ class _ContactsTabState extends State<ContactsTab> {
       body: Consumer<ContactsProvider>(
         builder: (context, contactsProvider, child) {
           final messagesProvider = context.watch<MessagesProvider>();
+          final connectionProvider = context.watch<ConnectionProvider>();
           final chatContacts = _sortContacts(
             contactsProvider.chatContacts,
             ContactSection.teamMembers,
@@ -247,6 +281,8 @@ class _ContactsTabState extends State<ContactsTab> {
             ContactSection.channels,
           );
           final pendingAdverts = contactsProvider.pendingAdverts;
+
+          _schedulePendingAdvertResolution(pendingAdverts, connectionProvider);
 
           // Check if there are any displayable contacts
           final hasDisplayableContacts =
@@ -287,27 +323,6 @@ class _ContactsTabState extends State<ContactsTab> {
             child: ListView(
               padding: const EdgeInsets.all(8),
               children: [
-                // Pending adverts (public key only; quick resolve)
-                if (pendingAdverts.isNotEmpty) ...[
-                  _SectionHeader(
-                    title: l10n.pending,
-                    count: pendingAdverts.length,
-                    icon: Icons.person_add_alt_1,
-                  ),
-                  ...pendingAdverts.map(
-                    (advert) => _PendingAdvertTile(
-                      advert: advert,
-                      subtitle:
-                          '${l10n.publicKey}: ${advert.publicKeyHex}\n${l10n.lastSeen}: ${_formatRelativeTime(context, advert.receivedAt)}',
-                      isResolving: _resolvingAdvertKeys.contains(
-                        advert.publicKeyHex,
-                      ),
-                      onResolve: () => _handleResolveAdvert(advert),
-                    ),
-                  ),
-                  const Divider(height: 32),
-                ],
-
                 // Team Members (Chat contacts)
                 if (chatContacts.isNotEmpty) ...[
                   _SectionHeader(
@@ -344,6 +359,27 @@ class _ContactsTabState extends State<ContactsTab> {
                     trailing: _buildSortMenu(context, ContactSection.rooms),
                   ),
                   ..._buildContactSectionItems(rooms),
+                  const Divider(height: 32),
+                ],
+
+                // Pending adverts are kept below resolved sections while we load details.
+                if (pendingAdverts.isNotEmpty) ...[
+                  _SectionHeader(
+                    title: l10n.pending,
+                    count: pendingAdverts.length,
+                    icon: Icons.person_search,
+                  ),
+                  ...pendingAdverts.map(
+                    (advert) => _PendingAdvertTile(
+                      advert: advert,
+                      subtitle:
+                          '${l10n.publicKey}: ${advert.shortDisplayKey}\n${l10n.lastSeen}: ${_formatRelativeTime(context, advert.receivedAt)}',
+                      isResolving: _resolvingAdvertKeys.contains(
+                        advert.publicKeyHex,
+                      ),
+                      onResolve: () => _handleResolveAdvert(advert),
+                    ),
+                  ),
                   const Divider(height: 32),
                 ],
 
@@ -513,7 +549,7 @@ class _PendingAdvertTile extends StatelessWidget {
               )
             : IconButton(
                 icon: const Icon(Icons.person_add_alt_1),
-                tooltip: 'Quick add',
+                tooltip: 'Resolve contact',
                 onPressed: onResolve,
               ),
       ),
