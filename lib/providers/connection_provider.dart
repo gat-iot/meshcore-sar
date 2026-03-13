@@ -772,7 +772,21 @@ class ConnectionProvider with ChangeNotifier {
     try {
       // Use maxChannels from device info if available, otherwise default to 40
       final channelCount = maxChannels ?? _deviceInfo.maxChannels ?? 40;
-      await _activeService.syncAllChannels(maxChannels: channelCount);
+      debugPrint(
+        '📻 [Provider] Syncing channels with tolerant per-slot reads (1-${channelCount - 1})...',
+      );
+
+      for (int i = 1; i < channelCount; i++) {
+        try {
+          await _activeService.getChannel(i);
+        } catch (e) {
+          debugPrint(
+            '⚠️ [Provider] Channel sync skipped slot $i after read failure: $e',
+          );
+        }
+      }
+
+      debugPrint('✅ [Provider] Channel sync complete');
     } catch (e) {
       _error = 'Failed to sync channels: $e';
       notifyListeners();
@@ -996,7 +1010,7 @@ class ConnectionProvider with ChangeNotifier {
 
       // Refresh channel state before choosing a slot so we match meshcore-open's
       // "pick first missing slot from the synced list" behavior.
-      await _activeService.syncAllChannels(maxChannels: maxChannels);
+      await syncChannels(maxChannels: maxChannels);
 
       // Match meshcore-open behavior:
       // - deterministic hash channels (#name) cannot be duplicated
