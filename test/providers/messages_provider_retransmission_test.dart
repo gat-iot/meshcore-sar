@@ -233,12 +233,52 @@ void main() {
       provider.addMessage(
         _buildReceivedChannelReplay(
           id: 'c-late-incoming',
-          senderTimestamp: 1700000306,
+          senderTimestamp: 1700000331,
           senderName: 'dz0ny (SI)',
         ),
       );
 
       expect(provider.messages, hasLength(2));
+    });
+
+    test('channel replay can dedupe using lazily resolved self name', () {
+      final provider = MessagesProvider();
+      provider.addSentMessage(
+        _buildSentChannelMessage(id: 'c-lazy', senderTimestamp: 1700000400),
+      );
+      provider.markMessageSent('c-lazy', 0, 0);
+      provider.resolveContactNameCallback = (_) => 'dz0ny (SI)';
+
+      provider.addMessage(
+        _buildReceivedChannelReplay(
+          id: 'c-lazy-incoming',
+          senderTimestamp: 1700000406,
+          senderName: 'dz0ny (SI)',
+        ),
+      );
+
+      expect(provider.messages, hasLength(1));
+      expect(provider.messages.single.id, equals('c-lazy'));
+    });
+
+    test('channel replay dedupes meshcore-prefixed self sender name', () {
+      final provider = MessagesProvider();
+      provider.resolveContactNameCallback = (_) => 'MeshCore-dz0ny (SI)';
+      provider.addSentMessage(
+        _buildSentChannelMessage(id: 'c-prefix', senderTimestamp: 1700000500),
+      );
+      provider.markMessageSent('c-prefix', 0, 0);
+
+      provider.addMessage(
+        _buildReceivedChannelReplay(
+          id: 'c-prefix-incoming',
+          senderTimestamp: 1700000500,
+          senderName: 'dz0ny (SI)',
+        ),
+      );
+
+      expect(provider.messages, hasLength(1));
+      expect(provider.messages.single.id, equals('c-prefix'));
     });
 
     test('missing ACK schedules a delayed retransmission', () {

@@ -293,9 +293,10 @@ class AppProvider with ChangeNotifier {
     if (publicKey == null || publicKey.isEmpty) return null;
 
     final ownPublicKey = connectionProvider.deviceInfo.publicKey;
-    final ownName =
-        connectionProvider.deviceInfo.deviceName ??
-        connectionProvider.deviceInfo.selfName;
+    final ownName = _preferredSelfDisplayName(
+      deviceName: connectionProvider.deviceInfo.deviceName,
+      selfName: connectionProvider.deviceInfo.selfName,
+    );
     if (_matchesPublicKeyPrefix(publicKey, ownPublicKey) &&
         ownName != null &&
         ownName.trim().isNotEmpty) {
@@ -338,6 +339,35 @@ class AppProvider with ChangeNotifier {
     }
 
     return trimmedSenderName == trimmedOwnName;
+  }
+
+  static String? preferredSelfDisplayName({
+    required String? deviceName,
+    required String? selfName,
+  }) => _preferredSelfDisplayName(deviceName: deviceName, selfName: selfName);
+
+  static String? _preferredSelfDisplayName({
+    required String? deviceName,
+    required String? selfName,
+  }) {
+    final trimmedSelfName = selfName?.trim();
+    if (trimmedSelfName != null && trimmedSelfName.isNotEmpty) {
+      return trimmedSelfName;
+    }
+
+    final trimmedDeviceName = deviceName?.trim();
+    if (trimmedDeviceName == null || trimmedDeviceName.isEmpty) {
+      return null;
+    }
+
+    if (trimmedDeviceName.toLowerCase().startsWith('meshcore-')) {
+      final stripped = trimmedDeviceName.substring('meshcore-'.length).trim();
+      if (stripped.isNotEmpty) {
+        return stripped;
+      }
+    }
+
+    return trimmedDeviceName;
   }
 
   static bool _matchesPublicKeyPrefix(
@@ -820,10 +850,10 @@ class AppProvider with ChangeNotifier {
 
             final isDeletedChannel = connectionProvider
                 .shouldTreatChannelInfoAsDeleted(
-              channelIdx,
-              channelName,
-              secret,
-            );
+                  channelIdx,
+                  channelName,
+                  secret,
+                );
             final isEmptyChannelInfo = AppProvider.isDeletedChannelInfo(
               channelIdx,
               channelName,
@@ -930,6 +960,18 @@ class AppProvider with ChangeNotifier {
 
     // When a message is received
     connectionProvider.onMessageReceived = (message) {
+      if (message.isChannelMessage) {
+        debugPrint(
+          '📥 [AppProvider] Channel message received: '
+          'id=${message.id}, '
+          'senderName=${message.senderName ?? "-"}, '
+          'senderKey=${message.senderKeyShort ?? "-"}, '
+          'pathLen=${message.pathLen}, '
+          'ts=${message.senderTimestamp}, '
+          'text=${message.text}',
+        );
+      }
+
       if (AppProvider.shouldIgnoreSelfReplay(
         message: message,
         ownPublicKey: connectionProvider.deviceInfo.publicKey,

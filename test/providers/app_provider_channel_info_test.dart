@@ -22,6 +22,16 @@ void main() {
   });
 
   group('AppProvider self replay handling', () {
+    test('prefers self name over meshcore device name', () {
+      expect(
+        AppProvider.preferredSelfDisplayName(
+          deviceName: 'MeshCore-dz0ny (SI)',
+          selfName: 'dz0ny (SI)',
+        ),
+        'dz0ny (SI)',
+      );
+    });
+
     test('ignores direct self replay without hops', () {
       final message = Message(
         id: 'dm-self',

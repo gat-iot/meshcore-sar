@@ -627,6 +627,13 @@ class MessagesProvider with ChangeNotifier {
           existing.text != message.text) {
         continue;
       }
+      if (message.isChannelMessage) {
+        debugPrint(
+          '🔁 [MessagesProvider] Channel duplicate match: '
+          'incoming(id=${message.id}, senderName=${message.senderName ?? "-"}, senderKey=${message.senderKeyShort ?? "-"}, pathLen=${message.pathLen}, ts=${message.senderTimestamp}) '
+          'existing(id=${existing.id}, sent=${existing.isSentMessage}, senderName=${existing.senderName ?? "-"}, senderKey=${existing.senderKeyShort ?? "-"}, pathLen=${existing.pathLen}, ts=${existing.senderTimestamp})',
+        );
+      }
       return index;
     }
 
@@ -647,9 +654,8 @@ class MessagesProvider with ChangeNotifier {
         return false;
       }
 
-      final timestampDeltaSeconds =
-          (existing.senderTimestamp - message.senderTimestamp).abs();
-      final withinChannelRepeatWindow = timestampDeltaSeconds <= 5;
+      final withinChannelRepeatWindow =
+          (existing.senderTimestamp - message.senderTimestamp).abs() <= 30;
 
       final existingSenderKey = existing.senderKeyShort;
       final incomingSenderKey = message.senderKeyShort;
@@ -660,8 +666,16 @@ class MessagesProvider with ChangeNotifier {
         return true;
       }
 
-      final existingSenderName = _normalizeSenderName(existing.senderName);
-      final incomingSenderName = _normalizeSenderName(message.senderName);
+      final existingSenderName = _normalizedResolvedSenderName(existing);
+      final incomingSenderName = _normalizedResolvedSenderName(message);
+      if (existing.isChannelMessage && message.isChannelMessage) {
+        debugPrint(
+          '🧪 [MessagesProvider] Channel dedupe check: '
+          'existing(id=${existing.id}, sent=${existing.isSentMessage}, senderName=${existing.senderName ?? "-"}, resolvedSender=${existingSenderName ?? "-"}, senderKey=${existing.senderKeyShort ?? "-"}, ts=${existing.senderTimestamp}, pathLen=${existing.pathLen}) '
+          'incoming(id=${message.id}, sent=${message.isSentMessage}, senderName=${message.senderName ?? "-"}, resolvedSender=${incomingSenderName ?? "-"}, senderKey=${message.senderKeyShort ?? "-"}, ts=${message.senderTimestamp}, pathLen=${message.pathLen}) '
+          'withinWindow=$withinChannelRepeatWindow',
+        );
+      }
       if (existingSenderName != null &&
           incomingSenderName != null &&
           existingSenderName == incomingSenderName) {
@@ -733,7 +747,13 @@ class MessagesProvider with ChangeNotifier {
     if (trimmed == null || trimmed.isEmpty) {
       return null;
     }
-    return trimmed.toLowerCase();
+
+    var normalized = trimmed.toLowerCase();
+    if (normalized.startsWith('meshcore-')) {
+      normalized = normalized.substring('meshcore-'.length).trim();
+    }
+
+    return normalized.isEmpty ? null : normalized;
   }
 
   Message _resolveSenderNameIfNeeded(Message message) {
@@ -749,6 +769,22 @@ class MessagesProvider with ChangeNotifier {
     }
 
     return message.copyWith(senderName: resolvedSenderName.trim());
+  }
+
+  String? _normalizedResolvedSenderName(Message message) {
+    final directName = _normalizeSenderName(message.senderName);
+    if (directName != null) {
+      return directName;
+    }
+
+    if (message.senderPublicKeyPrefix == null) {
+      return null;
+    }
+
+    final resolved = resolveContactNameCallback?.call(
+      message.senderPublicKeyPrefix,
+    );
+    return _normalizeSenderName(resolved);
   }
 
   /// Trigger urgent notification for SAR marker
