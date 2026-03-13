@@ -598,6 +598,9 @@ class _MessagesTabState extends State<MessagesTab> {
       return;
     }
 
+    _textController.clear();
+    _focusNode.unfocus();
+
     try {
       // Check destination type and send accordingly
       if (_destinationType ==
@@ -628,13 +631,18 @@ class _MessagesTabState extends State<MessagesTab> {
         await _sendToChannel(text, connectionProvider, messagesProvider, 0);
       }
 
-      _textController.clear();
-      _focusNode.unfocus();
       _markCurrentDestinationAsRead();
 
       if (!mounted) return;
     } catch (e) {
       if (!mounted) return;
+      if (_textController.text.isEmpty) {
+        _textController.text = text;
+        _textController.selection = TextSelection.collapsed(
+          offset: _textController.text.length,
+        );
+        _focusNode.requestFocus();
+      }
       ToastLogger.error(context, 'Failed to send: $e');
     }
   }
