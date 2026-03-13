@@ -17,5 +17,25 @@ void main() {
         isTrue,
       );
     });
+
+    test('treats duplicate hashtag channels as conflicts', () {
+      expect(
+        ConnectionProvider.isDuplicateChannelName(
+          requestedName: '#sar',
+          existingName: '#sar',
+        ),
+        isTrue,
+      );
+    });
+
+    test('allows private channels with the same name to coexist', () {
+      expect(
+        ConnectionProvider.isDuplicateChannelName(
+          requestedName: 'Ops',
+          existingName: 'Ops',
+        ),
+        isFalse,
+      );
+    });
   });
 }

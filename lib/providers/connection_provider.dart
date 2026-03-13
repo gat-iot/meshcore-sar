@@ -830,6 +830,14 @@ class ConnectionProvider with ChangeNotifier {
     return secret.any((byte) => byte != 0);
   }
 
+  @visibleForTesting
+  static bool isDuplicateChannelName({
+    required String requestedName,
+    required String existingName,
+  }) {
+    return requestedName.startsWith('#') && existingName == requestedName;
+  }
+
   bool _channelSlotIsOccupied(Object channel) {
     final channelName = (channel as dynamic).name as String?;
     final secret = (channel as dynamic).secret;
@@ -986,8 +994,9 @@ class ConnectionProvider with ChangeNotifier {
       // Determine channel type
       final bool isHashChannel = channelName.startsWith('#');
 
-      // Check for duplicate channels
-      int? existingSlot;
+      // Match meshcore-open behavior:
+      // - deterministic hash channels (#name) cannot be duplicated
+      // - private channels always use the next empty slot, even if the name matches
       if (getChannelInfo != null) {
         final maxChannels = _deviceInfo.maxChannels ?? 40;
         for (int i = 1; i < maxChannels; i++) {
@@ -995,8 +1004,12 @@ class ConnectionProvider with ChangeNotifier {
           if (channel != null) {
             final existingName = (channel as dynamic).name as String?;
             if (existingName != null && existingName.isNotEmpty) {
-              // For hash channels (#name), check exact match to prevent duplicates
-              if (isHashChannel && existingName == channelName) {
+              if (
+                isDuplicateChannelName(
+                  requestedName: channelName,
+                  existingName: existingName,
+                )
+              ) {
                 debugPrint(
                   '  ⚠️  Hash channel "$channelName" already exists in slot $i',
                 );
@@ -1004,38 +1017,22 @@ class ConnectionProvider with ChangeNotifier {
                   'Channel "$channelName" already exists. Hash channels cannot be duplicated.',
                 );
               }
-              // For private channels, check name match to allow overwrite
-              else if (!isHashChannel && existingName == channelName) {
-                debugPrint(
-                  '  ℹ️  Private channel "$channelName" found in slot $i - will overwrite',
-                );
-                existingSlot = i;
-                break;
-              }
             }
           }
         }
       }
 
-      // Determine slot to use
-      final int slotIdx;
-      if (existingSlot != null) {
-        // Overwrite existing private channel
-        slotIdx = existingSlot;
-        debugPrint('  Using existing slot: $slotIdx (overwrite mode)');
-      } else {
-        // Find next empty slot for new channel
-        final maxChannels = _deviceInfo.maxChannels ?? 40;
-        final maxCustomChannels = maxChannels > 0 ? maxChannels - 1 : 0;
-        final emptySlot = await findNextEmptyChannelSlot();
-        if (emptySlot == null) {
-          throw Exception(
-            'All channel slots are in use (maximum $maxCustomChannels custom channels)',
-          );
-        }
-        slotIdx = emptySlot;
-        debugPrint('  Using empty slot: $slotIdx (new channel)');
+      // Find next empty slot for any new channel.
+      final maxChannels = _deviceInfo.maxChannels ?? 40;
+      final maxCustomChannels = maxChannels > 0 ? maxChannels - 1 : 0;
+      final emptySlot = await findNextEmptyChannelSlot();
+      if (emptySlot == null) {
+        throw Exception(
+          'All channel slots are in use (maximum $maxCustomChannels custom channels)',
+        );
       }
+      final slotIdx = emptySlot;
+      debugPrint('  Using empty slot: $slotIdx (new channel)');
 
       // Generate secret
       final List<int> secretBytes;
@@ -1076,7 +1073,7 @@ class ConnectionProvider with ChangeNotifier {
       }
 
       debugPrint(
-        '✅ [Provider] Channel ${existingSlot != null ? 'updated' : 'created'} successfully in slot $slotIdx',
+        '✅ [Provider] Channel created successfully in slot $slotIdx',
       );
     } catch (e) {
       _error = 'Failed to create channel: $e';
