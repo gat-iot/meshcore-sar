@@ -177,7 +177,7 @@ void main() {
     });
 
     test(
-      'channel replay is deduped after raw echo detection confirms our send',
+      'channel replay is deduped for self sender within repeat window',
       () {
         final provider = MessagesProvider();
         provider.resolveContactNameCallback = (_) => 'dz0ny (SI)';
@@ -185,12 +185,11 @@ void main() {
           _buildSentChannelMessage(id: 'c-echo', senderTimestamp: 1700000100),
         );
         provider.markMessageSent('c-echo', 0, 0);
-        provider.handleMessageEcho('c-echo', 1, 12, -90);
 
         provider.addMessage(
           _buildReceivedChannelReplay(
             id: 'c-echo-incoming',
-            senderTimestamp: 1700000101,
+            senderTimestamp: 1700000104,
             senderName: 'dz0ny (SI)',
           ),
         );
@@ -202,7 +201,7 @@ void main() {
     );
 
     test(
-      'channel replay is not deduped before raw echo detection confirms it',
+      'channel replay is not deduped for different sender with same text',
       () {
         final provider = MessagesProvider();
         provider.resolveContactNameCallback = (_) => 'dz0ny (SI)';
@@ -218,13 +217,32 @@ void main() {
           _buildReceivedChannelReplay(
             id: 'c-no-echo-incoming',
             senderTimestamp: 1700000201,
-            senderName: 'dz0ny (SI)',
+            senderName: 'Radio Alpha',
           ),
         );
 
         expect(provider.messages, hasLength(2));
       },
     );
+
+    test('channel replay is not deduped outside repeat window', () {
+      final provider = MessagesProvider();
+      provider.resolveContactNameCallback = (_) => 'dz0ny (SI)';
+      provider.addSentMessage(
+        _buildSentChannelMessage(id: 'c-late', senderTimestamp: 1700000300),
+      );
+      provider.markMessageSent('c-late', 0, 0);
+
+      provider.addMessage(
+        _buildReceivedChannelReplay(
+          id: 'c-late-incoming',
+          senderTimestamp: 1700000306,
+          senderName: 'dz0ny (SI)',
+        ),
+      );
+
+      expect(provider.messages, hasLength(2));
+    });
 
     test('missing ACK schedules a delayed retransmission', () {
       fakeAsync((async) {

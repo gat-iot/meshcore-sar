@@ -646,11 +646,18 @@ class MessagesProvider with ChangeNotifier {
       if (existing.channelIdx != message.channelIdx) {
         return false;
       }
+
+      final timestampDeltaSeconds = (existing.senderTimestamp -
+              message.senderTimestamp)
+          .abs();
+      final withinChannelRepeatWindow = timestampDeltaSeconds <= 5;
+
       final existingSenderKey = existing.senderKeyShort;
       final incomingSenderKey = message.senderKeyShort;
       if (existingSenderKey != null &&
           incomingSenderKey != null &&
-          existingSenderKey == incomingSenderKey) {
+          existingSenderKey == incomingSenderKey &&
+          withinChannelRepeatWindow) {
         return true;
       }
 
@@ -663,23 +670,20 @@ class MessagesProvider with ChangeNotifier {
           return true;
         }
 
-        // When we send to a channel we add a local "sent" bubble immediately,
-        // then firmware may later sync back the same message as a received
-        // channel item under our public handle. Only fold that replay into the
-        // original bubble after LOG_RX_DATA has already confirmed it as our
-        // transmitted packet.
+        if (!withinChannelRepeatWindow) {
+          return false;
+        }
+
+        // Mirror meshcore-open behavior for self-authored channel messages:
+        // zero-hop self replays are dropped earlier in AppProvider, while
+        // routed self replays should fold into the local sent bubble when the
+        // public sender name matches within a short window.
         if (existing.isSentMessage &&
-            existing.echoCount > 0 &&
             !message.isSentMessage &&
-            (existing.senderTimestamp - message.senderTimestamp).abs() <= 1) {
+            existingSenderName == incomingSenderName) {
           return true;
         }
-      }
 
-      if (existing.isSentMessage &&
-          existing.echoCount > 0 &&
-          !message.isSentMessage &&
-          existing.senderTimestamp == message.senderTimestamp) {
         return true;
       }
 
