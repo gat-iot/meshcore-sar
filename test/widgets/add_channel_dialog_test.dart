@@ -4,7 +4,7 @@ import 'package:meshcore_sar_app/l10n/app_localizations.dart';
 import 'package:meshcore_sar_app/widgets/contacts/add_channel_dialog.dart';
 
 void main() {
-  Future<void> pumpDialog(
+  Future<void> pumpSheet(
     WidgetTester tester, {
     required Future<void> Function(String name, String secret) onCreateChannel,
   }) async {
@@ -15,7 +15,7 @@ void main() {
         home: Scaffold(
           body: Builder(
             builder: (context) => Center(
-              child: AddChannelDialog(onCreateChannel: onCreateChannel),
+              child: AddChannelSheet(onCreateChannel: onCreateChannel),
             ),
           ),
         ),
@@ -27,7 +27,7 @@ void main() {
     String? submittedName;
     String? submittedSecret;
 
-    await pumpDialog(
+    await pumpSheet(
       tester,
       onCreateChannel: (name, secret) async {
         submittedName = name;
@@ -47,7 +47,7 @@ void main() {
   testWidgets('uses done action for hash channels', (tester) async {
     String? submittedName;
 
-    await pumpDialog(
+    await pumpSheet(
       tester,
       onCreateChannel: (name, secret) async {
         submittedName = name;

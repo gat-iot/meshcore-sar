@@ -22,6 +22,7 @@ import '../../l10n/app_localizations.dart';
 class ContactTile extends StatelessWidget {
   final Contact contact;
   final String? groupLabel;
+  final bool compact;
   final Position? currentPosition;
   final double Function(double, double, double, double)? calculateDistance;
   final String Function(double)? formatDistance;
@@ -32,6 +33,7 @@ class ContactTile extends StatelessWidget {
     super.key,
     required this.contact,
     this.groupLabel,
+    this.compact = false,
     this.currentPosition,
     this.calculateDistance,
     this.formatDistance,
@@ -127,50 +129,52 @@ class ContactTile extends StatelessWidget {
           : colorScheme.onSurfaceVariant,
       fontWeight: FontWeight.w600,
     );
-    final Widget subtitleWidget = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 4),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            if (groupLabel case final label?)
-              _buildMetaPill(
-                context,
-                icon: Icons.folder_copy_outlined,
-                label: label,
+    final Widget subtitleWidget = compact
+        ? _buildCompactSubtitle(context, distanceText)
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  if (groupLabel case final label?)
+                    _buildMetaPill(
+                      context,
+                      icon: Icons.folder_copy_outlined,
+                      label: label,
+                    ),
+                  _buildMetaPill(
+                    context,
+                    icon: Icons.key_outlined,
+                    label: contact.publicKeyShort,
+                    monospace: true,
+                  ),
+                ],
               ),
-            _buildMetaPill(
-              context,
-              icon: Icons.key_outlined,
-              label: contact.publicKeyShort,
-              monospace: true,
-            ),
-          ],
-        ),
-        if (location != null) ...[
-          const SizedBox(height: 2),
-          _buildLocationLine(
-            context,
-            latitude: location.latitude,
-            longitude: location.longitude,
-            distanceText: distanceText,
-          ),
-          const SizedBox(height: 6),
-          Row(children: [_buildRoutePill(context, contact)]),
-        ] else
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              AppLocalizations.of(context)!.noGpsData,
-              style: Theme.of(
-                context,
-              ).textTheme.labelSmall?.copyWith(color: Colors.grey),
-            ),
-          ),
-      ],
-    );
+              if (location != null) ...[
+                const SizedBox(height: 2),
+                _buildLocationLine(
+                  context,
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  distanceText: distanceText,
+                ),
+                const SizedBox(height: 6),
+                Row(children: [_buildRoutePill(context, contact)]),
+              ] else
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    AppLocalizations.of(context)!.noGpsData,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: Colors.grey),
+                  ),
+                ),
+            ],
+          );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -291,6 +295,34 @@ class ContactTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCompactSubtitle(BuildContext context, String? distanceText) {
+    final location = contact.displayLocation;
+    final compactPills = <Widget>[
+      if (groupLabel case final label?)
+        _buildMetaPill(context, icon: Icons.folder_copy_outlined, label: label),
+      _buildMetaPill(
+        context,
+        icon: Icons.key_outlined,
+        label: contact.publicKeyShort,
+        monospace: true,
+      ),
+      if (distanceText != null) _buildDistancePill(context, distanceText),
+      if (contact.routeHasPath && contact.routeHopCount > 0)
+        _buildRoutePill(context, contact),
+      if (location == null)
+        _buildMetaPill(
+          context,
+          icon: Icons.location_disabled_outlined,
+          label: AppLocalizations.of(context)!.noGpsData,
+        ),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(spacing: 6, runSpacing: 6, children: compactPills),
     );
   }
 
@@ -570,46 +602,25 @@ class ContactTile extends StatelessWidget {
     BuildContext context,
     Contact contact,
   ) async {
-    final controller = TextEditingController(text: contact.nameOverride ?? '');
     final l10n = AppLocalizations.of(context)!;
-
-    final result = await showDialog<String?>(
+    final result = await showModalBottomSheet<String?>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Edit name'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: controller,
-              autofocus: true,
-              textInputAction: TextInputAction.done,
-              decoration: InputDecoration(
-                labelText: 'Custom name',
-                hintText: contact.advName,
-                helperText: 'Leave blank to use the advertised name.',
-              ),
-              onSubmitted: (value) {
-                Navigator.of(dialogContext).pop(value);
-              },
-            ),
-          ],
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (dialogContext) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(dialogContext).viewInsets.bottom,
+          ),
+          child: _ContactNameOverrideSheet(
+            initialValue: contact.nameOverride ?? '',
+            advertisedName: contact.advName,
+            cancelLabel: l10n.cancel,
+            saveLabel: l10n.save,
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: Text(l10n.save),
-          ),
-        ],
       ),
     );
-
-    controller.dispose();
 
     if (result == null || !context.mounted) {
       return;
@@ -976,6 +987,108 @@ class ContactTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ContactNameOverrideSheet extends StatefulWidget {
+  final String initialValue;
+  final String advertisedName;
+  final String cancelLabel;
+  final String saveLabel;
+
+  const _ContactNameOverrideSheet({
+    required this.initialValue,
+    required this.advertisedName,
+    required this.cancelLabel,
+    required this.saveLabel,
+  });
+
+  @override
+  State<_ContactNameOverrideSheet> createState() =>
+      _ContactNameOverrideSheetState();
+}
+
+class _ContactNameOverrideSheetState extends State<_ContactNameOverrideSheet> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(_controller.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Edit name',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              textInputAction: TextInputAction.done,
+              decoration: InputDecoration(
+                labelText: 'Custom name',
+                hintText: widget.advertisedName,
+                helperText: 'Leave blank to use the advertised name.',
+                border: const OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(widget.cancelLabel),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _submit,
+                    child: Text(widget.saveLabel),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meshcore_sar_app/l10n/app_localizations.dart';
 import 'package:meshcore_sar_app/models/contact.dart';
+import 'package:meshcore_sar_app/models/contact_group.dart';
 import 'package:meshcore_sar_app/providers/connection_provider.dart';
 import 'package:meshcore_sar_app/providers/contacts_provider.dart';
 import 'package:meshcore_sar_app/providers/map_provider.dart';
 import 'package:meshcore_sar_app/providers/messages_provider.dart';
 import 'package:meshcore_sar_app/screens/contacts_tab.dart';
+import 'package:meshcore_sar_app/utils/contact_grouping.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -36,13 +38,39 @@ void main() {
     );
   }
 
+  Contact buildRepeater({required int seed, required String name}) {
+    final publicKey = Uint8List(32);
+    publicKey[0] = seed;
+    publicKey[1] = seed + 1;
+
+    return Contact(
+      publicKey: publicKey,
+      type: ContactType.repeater,
+      flags: 0,
+      outPathLen: -1,
+      outPath: Uint8List(0),
+      advName: name,
+      lastAdvert: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      advLat: 46056000 + seed,
+      advLon: 14505000 + seed,
+      lastMod: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    );
+  }
+
   Future<void> pumpContactsTab(
     WidgetTester tester, {
-    required List<Contact> channels,
+    List<Contact> contacts = const [],
+    List<SavedContactGroup> savedGroups = const [],
   }) async {
     final contactsProvider = ContactsProvider();
-    for (final channel in channels) {
-      contactsProvider.addOrUpdateContact(channel);
+    for (final contact in contacts) {
+      contactsProvider.addOrUpdateContact(contact);
+    }
+    if (savedGroups.isNotEmpty) {
+      await contactsProvider.replaceAutoGroupsForSection(
+        'repeaters',
+        savedGroups,
+      );
     }
 
     await tester.pumpWidget(
@@ -69,7 +97,7 @@ void main() {
   ) async {
     await pumpContactsTab(
       tester,
-      channels: [buildChannel(name: 'Ops', channelIndex: 3)],
+      contacts: [buildChannel(name: 'Ops', channelIndex: 3)],
     );
 
     expect(find.text('Ops'), findsOneWidget);
@@ -88,5 +116,80 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('repeaters show Others group when multiple groups exist', (
+    tester,
+  ) async {
+    final repeaters = [
+      buildRepeater(seed: 10, name: 'AL-1'),
+      buildRepeater(seed: 11, name: 'AL-2'),
+      buildRepeater(seed: 12, name: 'AL-3'),
+      buildRepeater(seed: 13, name: 'AL-4'),
+      buildRepeater(seed: 20, name: 'BR-1'),
+      buildRepeater(seed: 21, name: 'BR-2'),
+      buildRepeater(seed: 22, name: 'BR-3'),
+      buildRepeater(seed: 23, name: 'BR-4'),
+      buildRepeater(seed: 30, name: 'Lone Relay'),
+    ];
+    final inferredGroups = ContactGrouping.inferGroups(repeaters);
+    final savedGroups = inferredGroups
+        .map(
+          (group) => SavedContactGroup(
+            id: 'repeaters_${group.key}',
+            sectionKey: 'repeaters',
+            label: group.label,
+            query: group.label,
+            createdAt: DateTime(2026, 3, 13, 10),
+            matchPrefixes: group.matchPrefixes,
+            isAutoGroup: true,
+          ),
+        )
+        .toList();
+
+    await pumpContactsTab(
+      tester,
+      contacts: repeaters,
+      savedGroups: savedGroups,
+    );
+
+    expect(find.text('AL-'), findsOneWidget);
+    expect(find.text('BR-'), findsOneWidget);
+    expect(find.text('Others'), findsOneWidget);
+    expect(find.text('Lone Relay'), findsNothing);
+  });
+
+  testWidgets('repeaters stay flat when only one group exists', (tester) async {
+    final repeaters = [
+      buildRepeater(seed: 40, name: 'AL-1'),
+      buildRepeater(seed: 41, name: 'AL-2'),
+      buildRepeater(seed: 42, name: 'AL-3'),
+      buildRepeater(seed: 43, name: 'AL-4'),
+      buildRepeater(seed: 50, name: 'Lone Relay'),
+    ];
+    final inferredGroups = ContactGrouping.inferGroups(repeaters);
+    final savedGroups = inferredGroups
+        .map(
+          (group) => SavedContactGroup(
+            id: 'repeaters_${group.key}',
+            sectionKey: 'repeaters',
+            label: group.label,
+            query: group.label,
+            createdAt: DateTime(2026, 3, 13, 10),
+            matchPrefixes: group.matchPrefixes,
+            isAutoGroup: true,
+          ),
+        )
+        .toList();
+
+    await pumpContactsTab(
+      tester,
+      contacts: repeaters,
+      savedGroups: savedGroups,
+    );
+
+    expect(find.text('AL-'), findsOneWidget);
+    expect(find.text('Others'), findsNothing);
+    expect(find.text('Lone Relay'), findsOneWidget);
   });
 }

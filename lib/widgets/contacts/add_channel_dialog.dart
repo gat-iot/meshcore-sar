@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 
-/// Dialog for adding a new channel
-class AddChannelDialog extends StatefulWidget {
+/// Bottom sheet for adding a new channel
+class AddChannelSheet extends StatefulWidget {
   final Future<void> Function(String name, String secret) onCreateChannel;
 
-  const AddChannelDialog({
-    super.key,
-    required this.onCreateChannel,
-  });
+  const AddChannelSheet({super.key, required this.onCreateChannel});
 
   @override
-  State<AddChannelDialog> createState() => _AddChannelDialogState();
+  State<AddChannelSheet> createState() => _AddChannelSheetState();
 }
 
-class _AddChannelDialogState extends State<AddChannelDialog> {
+class _AddChannelSheetState extends State<AddChannelSheet> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _secretController = TextEditingController();
@@ -84,7 +81,7 @@ class _AddChannelDialogState extends State<AddChannelDialog> {
     try {
       final channelName = _nameController.text.trim();
       final isHashChannel = channelName.startsWith('#');
-      
+
       // For hash channels, pass empty secret (will be auto-generated)
       // For private channels, use the provided secret
       final secret = isHashChannel ? '' : _secretController.text;
@@ -109,152 +106,183 @@ class _AddChannelDialogState extends State<AddChannelDialog> {
     final normalizedName = _nameController.text.trimLeft();
     final isHashChannel = normalizedName.startsWith('#');
 
-    return AlertDialog(
-      title: Text(l10n.addChannel),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Info banner explaining channel types
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 20,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        l10n.channelTypesInfo,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                        l10n.addChannel,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
+                    IconButton(
+                      onPressed: _isCreating
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                      tooltip: l10n.close,
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 16),
-
-              // Channel Name Field
-              TextFormField(
-                controller: _nameController,
-                decoration: InputDecoration(
-                  labelText: l10n.channelName,
-                  hintText: l10n.channelNameHint,
-                  border: const OutlineInputBorder(),
-                  prefixIcon: Icon(
-                    isHashChannel ? Icons.tag : Icons.lock_outline,
-                    color: isHashChannel ? Colors.blue : Colors.orange,
-                  ),
-                ),
-                enabled: !_isCreating,
-                maxLength: 31,
-                validator: _validateName,
-                textInputAction: isHashChannel
-                    ? TextInputAction.done
-                    : TextInputAction.next,
-                onChanged: (_) => setState(() {}), // Rebuild to update icon
-                onFieldSubmitted: (_) {
-                  if (isHashChannel) {
-                    _handleCreate();
-                  }
-                },
-              ),
-              // Channel Secret Field (only show for private channels)
-              if (!isHashChannel) ...[
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _secretController,
-                  decoration: InputDecoration(
-                    labelText: l10n.channelSecret,
-                    hintText: l10n.channelSecretHint,
-                    border: const OutlineInputBorder(),
-                  ),
-                  obscureText: true,
-                  enabled: !_isCreating,
-                  maxLength: 32,
-                  validator: _validateSecret,
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => _handleCreate(),
-                ),
-                const SizedBox(height: 8),
-                // Help Text for private channels
-                Text(
-                  l10n.channelSecretHelp,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-
-              // Help Text for hash channels
-              if (isHashChannel) ...[
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(8),
+                    color: theme.colorScheme.primaryContainer.withValues(
+                      alpha: 0.3,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(
-                        Icons.auto_awesome,
+                      Icon(
+                        Icons.info_outline,
                         size: 20,
-                        color: Colors.blue,
+                        color: theme.colorScheme.primary,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          l10n.hashChannelInfo,
+                          l10n.channelTypesInfo,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w500,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: l10n.channelName,
+                    hintText: l10n.channelNameHint,
+                    border: const OutlineInputBorder(),
+                    prefixIcon: Icon(
+                      isHashChannel ? Icons.tag : Icons.lock_outline,
+                      color: isHashChannel ? Colors.blue : Colors.orange,
+                    ),
+                  ),
+                  enabled: !_isCreating,
+                  maxLength: 31,
+                  validator: _validateName,
+                  textInputAction: isHashChannel
+                      ? TextInputAction.done
+                      : TextInputAction.next,
+                  onChanged: (_) => setState(() {}),
+                  onFieldSubmitted: (_) {
+                    if (isHashChannel) {
+                      _handleCreate();
+                    }
+                  },
+                ),
+                if (!isHashChannel) ...[
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _secretController,
+                    decoration: InputDecoration(
+                      labelText: l10n.channelSecret,
+                      hintText: l10n.channelSecretHint,
+                      border: const OutlineInputBorder(),
+                    ),
+                    obscureText: true,
+                    enabled: !_isCreating,
+                    maxLength: 32,
+                    validator: _validateSecret,
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _handleCreate(),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.channelSecretHelp,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                if (isHashChannel) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer.withValues(
+                        alpha: 0.5,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.auto_awesome,
+                          size: 20,
+                          color: Colors.blue,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            l10n.hashChannelInfo,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _isCreating
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: Text(l10n.cancel),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _isCreating ? null : _handleCreate,
+                        child: _isCreating
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(l10n.createChannel),
+                      ),
+                    ),
+                  ],
+                ),
               ],
-            ],
+            ),
           ),
         ),
       ),
-      actions: [
-        // Cancel Button
-        TextButton(
-          onPressed: _isCreating ? null : () => Navigator.of(context).pop(),
-          child: Text(l10n.cancel),
-        ),
-
-        // Create Button
-        FilledButton(
-          onPressed: _isCreating ? null : _handleCreate,
-          child: _isCreating
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(l10n.createChannel),
-        ),
-      ],
     );
   }
 }

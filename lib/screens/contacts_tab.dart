@@ -401,41 +401,50 @@ class _ContactsTabState extends State<ContactsTab> {
     );
   }
 
-  /// Show the add channel dialog
+  /// Show the add channel sheet
   Future<void> _showAddChannelDialog(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
 
-    await showDialog(
+    await showModalBottomSheet(
       context: context,
-      builder: (context) => AddChannelDialog(
-        onCreateChannel: (name, secret) async {
-          final connectionProvider = context.read<ConnectionProvider>();
-          try {
-            await connectionProvider.createChannel(
-              channelName: name,
-              channelSecret: secret,
-            );
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: AddChannelSheet(
+            onCreateChannel: (name, secret) async {
+              final connectionProvider = context.read<ConnectionProvider>();
+              try {
+                await connectionProvider.createChannel(
+                  channelName: name,
+                  channelSecret: secret,
+                );
 
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(l10n.channelCreatedSuccessfully),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            }
-          } catch (e) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(l10n.channelCreationFailed(e.toString())),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-            rethrow; // Re-throw to let dialog handle the error state
-          }
-        },
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(l10n.channelCreatedSuccessfully),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(l10n.channelCreationFailed(e.toString())),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+                rethrow; // Re-throw to let dialog handle the error state
+              }
+            },
+          ),
+        ),
       ),
     );
   }
@@ -627,6 +636,13 @@ class _ContactsTabState extends State<ContactsTab> {
               _showSavedGroupsForSection(ContactSection.repeaters)
               ? savedRepeaterGroups
               : const <_RenderedSavedGroup>[];
+          final ungroupedRepeaters = _excludeGroupedContacts(
+            repeaters,
+            visibleSavedRepeaterGroups,
+          );
+          final showRepeatersOthersGroup =
+              visibleSavedRepeaterGroups.length > 1 &&
+              ungroupedRepeaters.isNotEmpty;
           final rooms = _filterContactsForSection(
             allRooms,
             ContactSection.rooms,
@@ -783,12 +799,23 @@ class _ContactsTabState extends State<ContactsTab> {
                     visibleSavedRepeaterGroups,
                     ContactSection.repeaters,
                   ),
-                  ..._buildContactSectionItems(
-                    _excludeGroupedContacts(
-                      repeaters,
-                      visibleSavedRepeaterGroups,
+                  if (showRepeatersOthersGroup)
+                    _InferredContactGroupCard(
+                      label: 'Others',
+                      contacts: ungroupedRepeaters,
+                      kindLabel: 'Auto group',
+                      compactContacts: true,
+                      currentPosition: _currentPosition,
+                      calculateDistance: _calculateDistanceInMeters,
+                      formatDistance: _formatDistance,
+                      onNavigateToMap: widget.onNavigateToMap,
+                      onNavigateToMessages: widget.onNavigateToMessages,
+                    )
+                  else
+                    ..._buildContactSectionItems(
+                      ungroupedRepeaters,
+                      compact: true,
                     ),
-                  ),
                   const Divider(height: 32),
                 ],
 
@@ -894,11 +921,15 @@ class _ContactsTabState extends State<ContactsTab> {
     );
   }
 
-  List<Widget> _buildContactSectionItems(List<Contact> contacts) {
+  List<Widget> _buildContactSectionItems(
+    List<Contact> contacts, {
+    bool compact = false,
+  }) {
     return contacts
         .map(
           (contact) => ContactTile(
             contact: contact,
+            compact: compact,
             currentPosition: _currentPosition,
             calculateDistance: _calculateDistanceInMeters,
             formatDistance: _formatDistance,
@@ -932,6 +963,7 @@ class _ContactsTabState extends State<ContactsTab> {
           (group) => _InferredContactGroupCard(
             label: group.group.label,
             contacts: group.contacts,
+            compactContacts: section == ContactSection.repeaters,
             currentPosition: _currentPosition,
             calculateDistance: _calculateDistanceInMeters,
             formatDistance: _formatDistance,
@@ -1317,6 +1349,7 @@ class _InferredContactGroupCard extends StatelessWidget {
   final String label;
   final List<Contact> contacts;
   final String? kindLabel;
+  final bool compactContacts;
   final Position? currentPosition;
   final double Function(double, double, double, double) calculateDistance;
   final String Function(double) formatDistance;
@@ -1328,6 +1361,7 @@ class _InferredContactGroupCard extends StatelessWidget {
     required this.label,
     required this.contacts,
     this.kindLabel,
+    this.compactContacts = false,
     required this.currentPosition,
     required this.calculateDistance,
     required this.formatDistance,
@@ -1414,6 +1448,7 @@ class _InferredContactGroupCard extends StatelessWidget {
               (contact) => ContactTile(
                 contact: contact,
                 groupLabel: label,
+                compact: compactContacts,
                 currentPosition: currentPosition,
                 calculateDistance: calculateDistance,
                 formatDistance: formatDistance,
