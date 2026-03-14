@@ -329,6 +329,8 @@ class MessageStorageService {
     Message message, {
     MessageReceptionDetails? receptionDetails,
   }) {
+    final persistedPathBytes =
+        message.pathBytes ?? _pathBytesFromSnapshot(receptionDetails);
     return {
       'id': message.id,
       'messageType': message.messageType.name,
@@ -337,6 +339,7 @@ class MessageStorageService {
           : null,
       'channelIdx': message.channelIdx,
       'pathLen': message.pathLen,
+      'pathBytes': persistedPathBytes?.toList(),
       'textType': message.textType.value,
       'senderTimestamp': message.senderTimestamp,
       'text': message.text,
@@ -465,6 +468,14 @@ class MessageStorageService {
             : null,
         channelIdx: json['channelIdx'] as int?,
         pathLen: json['pathLen'] as int,
+        pathBytes: json['pathBytes'] is List
+            ? Uint8List.fromList(
+                (json['pathBytes'] as List<dynamic>)
+                    .whereType<num>()
+                    .map((b) => b.toInt())
+                    .toList(),
+              )
+            : null,
         textType: MessageTextType.fromValue(json['textType'] as int),
         senderTimestamp: json['senderTimestamp'] as int,
         text: json['text'] as String,
@@ -561,5 +572,13 @@ class MessageStorageService {
       debugPrint('❌ [MessageStorage] Error parsing message from JSON: $e');
       return null;
     }
+  }
+
+  Uint8List? _pathBytesFromSnapshot(MessageReceptionDetails? receptionDetails) {
+    final pathBytes = receptionDetails?.pathBytes;
+    if (pathBytes == null || pathBytes.isEmpty) {
+      return null;
+    }
+    return Uint8List.fromList(pathBytes);
   }
 }

@@ -549,6 +549,15 @@ class MessagesProvider with ChangeNotifier {
       }
     }
 
+    final incomingPathBytes = receptionDetailsSnapshot?.pathBytes;
+    if (incomingPathBytes != null &&
+        incomingPathBytes.isNotEmpty &&
+        finalMessage.pathBytes == null) {
+      finalMessage = finalMessage.copyWith(
+        pathBytes: Uint8List.fromList(incomingPathBytes),
+      );
+    }
+
     // Debug: Check if message is SAR
     if (message.text.startsWith('S:')) {
       debugPrint(
@@ -582,6 +591,15 @@ class MessagesProvider with ChangeNotifier {
       }
       if (receptionDetailsSnapshot != null) {
         _messageReceptionDetails[existingId] = receptionDetailsSnapshot;
+        final existingMessage = _messages[duplicateIndex];
+        final duplicatePathBytes = receptionDetailsSnapshot.pathBytes;
+        if (existingMessage.pathBytes == null &&
+            duplicatePathBytes != null &&
+            duplicatePathBytes.isNotEmpty) {
+          _messages[duplicateIndex] = existingMessage.copyWith(
+            pathBytes: Uint8List.fromList(duplicatePathBytes),
+          );
+        }
       }
       _persistMessages();
       return; // Skip duplicate
@@ -692,7 +710,7 @@ class MessagesProvider with ChangeNotifier {
           incomingSenderName != null &&
           existingSenderName == incomingSenderName) {
         if (!existing.isSentMessage && !message.isSentMessage) {
-          return true;
+          return withinChannelRepeatWindow;
         }
 
         if (!withinChannelRepeatWindow) {
@@ -715,7 +733,8 @@ class MessagesProvider with ChangeNotifier {
       return false;
     }
 
-    return true;
+    // System messages and other types: never deduplicate by scope alone.
+    return false;
   }
 
   /// Add multiple messages
@@ -725,7 +744,33 @@ class MessagesProvider with ChangeNotifier {
 
     for (final message in messages) {
       // Always enhance message with SAR parser to detect SAR markers
-      final enhancedMessage = SarMessageParser.enhanceMessage(message);
+      var enhancedMessage = SarMessageParser.enhanceMessage(message);
+
+      // Check if it's a drawing message (D:...) and not already marked
+      if (DrawingMessageParser.isDrawingMessage(enhancedMessage.text) &&
+          !enhancedMessage.isDrawing) {
+        final drawing = DrawingMessageParser.parseDrawingMessage(
+          enhancedMessage.text,
+          senderName: enhancedMessage.senderName,
+          messageId: enhancedMessage.id,
+        );
+        enhancedMessage = enhancedMessage.copyWith(
+          isDrawing: true,
+          drawingId: drawing?.id,
+        );
+      }
+
+      // Check if it's a voice message and not already marked
+      if (!enhancedMessage.isVoice) {
+        final envelope = VoiceEnvelope.tryParseText(enhancedMessage.text);
+        if (envelope != null) {
+          enhancedMessage = enhancedMessage.copyWith(
+            isVoice: true,
+            voiceId: envelope.sessionId,
+          );
+        }
+      }
+      enhancedMessage = _resolveSenderNameIfNeeded(enhancedMessage);
 
       // Check for duplicates
       if (_findDuplicateMessageIndex(enhancedMessage) != -1) {
@@ -1028,6 +1073,7 @@ class MessagesProvider with ChangeNotifier {
     for (final messageId in messageIdsToRemove) {
       _timeoutTimers[messageId]?.cancel();
       _timeoutTimers.remove(messageId);
+      _clearChannelSendWarning(messageId);
       _messageContactMap.remove(messageId);
       _groupedMessageMapping.remove(messageId);
       _messageContactLocations.remove(messageId);
@@ -1245,11 +1291,7 @@ class MessagesProvider with ChangeNotifier {
 
   /// Clear all messages
   void clearMessages() {
-    for (final timer in _channelEchoWarningTimers.values) {
-      timer.cancel();
-    }
-    _channelEchoWarningTimers.clear();
-    _channelEchoWarningMessageIds.clear();
+    _cancelAllTimers();
     _messages.clear();
     _sarMarkers.clear();
     _removedSarMarkerIds.clear();
@@ -1257,6 +1299,14 @@ class MessagesProvider with ChangeNotifier {
     _messageReceptionDetails.clear();
     _messageTransferDetails.clear();
     _messageRouteMetadata.clear();
+    _pendingSentMessages.clear();
+    _messageContactMap.clear();
+    _groupedMessageMapping.clear();
+    _ackTagToRecipients.clear();
+    _messageAckHistory.clear();
+    _ackHistoryLookup.clear();
+    _completedAckHistory.clear();
+    _retryManager.clearAll();
     _persistMessages();
     unawaited(_storageService.saveRemovedSarMarkerIds(_removedSarMarkerIds));
     notifyListeners();
@@ -1272,11 +1322,7 @@ class MessagesProvider with ChangeNotifier {
 
   /// Clear all data
   void clearAll() {
-    for (final timer in _channelEchoWarningTimers.values) {
-      timer.cancel();
-    }
-    _channelEchoWarningTimers.clear();
-    _channelEchoWarningMessageIds.clear();
+    _cancelAllTimers();
     _messages.clear();
     _sarMarkers.clear();
     _removedSarMarkerIds.clear();
@@ -1284,6 +1330,14 @@ class MessagesProvider with ChangeNotifier {
     _messageReceptionDetails.clear();
     _messageTransferDetails.clear();
     _messageRouteMetadata.clear();
+    _pendingSentMessages.clear();
+    _messageContactMap.clear();
+    _groupedMessageMapping.clear();
+    _ackTagToRecipients.clear();
+    _messageAckHistory.clear();
+    _ackHistoryLookup.clear();
+    _completedAckHistory.clear();
+    _retryManager.clearAll();
     _persistMessages();
     unawaited(_storageService.saveRemovedSarMarkerIds(_removedSarMarkerIds));
     notifyListeners();
@@ -1964,7 +2018,7 @@ class MessagesProvider with ChangeNotifier {
       debugPrint('  Message index in list: $index');
 
       if (index != -1) {
-        final updatedMessage = message.copyWith(
+        final updatedMessage = _messages[index].copyWith(
           deliveryStatus: MessageDeliveryStatus.delivered,
           roundTripTimeMs: roundTripTimeMs,
           deliveredAt: DateTime.now(),
@@ -2323,6 +2377,7 @@ class MessagesProvider with ChangeNotifier {
       senderPublicKeyPrefix: message.senderPublicKeyPrefix,
       channelIdx: message.channelIdx,
       pathLen: message.pathLen,
+      pathBytes: message.pathBytes,
       textType: message.textType,
       senderTimestamp: message.senderTimestamp,
       text: message.text,
@@ -2410,7 +2465,19 @@ class MessagesProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    // Cancel all pending timeout timers
+    _cancelAllTimers();
+    _completedAckHistory.clear();
+    _messageAckHistory.clear();
+    _ackHistoryLookup.clear();
+
+    // Clear retry manager
+    _retryManager.clearAll();
+
+    super.dispose();
+  }
+
+  /// Cancel all pending timers (timeout + echo warning).
+  void _cancelAllTimers() {
     for (final timer in _timeoutTimers.values) {
       timer.cancel();
     }
@@ -2420,14 +2487,6 @@ class MessagesProvider with ChangeNotifier {
     }
     _channelEchoWarningTimers.clear();
     _channelEchoWarningMessageIds.clear();
-    _completedAckHistory.clear();
-    _messageAckHistory.clear();
-    _ackHistoryLookup.clear();
-
-    // Clear retry manager
-    _retryManager.clearAll();
-
-    super.dispose();
   }
 
   void _rememberCompletedAck(int ackCode) {

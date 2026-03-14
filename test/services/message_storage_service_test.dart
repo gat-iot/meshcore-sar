@@ -43,9 +43,11 @@ void main() {
       await prefs.remove('stored_message_reception_details');
 
       final restoredDetails = await storage.loadMessageReceptionDetails();
+      final restoredMessages = await storage.loadMessages();
 
       expect(restoredDetails.keys, contains(message.id));
       expect(restoredDetails[message.id]?.pathBytes, [0xAA, 0xBB, 0xCC]);
+      expect(restoredMessages.single.pathBytes, [0xAA, 0xBB, 0xCC]);
     },
   );
 
