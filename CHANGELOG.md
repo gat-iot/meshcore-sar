@@ -4,7 +4,7 @@
 
 - Discovery and contacts: finished the discovery flow, removed artificial UI delays, added profile storage and sync, and allowed contact name overrides.
 - Messaging and channels: fixed channel sync, deduplication, overwrite and deletion issues, cleared message input after send, and added delayed-message warning tracking.
-- Voice and transport: added LPCNet voice mode support, fixed a voice quality regression, improved scan and advert parsing, and kept route path data visible in logs.
+- Voice and transport: improved voice playback quality, improved scan and advert parsing, and kept route path data visible in logs.
 - Maps and field operations: enabled iOS background GPS updates, added GPX trail import/export, introduced a fullscreen repeater map, and added live mesh traffic views.
 - Localization and UI polish: added multilingual localization coverage, updated locale strings, fixed onboarding layout issues, and refined channel and contacts presentation.
 
