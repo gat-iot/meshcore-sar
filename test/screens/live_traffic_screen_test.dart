@@ -115,9 +115,15 @@ void main() {
 
     expect(find.text('1 pkt/min'), findsOneWidget);
     expect(find.text('Device total 7'), findsOneWidget);
-    expect(find.text('Response'), findsWidgets);
+    expect(find.text('FLOOD RESPONSE'), findsOneWidget);
     expect(find.text('MULTI-HOP'), findsOneWidget);
     expect(find.textContaining('RSSI -84 dBm'), findsOneWidget);
+    expect(find.textContaining('Hash:'), findsOneWidget);
+    expect(
+      find.textContaining('Path: 3 hops [c010,6301,68d9]'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Path Hashes: 2-byte per hop'), findsOneWidget);
   });
 
   testWidgets('clear live view only resets transient screen state', (
@@ -174,6 +180,6 @@ void main() {
     await tester.pump();
 
     expect(find.text('No packets for this filter'), findsNothing);
-    expect(find.textContaining('3 bytes'), findsOneWidget);
+    expect(find.textContaining('Size: 3 bytes'), findsOneWidget);
   });
 }

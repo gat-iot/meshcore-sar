@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 /// Message delivery tracking helper
@@ -29,6 +30,9 @@ class MessageDeliveryTracker {
 
   /// Map of ACK tag to timestamp for timeout cleanup
   final Map<int, DateTime> _ackTagTimestamps = {};
+
+  /// Completer signalled when a pending ACK slot is freed (delivery or removal).
+  Completer<void>? _slotFreedCompleter;
 
   /// Track a pending message ID before sending
   ///
@@ -112,6 +116,7 @@ class MessageDeliveryTracker {
       _messageIdToAckTag.remove(messageId);
     }
     _ackTagTimestamps.remove(ackCode);
+    _notifySlotFreed();
   }
 
   /// Remove ACK tag mapping by message ID
@@ -122,6 +127,7 @@ class MessageDeliveryTracker {
     if (ackTag != null) {
       _ackTagToMessageId.remove(ackTag);
       _ackTagTimestamps.remove(ackTag);
+      _notifySlotFreed();
     }
     _pendingMessageIds.remove(messageId);
     final emptyKeys = <String>[];
@@ -166,6 +172,7 @@ class MessageDeliveryTracker {
     _ackTagToMessageId.clear();
     _messageIdToAckTag.clear();
     _ackTagTimestamps.clear();
+    _notifySlotFreed();
   }
 
   /// Get count of pending ACK tags
@@ -178,6 +185,27 @@ class MessageDeliveryTracker {
   ///
   /// Returns true if >= 7 pending ACKs (stay under firmware limit of 8)
   bool get shouldRateLimit => pendingCount >= 7;
+
+  /// Wait until a pending ACK slot is freed, or [timeout] elapses.
+  ///
+  /// Returns immediately if not at the rate limit.
+  Future<void> waitForSlot({
+    Duration timeout = const Duration(milliseconds: 500),
+  }) async {
+    if (!shouldRateLimit) return;
+    _slotFreedCompleter ??= Completer<void>();
+    await _slotFreedCompleter!.future.timeout(
+      timeout,
+      onTimeout: () {},
+    );
+  }
+
+  void _notifySlotFreed() {
+    if (_slotFreedCompleter != null && !_slotFreedCompleter!.isCompleted) {
+      _slotFreedCompleter!.complete();
+    }
+    _slotFreedCompleter = null;
+  }
 
   /// Get oldest pending ACK timestamp (for debugging)
   DateTime? get oldestPendingTimestamp {

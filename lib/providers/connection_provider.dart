@@ -264,7 +264,6 @@ class ConnectionProvider with ChangeNotifier {
 
       try {
         await _activeService.addOrUpdateContact(pendingOp.contact!);
-        await Future.delayed(const Duration(milliseconds: 300));
 
         if (pendingOp.messageId != null) {
           _messageDeliveryTracker.trackPendingDirectMessage(
@@ -1272,12 +1271,11 @@ class ConnectionProvider with ChangeNotifier {
         '⚠️ [ConnectionProvider] Rate limit hit: $pendingCount pending ACKs (max 7)',
       );
       debugPrint(
-        '⚠️ Firmware only tracks 8 ACKs - waiting for delivery confirmations...',
+        '⚠️ Firmware only tracks 8 ACKs - waiting for delivery confirmation...',
       );
 
-      // Wait briefly for some ACKs to arrive, then proceed anyway
-      // (User action shouldn't be blocked forever)
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Wait for a slot to free up (delivery/timeout), max 500ms
+      await _messageDeliveryTracker.waitForSlot();
 
       if (_messageDeliveryTracker.shouldRateLimit) {
         debugPrint(
@@ -1353,30 +1351,14 @@ class ConnectionProvider with ChangeNotifier {
         attempt: retryAttempt,
       );
 
-      if (messageId != null) {
-        Future.delayed(const Duration(milliseconds: 350), () {
-          if (_messageDeliveryTracker.hasAckForMessage(messageId)) {
-            return;
-          }
-
-          debugPrint(
-            'ℹ️ [ConnectionProvider] Missing RESP_CODE_SENT for $messageId; promoting to sent via fallback',
-          );
-          onMessageSent?.call(messageId, 0, 0);
-        });
-      }
-
-      // Clear pending operation after successful send (no error)
-      // If ERR_CODE_NOT_FOUND occurs, the operation will be recovered automatically
+      // Clear pending operation — any ERR_CODE_NOT_FOUND has already been
+      // handled synchronously by onContactNotFound before sendTextMessage returns.
       if (effectiveContact != null) {
         final operationId = contactPublicKey
             .sublist(0, 6)
             .map((b) => b.toRadixString(16).padLeft(2, '0'))
             .join(':');
-        // Use a small delay to allow error response to arrive before clearing
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _pendingSendOperations.remove(operationId);
-        });
+        _pendingSendOperations.remove(operationId);
       }
 
       return true;

@@ -61,9 +61,10 @@ class _MessagesTabState extends State<MessagesTab> {
   Timer? _highlightTimer; // Timer for clearing message highlight
   Timer? _channelReadTimer;
   String? _pendingChannelReadKey;
-  TextEditingValue _lastComposerValue = const TextEditingValue();
-  bool _isMentionPickerOpen = false;
   bool _suppressMentionTrigger = false;
+  TextRange? _activeMentionRange;
+  String _mentionQuery = '';
+  List<Contact> _mentionSuggestions = const [];
 
   // Message destination state
   String _destinationType =
@@ -92,8 +93,8 @@ class _MessagesTabState extends State<MessagesTab> {
   @override
   void initState() {
     super.initState();
-    _lastComposerValue = _textController.value;
     _textController.addListener(_handleComposerChanged);
+    _focusNode.addListener(_handleFocusChanged);
     // Load saved message destination
     _loadSavedDestination();
     _loadVoiceSettings();
@@ -126,6 +127,7 @@ class _MessagesTabState extends State<MessagesTab> {
     _channelReadTimer?.cancel();
     _voiceStreamSub?.cancel();
     _voiceRecorder.dispose();
+    _focusNode.removeListener(_handleFocusChanged);
     _textController.dispose();
     _focusNode.dispose();
     _scrollController.dispose();
@@ -195,25 +197,13 @@ class _MessagesTabState extends State<MessagesTab> {
   }
 
   void _handleComposerChanged() {
-    final previousValue = _lastComposerValue;
-    final currentValue = _textController.value;
-    _lastComposerValue = currentValue;
-
     _updateCharacterCount();
 
-    if (_suppressMentionTrigger || _isMentionPickerOpen) {
+    if (_suppressMentionTrigger) {
       return;
     }
 
-    final mentionTriggerRange = _getMentionTriggerRange(
-      previousValue: previousValue,
-      currentValue: currentValue,
-    );
-    if (mentionTriggerRange == null) {
-      return;
-    }
-
-    unawaited(_showMentionSelectorForRange(mentionTriggerRange));
+    _updateMentionSuggestions(_textController.value);
   }
 
   void _updateCharacterCount() {
@@ -222,43 +212,112 @@ class _MessagesTabState extends State<MessagesTab> {
     });
   }
 
-  TextRange? _getMentionTriggerRange({
-    required TextEditingValue previousValue,
-    required TextEditingValue currentValue,
-  }) {
-    if (!previousValue.selection.isValid ||
-        !currentValue.selection.isValid ||
-        !previousValue.selection.isCollapsed ||
-        !currentValue.selection.isCollapsed) {
+  void _handleFocusChanged() {
+    if (!_focusNode.hasFocus) {
+      _clearMentionSuggestions();
+      return;
+    }
+
+    if (_suppressMentionTrigger) {
+      return;
+    }
+
+    _updateMentionSuggestions(_textController.value);
+  }
+
+  void _updateMentionSuggestions(TextEditingValue value) {
+    final triggerRange = _getMentionTriggerRange(value);
+    if (triggerRange == null) {
+      _clearMentionSuggestions();
+      return;
+    }
+
+    final query = value.text.substring(
+      triggerRange.start + 1,
+      triggerRange.end,
+    );
+    final contacts = _buildMentionSuggestions(query);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _activeMentionRange = triggerRange;
+      _mentionQuery = query;
+      _mentionSuggestions = contacts;
+    });
+  }
+
+  void _clearMentionSuggestions() {
+    if (_activeMentionRange == null &&
+        _mentionQuery.isEmpty &&
+        _mentionSuggestions.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _activeMentionRange = null;
+      _mentionQuery = '';
+      _mentionSuggestions = const [];
+    });
+  }
+
+  TextRange? _getMentionTriggerRange(TextEditingValue value) {
+    if (!value.selection.isValid || !value.selection.isCollapsed) {
       return null;
     }
 
-    final previousOffset = previousValue.selection.baseOffset;
-    final currentOffset = currentValue.selection.baseOffset;
-    if (previousOffset < 0 || currentOffset < 0) {
+    final cursorOffset = value.selection.baseOffset;
+    if (cursorOffset <= 0) {
       return null;
     }
 
-    if (currentValue.text.length != previousValue.text.length + 1 ||
-        currentOffset != previousOffset + 1) {
+    final text = value.text;
+    final triggerStart = text.lastIndexOf('@', cursorOffset - 1);
+    if (triggerStart == -1) {
       return null;
     }
 
-    if (currentValue.text.substring(0, previousOffset) !=
-        previousValue.text.substring(0, previousOffset)) {
+    final leadingChar = triggerStart > 0 ? text[triggerStart - 1] : null;
+    if (leadingChar != null && !RegExp(r'[\s\(\[\{]').hasMatch(leadingChar)) {
       return null;
     }
 
-    if (currentValue.text.substring(currentOffset) !=
-        previousValue.text.substring(previousOffset)) {
+    final query = text.substring(triggerStart + 1, cursorOffset);
+    if (query.contains(RegExp(r'[\s@\[\]\n\r]'))) {
       return null;
     }
 
-    if (currentValue.text[previousOffset] != '@') {
-      return null;
-    }
+    return TextRange(start: triggerStart, end: cursorOffset);
+  }
 
-    return TextRange(start: previousOffset, end: currentOffset);
+  List<Contact> _buildMentionSuggestions(String query) {
+    final contactsProvider = context.read<ContactsProvider>();
+    final normalizedQuery = query.trim().toLowerCase();
+    final contacts =
+        contactsProvider.contacts
+            .where((contact) => contact.type == ContactType.chat)
+            .where((contact) {
+              if (normalizedQuery.isEmpty) return true;
+              return contact.displayName.toLowerCase().contains(
+                normalizedQuery,
+              );
+            })
+            .toList()
+          ..sort((a, b) {
+            final aName = a.displayName.toLowerCase();
+            final bName = b.displayName.toLowerCase();
+            final aStarts =
+                normalizedQuery.isNotEmpty && aName.startsWith(normalizedQuery);
+            final bStarts =
+                normalizedQuery.isNotEmpty && bName.startsWith(normalizedQuery);
+            if (aStarts != bStarts) {
+              return aStarts ? -1 : 1;
+            }
+            return aName.compareTo(bName);
+          });
+
+    return contacts.take(8).toList(growable: false);
   }
 
   int get _maxMessageBytes =>
@@ -378,56 +437,6 @@ class _MessagesTabState extends State<MessagesTab> {
     );
   }
 
-  Future<void> _showMentionSelectorForRange(TextRange triggerRange) async {
-    final contactsProvider = context.read<ContactsProvider>();
-    final contacts = contactsProvider.contacts
-        .where((contact) => contact.type == ContactType.chat)
-        .toList();
-
-    if (contacts.isEmpty || !mounted) {
-      return;
-    }
-
-    _isMentionPickerOpen = true;
-    Contact? selectedContact;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => RecipientSelectorSheet(
-        contacts: contacts,
-        rooms: const [],
-        channels: const [],
-        unreadCount: 0,
-        unreadCountsByPublicKey: {
-          for (final contact in contacts) contact.publicKeyHex: 0,
-        },
-        currentDestinationType: null,
-        currentRecipientPublicKey: null,
-        showAllOption: false,
-        onSelect: (_, recipient) {
-          selectedContact = recipient;
-        },
-      ),
-    );
-
-    _isMentionPickerOpen = false;
-
-    if (!mounted) {
-      return;
-    }
-
-    if (selectedContact != null) {
-      _insertReplyMention(
-        selectedContact!.displayName,
-        replacementRange: triggerRange,
-      );
-    }
-
-    _focusNode.requestFocus();
-  }
-
   /// Handle recipient selection
   Future<void> _onRecipientSelected(String type, Contact? recipient) async {
     setState(() {
@@ -489,9 +498,17 @@ class _MessagesTabState extends State<MessagesTab> {
       selection: TextSelection.collapsed(offset: nextOffset),
       composing: TextRange.empty,
     );
-    _lastComposerValue = _textController.value;
     _suppressMentionTrigger = false;
+    _clearMentionSuggestions();
     _enforceMessageByteLimit();
+  }
+
+  void _selectMention(Contact contact) {
+    _insertReplyMention(
+      contact.displayName,
+      replacementRange: _activeMentionRange,
+    );
+    _focusNode.requestFocus();
   }
 
   Future<void> _replyToMessage(Message message) async {
@@ -2040,6 +2057,9 @@ class _MessagesTabState extends State<MessagesTab> {
                   bottomPadding: composerBottomPadding,
                   destinationLabel: _getDestinationLabel(),
                   destinationAvatar: _buildDestinationAvatar(context),
+                  mentionSuggestions: _mentionSuggestions,
+                  mentionQuery: _mentionQuery,
+                  onMentionSelected: _selectMention,
                   onShowComposerActions: _showComposerActions,
                   onShowRecipientSelector: _showRecipientSelector,
                   onStartVoiceRecording: _startVoiceRecording,

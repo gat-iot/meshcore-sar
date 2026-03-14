@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meshcore_sar_app/l10n/app_localizations.dart';
+import 'package:meshcore_sar_app/models/contact.dart';
 import 'package:meshcore_sar_app/models/message.dart';
 import 'package:meshcore_sar_app/providers/app_provider.dart';
 import 'package:meshcore_sar_app/providers/channels_provider.dart';
@@ -16,9 +17,33 @@ import 'package:meshcore_sar_app/services/voice_codec_service.dart';
 import 'package:meshcore_sar_app/services/voice_player_service.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:typed_data';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  Contact buildContact({
+    required String name,
+    required ContactType type,
+    int secondByte = 1,
+  }) {
+    final publicKey = Uint8List(32);
+    publicKey[0] = secondByte;
+    publicKey[1] = secondByte;
+
+    return Contact(
+      publicKey: publicKey,
+      type: type,
+      flags: 0,
+      outPathLen: 0,
+      outPath: Uint8List(64),
+      advName: name,
+      lastAdvert: 0,
+      advLat: 0,
+      advLon: 0,
+      lastMod: 0,
+    );
+  }
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -93,6 +118,85 @@ void main() {
     await tester.pump();
 
     expect(messagesProvider.unreadCount, 0);
+
+    appProvider.dispose();
+    voiceProvider.dispose();
+    imageProvider.dispose();
+    drawingProvider.dispose();
+    mapProvider.dispose();
+    messagesProvider.dispose();
+    contactsProvider.dispose();
+    connectionProvider.dispose();
+    channelsProvider.dispose();
+  });
+
+  testWidgets('shows mention overlay above composer and inserts selection', (
+    tester,
+  ) async {
+    final connectionProvider = ConnectionProvider();
+    final contactsProvider = ContactsProvider();
+    final messagesProvider = MessagesProvider();
+    final mapProvider = MapProvider();
+    final drawingProvider = DrawingProvider();
+    await messagesProvider.initialize();
+    await drawingProvider.initialize();
+    final channelsProvider = ChannelsProvider()..initializePublicChannel();
+    final voiceProvider = VoiceProvider(
+      codec: VoiceCodecService(),
+      player: VoicePlayerService(),
+    );
+    final imageProvider = ip.ImageProvider();
+    final appProvider = AppProvider(
+      connectionProvider: connectionProvider,
+      contactsProvider: contactsProvider,
+      messagesProvider: messagesProvider,
+      drawingProvider: drawingProvider,
+      channelsProvider: channelsProvider,
+      voiceProvider: voiceProvider,
+      imageProvider: imageProvider,
+    );
+
+    contactsProvider.addContacts([
+      buildContact(name: 'Tim', type: ContactType.chat, secondByte: 2),
+      buildContact(name: 'Slane', type: ContactType.chat, secondByte: 3),
+    ]);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: connectionProvider),
+          ChangeNotifierProvider.value(value: contactsProvider),
+          ChangeNotifierProvider.value(value: messagesProvider),
+          ChangeNotifierProvider.value(value: mapProvider),
+          ChangeNotifierProvider.value(value: drawingProvider),
+          ChangeNotifierProvider.value(value: channelsProvider),
+          ChangeNotifierProvider.value(value: voiceProvider),
+          ChangeNotifierProvider.value(value: imageProvider),
+          ChangeNotifierProvider.value(value: appProvider),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Scaffold(body: MessagesTab(isActive: true)),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 60));
+
+    await tester.tap(find.byType(TextField).first);
+    await tester.enterText(find.byType(TextField).first, '@t');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tim'), findsOneWidget);
+    expect(find.text('Slane'), findsNothing);
+
+    await tester.tap(find.text('Tim'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('@[Tim] '), findsOneWidget);
+    expect(find.text('Tim'), findsNothing);
 
     appProvider.dispose();
     voiceProvider.dispose();

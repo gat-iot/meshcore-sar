@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../models/contact.dart';
 import '../../providers/app_provider.dart';
+import '../common/contact_avatar.dart';
 
 class MessagesComposer extends StatelessWidget {
   final TextEditingController textController;
@@ -17,6 +19,9 @@ class MessagesComposer extends StatelessWidget {
   final double bottomPadding;
   final String destinationLabel;
   final Widget destinationAvatar;
+  final List<Contact> mentionSuggestions;
+  final String mentionQuery;
+  final ValueChanged<Contact> onMentionSelected;
   final VoidCallback onShowComposerActions;
   final VoidCallback onShowRecipientSelector;
   final Future<void> Function() onStartVoiceRecording;
@@ -36,6 +41,9 @@ class MessagesComposer extends StatelessWidget {
     required this.bottomPadding,
     required this.destinationLabel,
     required this.destinationAvatar,
+    required this.mentionSuggestions,
+    required this.mentionQuery,
+    required this.onMentionSelected,
     required this.onShowComposerActions,
     required this.onShowRecipientSelector,
     required this.onStartVoiceRecording,
@@ -50,6 +58,15 @@ class MessagesComposer extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (mentionSuggestions.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: _MentionSuggestionsCard(
+                suggestions: mentionSuggestions,
+                query: mentionQuery,
+                onSelected: onMentionSelected,
+              ),
+            ),
           SafeArea(
             top: false,
             child: Padding(
@@ -148,6 +165,96 @@ class MessagesComposer extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MentionSuggestionsCard extends StatelessWidget {
+  final List<Contact> suggestions;
+  final String query;
+  final ValueChanged<Contact> onSelected;
+
+  const _MentionSuggestionsCard({
+    required this.suggestions,
+    required this.query,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = query.isEmpty ? '@' : '@$query';
+
+    return Material(
+      elevation: 10,
+      color: Theme.of(context).colorScheme.surface,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        constraints: const BoxConstraints(maxHeight: 360),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.30),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
+              child: Text(
+                title,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                itemCount: suggestions.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 4),
+                itemBuilder: (context, index) {
+                  final contact = suggestions[index];
+                  return Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () => onSelected(contact),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            ContactAvatar(contact: contact, radius: 19),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                contact.displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

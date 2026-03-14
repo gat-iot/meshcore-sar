@@ -134,11 +134,12 @@ class _LiveTrafficScreenState extends State<LiveTrafficScreen> {
     final routeHashCounts = _RouteHashCounts.fromContacts(
       contactsProvider?.contacts ?? const <Contact>[],
     );
-    final packetTypes = unfilteredSnapshot.visibleEntries
-        .map((entry) => entry.payloadLabel)
-        .toSet()
-        .toList()
-      ..sort();
+    final packetTypes =
+        unfilteredSnapshot.visibleEntries
+            .map((entry) => entry.payloadLabel)
+            .toSet()
+            .toList()
+          ..sort();
     final filteredEntries = snapshot.visibleEntries;
 
     return Scaffold(
@@ -202,7 +203,9 @@ class _LiveTrafficScreenState extends State<LiveTrafficScreen> {
                       Icon(
                         Icons.radar_rounded,
                         size: 64,
-                        color: theme.colorScheme.primary.withValues(alpha: 0.45),
+                        color: theme.colorScheme.primary.withValues(
+                          alpha: 0.45,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       const Text(
@@ -218,7 +221,9 @@ class _LiveTrafficScreenState extends State<LiveTrafficScreen> {
                             ? 'This view only shows in-memory traffic while it is active.'
                             : 'Try a different packet type or switch back to All.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -488,7 +493,9 @@ class _FilterChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: color.withValues(alpha: selected ? 0.14 : 0.08),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: selected ? 0.45 : 0.22)),
+          border: Border.all(
+            color: color.withValues(alpha: selected ? 0.45 : 0.22),
+          ),
         ),
         child: Text(
           label,
@@ -641,8 +648,9 @@ class _LiveTrafficCard extends StatelessWidget {
     final isRx = log.direction == PacketDirection.rx;
     final accent = isRx ? Colors.green : Colors.blue;
     final rxInfo = log.logRxDataInfo;
-    final routePreview = _resolvedRoutePreview(context, entry);
     final originDistance = _originDistanceLabel(context, entry);
+    final packetDetails = _LiveTrafficPacketDetails.fromEntry(entry);
+    final signalMetric = _SignalMetric.fromRxInfo(rxInfo);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -657,7 +665,10 @@ class _LiveTrafficCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(999),
@@ -677,7 +688,7 @@ class _LiveTrafficCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      entry.payloadLabel,
+                      packetDetails.title,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -696,15 +707,31 @@ class _LiveTrafficCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Text(
-                _timeAgo(log.timestamp, now),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+              if (signalMetric != null) ...[
+                const SizedBox(width: 12),
+                _CompactSignalIndicator(metric: signalMetric),
+              ] else
+                Text(
+                  _timeAgo(log.timestamp, now),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
             ],
           ),
+          const SizedBox(height: 10),
+          _PacketInfoLine(
+            text:
+                '${_formatClock(log.timestamp)} • Size: ${log.rawData.length} bytes',
+          ),
+          _PacketInfoLine(text: 'Hash: ${packetDetails.packetHashHex}'),
+          if (packetDetails.pathLine != null)
+            _PacketInfoLine(text: packetDetails.pathLine!),
+          if (packetDetails.pathHashLine != null)
+            _PacketInfoLine(text: packetDetails.pathHashLine!),
+          if (packetDetails.endpointLine != null)
+            _PacketInfoLine(text: packetDetails.endpointLine!),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -714,28 +741,17 @@ class _LiveTrafficCard extends StatelessWidget {
                 label: '${log.rawData.length} bytes',
                 onTap: () => _showPacketBytesSheet(context, log.rawData),
               ),
+              if (entry.isMultiHop)
+                const _PacketMetaChip(label: 'MULTI-HOP', emphasized: true),
+              if (originDistance != null)
+                _PacketMetaChip(label: 'Origin $originDistance'),
               if (rxInfo?.rssiDbm != null)
                 _PacketMetaChip(label: 'RSSI ${rxInfo!.rssiDbm} dBm'),
               if (rxInfo?.snrDb != null)
                 _PacketMetaChip(
                   label: 'SNR ${rxInfo!.snrDb!.toStringAsFixed(1)} dB',
                 ),
-              if (entry.hopCount != null)
-                _PacketMetaChip(label: '${entry.hopCount} hops'),
-              if (entry.isMultiHop)
-                const _PacketMetaChip(label: 'MULTI-HOP', emphasized: true),
-              if (originDistance != null)
-                _PacketMetaChip(label: 'Origin $originDistance'),
             ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            routePreview,
-            style: TextStyle(
-              fontSize: 12,
-              fontFamily: 'monospace',
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
           ),
         ],
       ),
@@ -746,6 +762,13 @@ class _LiveTrafficCard extends StatelessWidget {
     final diff = now.difference(timestamp);
     if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
     return '${diff.inMinutes}m ago';
+  }
+
+  static String _formatClock(DateTime timestamp) {
+    final hour = timestamp.hour.toString().padLeft(2, '0');
+    final minute = timestamp.minute.toString().padLeft(2, '0');
+    final second = timestamp.second.toString().padLeft(2, '0');
+    return '$hour:$minute:$second';
   }
 
   static String _resolvedRoutePreview(
@@ -856,11 +879,16 @@ class _LiveTrafficCard extends StatelessWidget {
       final hex = chunk
           .map((byte) => byte.toRadixString(16).padLeft(2, '0').toUpperCase())
           .join(' ');
-      hexLines.add('${offset.toRadixString(16).padLeft(4, '0').toUpperCase()}: $hex');
+      hexLines.add(
+        '${offset.toRadixString(16).padLeft(4, '0').toUpperCase()}: $hex',
+      );
     }
 
     final ascii = data
-        .map((byte) => (byte >= 32 && byte <= 126) ? String.fromCharCode(byte) : '.')
+        .map(
+          (byte) =>
+              (byte >= 32 && byte <= 126) ? String.fromCharCode(byte) : '.',
+        )
         .join();
 
     return showModalBottomSheet<void>(
@@ -886,10 +914,7 @@ class _LiveTrafficCard extends StatelessWidget {
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    'Hex',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
+                  Text('Hex', style: Theme.of(context).textTheme.titleSmall),
                   const SizedBox(height: 8),
                   Container(
                     width: double.infinity,
@@ -909,10 +934,7 @@ class _LiveTrafficCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    'ASCII',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
+                  Text('ASCII', style: Theme.of(context).textTheme.titleSmall),
                   const SizedBox(height: 8),
                   Container(
                     width: double.infinity,
@@ -948,6 +970,253 @@ class _LiveTrafficCard extends StatelessWidget {
       return node.label;
     }
     return node.hexLabel;
+  }
+}
+
+class _LiveTrafficPacketDetails {
+  final String title;
+  final String packetHashHex;
+  final String? pathLine;
+  final String? pathHashLine;
+  final String? endpointLine;
+
+  const _LiveTrafficPacketDetails({
+    required this.title,
+    required this.packetHashHex,
+    required this.pathLine,
+    required this.pathHashLine,
+    required this.endpointLine,
+  });
+
+  factory _LiveTrafficPacketDetails.fromEntry(LiveTrafficEntry entry) {
+    final route = entry.route;
+    final payloadType = route?.payloadType;
+    final parsedPayload = _ParsedTrafficPayload.tryParse(
+      entry.log.rawData,
+      route,
+    );
+    final title = switch (payloadType) {
+      0x00 => 'FLOOD REQUEST',
+      0x01 => 'FLOOD RESPONSE',
+      0x02 => 'FLOOD TEXT',
+      0x03 => 'FLOOD ACK',
+      0x04 => 'FLOOD ADVERTISEMENT',
+      0x05 => 'FLOOD GROUP_TEXT',
+      0x06 => 'FLOOD GROUP_DATA',
+      0x07 => 'FLOOD ANON_REQUEST',
+      0x08 => 'FLOOD RETURNED_PATH',
+      0x09 => 'FLOOD TRACE_PATH',
+      0x0A => 'FLOOD MULTIPART',
+      0x0B => 'FLOOD CONTROL',
+      _ => entry.payloadLabel.toUpperCase(),
+    };
+
+    final hopHashes = route?.hopHashes ?? const <String>[];
+    final pathLine = hopHashes.isEmpty
+        ? null
+        : 'Path: ${hopHashes.length} hop${hopHashes.length == 1 ? '' : 's'} [${hopHashes.join(',')}]';
+    final pathHashLine = route == null
+        ? null
+        : 'Path Hashes: ${route.hashSize}-byte per hop';
+
+    return _LiveTrafficPacketDetails(
+      title: title,
+      packetHashHex: _packetHash(entry.log.rawData),
+      pathLine: pathLine,
+      pathHashLine: pathHashLine,
+      endpointLine: parsedPayload?.endpointLine,
+    );
+  }
+
+  static String _packetHash(List<int> bytes) {
+    const fnvOffset = 0xcbf29ce484222325;
+    const fnvPrime = 0x100000001b3;
+    const mask = 0xFFFFFFFFFFFFFFFF;
+    var hash = fnvOffset;
+    for (final byte in bytes) {
+      hash ^= byte & 0xFF;
+      hash = (hash * fnvPrime) & mask;
+    }
+    return hash.toRadixString(16).padLeft(16, '0').toUpperCase();
+  }
+}
+
+class _ParsedTrafficPayload {
+  final String? endpointLine;
+
+  const _ParsedTrafficPayload({this.endpointLine});
+
+  static _ParsedTrafficPayload? tryParse(
+    List<int> rawData,
+    DecodedLogRxRoute? route,
+  ) {
+    if (rawData.length < 5 ||
+        rawData.first != LiveTrafficSummary.logRxDataResponseCode) {
+      return null;
+    }
+
+    final rawPacketData = rawData.sublist(3);
+    if (rawPacketData.length < 2) return null;
+
+    final header = rawPacketData[0];
+    final routeType = header & 0x03;
+    final payloadType = (header >> 2) & 0x0F;
+
+    var index = 1;
+    if (routeType == 0x00 || routeType == 0x03) {
+      if (rawPacketData.length < index + 5) return null;
+      index += 4;
+    }
+
+    if (rawPacketData.length <= index) return null;
+    final pathDescriptor = rawPacketData[index++];
+    final pathByteLen =
+        LogRxRouteDecoder.descriptorByteLength(pathDescriptor) ??
+        (pathDescriptor == 0xFF ? 0 : null);
+    if (pathByteLen == null || rawPacketData.length < index + pathByteLen) {
+      return null;
+    }
+    index += pathByteLen;
+    final payload = rawPacketData.sublist(index);
+    final senderHash = route?.hopHashes.isNotEmpty == true
+        ? route!.hopHashes.first
+        : null;
+
+    switch (payloadType) {
+      case 0x05:
+      case 0x06:
+        if (payload.isEmpty) return const _ParsedTrafficPayload();
+        return _ParsedTrafficPayload(
+          endpointLine:
+              'Channel Hash: ${payload.first.toRadixString(16).padLeft(2, '0').toUpperCase()}',
+        );
+      case 0x00:
+      case 0x01:
+      case 0x07:
+        if (payload.isEmpty) return const _ParsedTrafficPayload();
+        final destinationHash = payload.first
+            .toRadixString(16)
+            .padLeft(2, '0')
+            .toUpperCase();
+        return _ParsedTrafficPayload(
+          endpointLine: senderHash == null
+              ? 'To: <$destinationHash>'
+              : 'From: <${senderHash.toUpperCase()}> To: <$destinationHash>',
+        );
+      default:
+        return const _ParsedTrafficPayload();
+    }
+  }
+}
+
+class _PacketInfoLine extends StatelessWidget {
+  final String text;
+
+  const _PacketInfoLine({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 13,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+      ),
+    );
+  }
+}
+
+class _SignalMetric {
+  final String valueLabel;
+  final Color color;
+  final int activeBars;
+
+  const _SignalMetric({
+    required this.valueLabel,
+    required this.color,
+    required this.activeBars,
+  });
+
+  static _SignalMetric? fromRxInfo(LogRxDataInfo? rxInfo) {
+    if (rxInfo == null) return null;
+    if (rxInfo?.snrDb != null) {
+      final snr = rxInfo.snrDb!;
+      return _SignalMetric(
+        valueLabel: '${snr.toStringAsFixed(1)}dB',
+        color: snr >= 10
+            ? Colors.green
+            : snr >= 0
+            ? Colors.amber
+            : Colors.redAccent,
+        activeBars: snr >= 10
+            ? 3
+            : snr >= 0
+            ? 2
+            : 1,
+      );
+    }
+    if (rxInfo?.rssiDbm != null) {
+      final rssi = rxInfo.rssiDbm!;
+      return _SignalMetric(
+        valueLabel: '$rssi dBm',
+        color: rssi >= -80
+            ? Colors.green
+            : rssi >= -95
+            ? Colors.amber
+            : Colors.redAccent,
+        activeBars: rssi >= -80
+            ? 3
+            : rssi >= -95
+            ? 2
+            : 1,
+      );
+    }
+    return null;
+  }
+}
+
+class _CompactSignalIndicator extends StatelessWidget {
+  final _SignalMetric metric;
+
+  const _CompactSignalIndicator({required this.metric});
+
+  @override
+  Widget build(BuildContext context) {
+    final inactive = Theme.of(context).colorScheme.outlineVariant;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (var index = 0; index < 3; index++) ...[
+              if (index > 0) const SizedBox(width: 3),
+              Container(
+                width: 5,
+                height: 10.0 + (index * 8),
+                decoration: BoxDecoration(
+                  color: index < metric.activeBars ? metric.color : inactive,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          metric.valueLabel,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+      ],
+    );
   }
 }
 
