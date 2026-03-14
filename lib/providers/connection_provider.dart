@@ -1181,11 +1181,9 @@ class ConnectionProvider with ChangeNotifier {
       // behavior, then reconcile with an on-device refresh below.
       onChannelInfoReceived?.call(channelIdx, '', Uint8List(16), null);
 
-      // Small delay to allow the response to propagate
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      // Refresh channels to update UI
-      // The empty channel will trigger removal via onChannelInfoReceived callback
+      // Refresh channel from device to reconcile UI state.
+      // BLE commands are processed in order by firmware, so the
+      // getChannel response reflects the completed deletion.
       await _activeService.getChannel(channelIdx);
     } catch (e) {
       _pendingDeletedChannelIndices.remove(channelIdx);
@@ -1437,10 +1435,6 @@ class ConnectionProvider with ChangeNotifier {
           plainText: text,
         );
         debugPrint('  trackSentChannelMessage completed');
-
-        // Small delay to ensure the message is in the MessagesProvider list
-        // before we try to mark it as sent
-        await Future.delayed(const Duration(milliseconds: 50));
 
         // Use a dummy ACK tag (0) and timeout (0) for channel messages
         // This will trigger the callback to mark the message as "sent"
