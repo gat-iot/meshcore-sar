@@ -2058,6 +2058,12 @@ class ConnectionProvider with ChangeNotifier {
         advertLocationPolicy: advertLocationPolicy,
         multiAcks: multiAcks,
       );
+      _deviceInfo = _deviceInfo.copyWith(
+        telemetryModes: telemetryModes,
+        advertLocPolicy: advertLocationPolicy,
+        multiAcks: multiAcks,
+      );
+      notifyListeners();
     } catch (e) {
       _error = 'Failed to set other params: $e';
       notifyListeners();
@@ -2096,6 +2102,10 @@ class ConnectionProvider with ChangeNotifier {
           autoAddOverwriteOldest: null,
         );
         notifyListeners();
+        return;
+      }
+      if (_isTransientAutoaddConfigError(e)) {
+        debugPrint('Ignoring transient auto-add config error: $e');
         return;
       }
       _error = 'Failed to get auto-add config: $e';
@@ -2151,16 +2161,7 @@ class ConnectionProvider with ChangeNotifier {
       // The device query command triggers a SelfInfo response
       await _activeService.refreshDeviceInfo();
       if (_supportsAutoaddConfig != false) {
-        try {
-          await _activeService.getAutoaddConfig();
-          _supportsAutoaddConfig = true;
-        } catch (e) {
-          if (_isUnsupportedAutoaddConfigError(e)) {
-            _supportsAutoaddConfig = false;
-          } else {
-            rethrow;
-          }
-        }
+        unawaited(getAutoaddConfig());
       }
       try {
         await _activeService.getAllowedRepeatFreq();
@@ -2175,8 +2176,13 @@ class ConnectionProvider with ChangeNotifier {
 
   bool _isUnsupportedAutoaddConfigError(Object error) {
     final message = error.toString().toLowerCase();
-    return message.contains('illegal argument') ||
+    return message.contains('unsupported command') ||
         message.contains('unsupported');
+  }
+
+  bool _isTransientAutoaddConfigError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('illegal argument');
   }
 
   /// Request battery and storage information

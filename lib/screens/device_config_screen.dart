@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -24,6 +25,7 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
   static const Duration _bulkDeleteInterItemDelay = Duration(milliseconds: 120);
   static const Duration _bulkDeleteBatchDelay = Duration(milliseconds: 700);
   static const Duration _bulkDeleteFinalSyncDelay = Duration(milliseconds: 900);
+  static const int _autoAddFilterModeFlag = 1;
   static const List<_RadioPreset> _radioPresets = [
     _RadioPreset(
       id: 'australia',
@@ -176,6 +178,7 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
   late TextEditingController _lonController;
   late TextEditingController _freqController;
   late TextEditingController _txPowerController;
+  late final ConnectionProvider _connectionProvider;
 
   bool _telemetryEnabled = false;
   bool _repeatEnabled = false;
@@ -194,6 +197,8 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
   bool _publicInfoSaved = false;
   bool _radioSettingsSaved = false;
   bool _autoDiscoverySettingsSaved = false;
+  bool _autoDiscoverySettingsDirty = false;
+  String? _lastAutoDiscoverySignature;
   String? _publicInfoError;
   String? _radioSettingsError;
   String? _autoDiscoverySettingsError;
@@ -218,7 +223,9 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
   @override
   void initState() {
     super.initState();
-    final deviceInfo = context.read<ConnectionProvider>().deviceInfo;
+    _connectionProvider = context.read<ConnectionProvider>();
+    _connectionProvider.addListener(_handleConnectionProviderChanged);
+    final deviceInfo = _connectionProvider.deviceInfo;
 
     _nameController = TextEditingController(
       text: deviceInfo.selfName ?? deviceInfo.deviceName ?? '',
@@ -273,14 +280,8 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
 
     // Initialize repeat mode from device info (firmware v9+)
     _repeatEnabled = deviceInfo.clientRepeat ?? false;
-    _autoAddDiscoveredContactsEnabled =
-        !(deviceInfo.manualAddContacts ?? false);
-    _autoAddUsersEnabled = deviceInfo.autoAddUsers ?? true;
-    _autoAddRepeatersEnabled = deviceInfo.autoAddRepeaters ?? true;
-    _autoAddRoomServersEnabled = deviceInfo.autoAddRoomServers ?? true;
-    _autoAddSensorsEnabled = deviceInfo.autoAddSensors ?? true;
-    _overwriteOldestAutoAddEnabled =
-        deviceInfo.autoAddOverwriteOldest ?? false;
+    _syncAutoDiscoveryState(deviceInfo);
+    _lastAutoDiscoverySignature = _autoDiscoverySignature(deviceInfo);
 
     // Fetch allowed repeat frequencies on open if device supports repeat mode
     if (deviceInfo.clientRepeat != null &&
@@ -291,13 +292,14 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ConnectionProvider>().getBatteryAndStorage();
-      context.read<ConnectionProvider>().getAutoaddConfig();
+      _connectionProvider.getBatteryAndStorage();
+      unawaited(_connectionProvider.getAutoaddConfig());
     });
   }
 
   @override
   void dispose() {
+    _connectionProvider.removeListener(_handleConnectionProviderChanged);
     _nameController.dispose();
     _latController.dispose();
     _lonController.dispose();
@@ -406,12 +408,78 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
   }
 
   void _markAutoDiscoverySettingsDirty() {
+    _autoDiscoverySettingsDirty = true;
     if (_autoDiscoverySettingsSaved || _autoDiscoverySettingsError != null) {
       setState(() {
         _autoDiscoverySettingsSaved = false;
         _autoDiscoverySettingsError = null;
       });
     }
+  }
+
+  String _autoDiscoverySignature(DeviceInfo deviceInfo) {
+    return [
+      deviceInfo.manualAddContacts,
+      deviceInfo.autoAddUsers,
+      deviceInfo.autoAddRepeaters,
+      deviceInfo.autoAddRoomServers,
+      deviceInfo.autoAddSensors,
+      deviceInfo.autoAddOverwriteOldest,
+    ].join('|');
+  }
+
+  void _handleConnectionProviderChanged() {
+    if (!mounted || _autoDiscoverySettingsDirty) return;
+
+    final deviceInfo = _connectionProvider.deviceInfo;
+    final nextSignature = _autoDiscoverySignature(deviceInfo);
+    if (nextSignature == _lastAutoDiscoverySignature) return;
+
+    _lastAutoDiscoverySignature = nextSignature;
+    setState(() {
+      _syncAutoDiscoveryState(deviceInfo);
+    });
+  }
+
+  bool _hasAutoAddTargetsEnabled(DeviceInfo deviceInfo) {
+    return (deviceInfo.autoAddUsers ?? false) ||
+        (deviceInfo.autoAddRepeaters ?? false) ||
+        (deviceInfo.autoAddRoomServers ?? false) ||
+        (deviceInfo.autoAddSensors ?? false);
+  }
+
+  void _syncAutoDiscoveryState(DeviceInfo deviceInfo) {
+    final hasFetchedAutoAddConfig =
+        deviceInfo.autoAddUsers != null ||
+        deviceInfo.autoAddRepeaters != null ||
+        deviceInfo.autoAddRoomServers != null ||
+        deviceInfo.autoAddSensors != null ||
+        deviceInfo.autoAddOverwriteOldest != null;
+
+    _autoAddDiscoveredContactsEnabled = hasFetchedAutoAddConfig
+        ? _hasAutoAddTargetsEnabled(deviceInfo)
+        : !(deviceInfo.manualAddContacts ?? false);
+    _autoAddUsersEnabled = deviceInfo.autoAddUsers ?? true;
+    _autoAddRepeatersEnabled = deviceInfo.autoAddRepeaters ?? true;
+    _autoAddRoomServersEnabled = deviceInfo.autoAddRoomServers ?? true;
+    _autoAddSensorsEnabled = deviceInfo.autoAddSensors ?? true;
+    _overwriteOldestAutoAddEnabled = deviceInfo.autoAddOverwriteOldest ?? false;
+  }
+
+  int _telemetryModesForSave(ConnectionProvider connectionProvider) {
+    final deviceInfo = connectionProvider.deviceInfo;
+    final telemetryEnabled =
+        (deviceInfo.advLat != null && deviceInfo.advLat != 0) ||
+        (deviceInfo.advLon != null && deviceInfo.advLon != 0);
+    return deviceInfo.telemetryModes ?? (telemetryEnabled ? 0x0A : 0x00);
+  }
+
+  int _advertLocationPolicyForSave(ConnectionProvider connectionProvider) {
+    final deviceInfo = connectionProvider.deviceInfo;
+    final telemetryEnabled =
+        (deviceInfo.advLat != null && deviceInfo.advLat != 0) ||
+        (deviceInfo.advLon != null && deviceInfo.advLon != 0);
+    return deviceInfo.advertLocPolicy ?? (telemetryEnabled ? 1 : 0);
   }
 
   Future<void> _savePublicInfo() async {
@@ -425,9 +493,6 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
     });
 
     try {
-      final manualAddContacts =
-          (connectionProvider.deviceInfo.manualAddContacts ?? false) ? 1 : 0;
-
       // Save name
       if (_nameController.text.isNotEmpty) {
         await connectionProvider.setAdvertName(_nameController.text);
@@ -466,7 +531,7 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
         // Set telemetry modes to "Allow All" (mode 2 for both base and location)
         final telemetryModes = 0x0A; // binary: 00001010 (base=2, location=2)
         await connectionProvider.setOtherParams(
-          manualAddContacts: manualAddContacts,
+          manualAddContacts: _autoAddFilterModeFlag,
           telemetryModes: telemetryModes,
           advertLocationPolicy: 1,
         );
@@ -477,7 +542,7 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
         // Set telemetry modes to "Deny" (mode 0)
         final telemetryModes = 0x00;
         await connectionProvider.setOtherParams(
-          manualAddContacts: manualAddContacts,
+          manualAddContacts: _autoAddFilterModeFlag,
           telemetryModes: telemetryModes,
           advertLocationPolicy: 0,
         );
@@ -580,6 +645,16 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
 
   Future<void> _saveAutoDiscoverySettings() async {
     final connectionProvider = context.read<ConnectionProvider>();
+    final autoAddUsers =
+        _autoAddDiscoveredContactsEnabled && _autoAddUsersEnabled;
+    final autoAddRepeaters =
+        _autoAddDiscoveredContactsEnabled && _autoAddRepeatersEnabled;
+    final autoAddRoomServers =
+        _autoAddDiscoveredContactsEnabled && _autoAddRoomServersEnabled;
+    final autoAddSensors =
+        _autoAddDiscoveredContactsEnabled && _autoAddSensorsEnabled;
+    final overwriteOldest =
+        _autoAddDiscoveredContactsEnabled && _overwriteOldestAutoAddEnabled;
 
     setState(() {
       _isSavingAutoDiscoverySettings = true;
@@ -588,25 +663,30 @@ class _DeviceConfigScreenState extends State<DeviceConfigScreen> {
     });
 
     try {
+      await connectionProvider.setAutoaddConfig(
+        autoAddUsers: autoAddUsers,
+        autoAddRepeaters: autoAddRepeaters,
+        autoAddRoomServers: autoAddRoomServers,
+        autoAddSensors: autoAddSensors,
+        overwriteOldest: overwriteOldest,
+      );
       await connectionProvider.setOtherParams(
-        manualAddContacts: _autoAddDiscoveredContactsEnabled ? 0 : 1,
-        telemetryModes: connectionProvider.deviceInfo.telemetryModes ?? 0,
-        advertLocationPolicy: connectionProvider.deviceInfo.advertLocPolicy ?? 0,
+        manualAddContacts: _autoAddFilterModeFlag,
+        telemetryModes: _telemetryModesForSave(connectionProvider),
+        advertLocationPolicy: _advertLocationPolicyForSave(connectionProvider),
         multiAcks: connectionProvider.deviceInfo.multiAcks ?? 0,
       );
-      await connectionProvider.setAutoaddConfig(
-        autoAddUsers: _autoAddUsersEnabled,
-        autoAddRepeaters: _autoAddRepeatersEnabled,
-        autoAddRoomServers: _autoAddRoomServersEnabled,
-        autoAddSensors: _autoAddSensorsEnabled,
-        overwriteOldest: _overwriteOldestAutoAddEnabled,
-      );
-      await connectionProvider.refreshDeviceInfo();
+      await connectionProvider.getAutoaddConfig();
 
       if (mounted) {
         setState(() {
+          _syncAutoDiscoveryState(connectionProvider.deviceInfo);
+          _lastAutoDiscoverySignature = _autoDiscoverySignature(
+            connectionProvider.deviceInfo,
+          );
           _isSavingAutoDiscoverySettings = false;
           _autoDiscoverySettingsSaved = true;
+          _autoDiscoverySettingsDirty = false;
         });
       }
     } catch (e) {
