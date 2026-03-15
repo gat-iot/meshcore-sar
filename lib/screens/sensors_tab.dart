@@ -774,7 +774,7 @@ class SensorMetricSelectorItem extends StatelessWidget {
                     ),
                   ),
                 ),
-                Switch.adaptive(value: visible, onChanged: onToggle),
+                Switch(value: visible, onChanged: onToggle),
               ],
             ),
             const SizedBox(height: 12),

@@ -1875,7 +1875,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
-                Switch.adaptive(
+                Switch(
                   value: _showCurrentImagePreview,
                   onChanged: (value) {
                     setState(() => _showCurrentImagePreview = value);
