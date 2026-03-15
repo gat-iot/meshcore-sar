@@ -14,6 +14,7 @@ class AddContactScreen extends StatefulWidget {
 class _AddContactScreenState extends State<AddContactScreen> {
   final TextEditingController _advertController = TextEditingController();
   bool _isImporting = false;
+  bool _importSucceeded = false;
   String? _validationError;
 
   @override
@@ -85,6 +86,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
 
     setState(() {
       _advertController.text = text.trim();
+      _importSucceeded = false;
       _validationError = null;
     });
   }
@@ -110,6 +112,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
 
     setState(() {
       _isImporting = true;
+      _importSucceeded = false;
       _validationError = null;
     });
 
@@ -139,7 +142,9 @@ class _AddContactScreenState extends State<AddContactScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Contact imported')));
-    Navigator.of(context).pop(true);
+    setState(() {
+      _importSucceeded = true;
+    });
   }
 
   @override
@@ -169,8 +174,9 @@ class _AddContactScreenState extends State<AddContactScreen> {
             minLines: 4,
             maxLines: 8,
             onChanged: (_) {
-              if (_validationError != null) {
+              if (_validationError != null || _importSucceeded) {
                 setState(() {
+                  _importSucceeded = false;
                   _validationError = null;
                 });
               }
@@ -204,19 +210,48 @@ class _AddContactScreenState extends State<AddContactScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _isImporting ? null : _importContact,
+                  onPressed: (_isImporting || _importSucceeded)
+                      ? null
+                      : _importContact,
                   icon: _isImporting
                       ? const SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
+                      : _importSucceeded
+                      ? const Icon(Icons.check_circle_outline)
                       : const Icon(Icons.person_add_alt_1_outlined),
-                  label: Text(_isImporting ? 'Importing...' : 'Add Contact'),
+                  label: Text(
+                    _isImporting
+                        ? 'Importing...'
+                        : _importSucceeded
+                        ? 'Added'
+                        : 'Add Contact',
+                  ),
                 ),
               ),
             ],
           ),
+          if (_importSucceeded) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Contact added. Paste or edit another advert to import again.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
