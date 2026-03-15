@@ -37,6 +37,7 @@ class _ContactsTabState extends State<ContactsTab> {
   final Map<ContactSection, String> _sectionFilters = {
     ContactSection.teamMembers: '',
     ContactSection.repeaters: '',
+    ContactSection.sensors: '',
     ContactSection.rooms: '',
     ContactSection.channels: '',
   };
@@ -44,6 +45,7 @@ class _ContactsTabState extends State<ContactsTab> {
   final Map<ContactSection, ContactSortMode> _sortModes = {
     ContactSection.teamMembers: ContactSortMode.lastSeen,
     ContactSection.repeaters: ContactSortMode.lastSeen,
+    ContactSection.sensors: ContactSortMode.lastSeen,
     ContactSection.rooms: ContactSortMode.lastSeen,
   };
 
@@ -539,6 +541,10 @@ class _ContactsTabState extends State<ContactsTab> {
             contactsProvider.repeaters,
             ContactSection.repeaters,
           );
+          final allSensors = _sortContacts(
+            contactsProvider.sensorContacts,
+            ContactSection.sensors,
+          );
           final allRooms = _sortContacts(
             contactsProvider.rooms,
             ContactSection.rooms,
@@ -580,6 +586,19 @@ class _ContactsTabState extends State<ContactsTab> {
           final showRepeatersOthersGroup =
               visibleSavedRepeaterGroups.length > 1 &&
               ungroupedRepeaters.isNotEmpty;
+          final sensors = _filterContactsForSection(
+            allSensors,
+            ContactSection.sensors,
+          );
+          final savedSensorGroups = _buildSavedGroupsForSection(
+            contactsProvider,
+            allSensors,
+            ContactSection.sensors,
+          );
+          final visibleSavedSensorGroups =
+              _showSavedGroupsForSection(ContactSection.sensors)
+              ? savedSensorGroups
+              : const <_RenderedSavedGroup>[];
           final rooms = _filterContactsForSection(
             allRooms,
             ContactSection.rooms,
@@ -608,12 +627,14 @@ class _ContactsTabState extends State<ContactsTab> {
               : const <_RenderedSavedGroup>[];
           final showTeamMembersSection = allChatContacts.isNotEmpty;
           final showRepeatersSection = allRepeaters.isNotEmpty;
+          final showSensorsSection = allSensors.isNotEmpty;
           final showRoomsSection = allRooms.isNotEmpty;
           final showChannelsSection = allChannels.isNotEmpty;
           // Check if there are any displayable contacts
           final hasDisplayableContacts =
               allChatContacts.isNotEmpty ||
               allRepeaters.isNotEmpty ||
+              allSensors.isNotEmpty ||
               allRooms.isNotEmpty ||
               allChannels.isNotEmpty;
 
@@ -739,6 +760,36 @@ class _ContactsTabState extends State<ContactsTab> {
                     ..._buildContactSectionItems(
                       ungroupedRepeaters,
                       compact: true,
+                    ),
+                  const Divider(height: 32),
+                ],
+
+                // Sensors
+                if (showSensorsSection) ...[
+                  _SectionHeader(
+                    title: 'Sensors',
+                    count: sensors.length,
+                    icon: Icons.sensors,
+                    trailing: _buildSortMenu(context, ContactSection.sensors),
+                  ),
+                  _buildSectionFilterField(
+                    context,
+                    ContactSection.sensors,
+                    contactsProvider,
+                  ),
+                  ..._buildSavedGroupCards(
+                    visibleSavedSensorGroups,
+                    ContactSection.sensors,
+                  ),
+                  if (sensors.isEmpty &&
+                      _sectionHasActiveFilter(ContactSection.sensors))
+                    _buildNoFilterResults(context)
+                  else
+                    ..._buildContactSectionItems(
+                      _excludeGroupedContacts(
+                        sensors,
+                        visibleSavedSensorGroups,
+                      ),
                     ),
                   const Divider(height: 32),
                 ],
@@ -1172,7 +1223,7 @@ class _ContactsTabState extends State<ContactsTab> {
 
 enum ContactSortMode { lastSeen, distance }
 
-enum ContactSection { teamMembers, repeaters, rooms, channels }
+enum ContactSection { teamMembers, repeaters, sensors, rooms, channels }
 
 class _RenderedSavedGroup {
   final SavedContactGroup group;

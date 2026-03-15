@@ -170,7 +170,7 @@ class SensorsProvider with ChangeNotifier {
       _watchedSensorKeys.contains(publicKeyHex);
 
   Future<void> addSensor(Contact contact) async {
-    if (!contact.isChat && !contact.isRepeater) {
+    if (!contact.isChat && !contact.isRepeater && !contact.isSensor) {
       return;
     }
     if (_watchedSensorKeys.contains(contact.publicKeyHex)) {
@@ -204,6 +204,7 @@ class SensorsProvider with ChangeNotifier {
     final candidates = <Contact>[
       ...contactsProvider.chatContacts,
       ...contactsProvider.repeaters,
+      ...contactsProvider.sensorContacts,
     ];
     candidates.removeWhere((contact) => isWatched(contact.publicKeyHex));
     candidates.sort((a, b) => b.lastSeenTime.compareTo(a.lastSeenTime));

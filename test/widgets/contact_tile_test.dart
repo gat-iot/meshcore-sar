@@ -104,4 +104,58 @@ void main() {
     expect(find.text(contact.publicKeyShort), findsNothing);
     expect(find.byIcon(Icons.key_outlined), findsNothing);
   });
+
+  testWidgets('sensor contacts can be added to sensors', (tester) async {
+    await pumpTile(
+      tester,
+      buildContact(name: 'WX Station', type: ContactType.sensor),
+    );
+
+    await tester.tap(find.text('WX Station'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add to Sensors'), findsOneWidget);
+  });
+
+  testWidgets('sensor preview shows telemetry card', (tester) async {
+    final contact = buildContact(name: 'WX Station', type: ContactType.sensor)
+        .copyWith(
+          telemetry: ContactTelemetry(
+            batteryPercentage: 84,
+            temperature: 21.5,
+            humidity: 58.0,
+            extraSensorData: const {
+              'co2': 415.0,
+              'illuminance_2': 500.0,
+              'current_2': 0.015,
+              'power_2': 0.25,
+              'distance_2': 1.234,
+            },
+            timestamp: DateTime.now().subtract(const Duration(minutes: 1)),
+          ),
+        );
+
+    await pumpTile(tester, contact);
+
+    await tester.tap(find.text('WX Station'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Preview'), findsOneWidget);
+
+    await tester.tap(find.text('Preview'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Battery'), findsOneWidget);
+    expect(find.text('84%'), findsOneWidget);
+    expect(find.text('Temperature'), findsOneWidget);
+    expect(find.text('21.5°C'), findsOneWidget);
+    expect(find.text('CO2'), findsOneWidget);
+    expect(find.text('415 ppm'), findsOneWidget);
+    expect(find.text('Illuminance (ch 2)'), findsOneWidget);
+    expect(find.text('~4.2 W/m2 daylight'), findsOneWidget);
+    expect(find.text('Current (ch 2)'), findsOneWidget);
+    expect(find.text('15 mA'), findsOneWidget);
+    expect(find.text('Power (ch 2)'), findsOneWidget);
+    expect(find.text('Distance (ch 2)'), findsOneWidget);
+  });
 }
