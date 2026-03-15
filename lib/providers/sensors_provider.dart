@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/contact.dart';
+import '../widgets/sensors/sensor_telemetry_card.dart';
 import 'connection_provider.dart';
 import 'contacts_provider.dart';
 
@@ -18,7 +19,16 @@ class SensorsProvider with ChangeNotifier {
   static const String _metricLabelKey = 'sensor_metric_labels';
   static const String _metricOrderKey = 'sensor_metric_order';
   static const String _autoRefreshMinutesKey = 'sensor_auto_refresh_minutes';
-  static const List<int> supportedAutoRefreshIntervals = <int>[0, 1, 5, 15];
+  static const List<int> supportedAutoRefreshIntervals = <int>[
+    0,
+    5,
+    15,
+    30,
+    60,
+    360,
+    720,
+    1440,
+  ];
   static const Set<String> _defaultVisibleFields = <String>{
     'voltage',
     'battery',
@@ -118,7 +128,9 @@ class SensorsProvider with ChangeNotifier {
         final decoded =
             jsonDecode(storedAutoRefreshJson) as Map<String, dynamic>;
         for (final entry in decoded.entries) {
-          final minutes = (entry.value as num).toInt();
+          final minutes = _normalizeAutoRefreshMinutes(
+            (entry.value as num).toInt(),
+          );
           if (minutes > 0) {
             _autoRefreshMinutesBySensor[entry.key] = minutes;
           }
@@ -212,6 +224,22 @@ class SensorsProvider with ChangeNotifier {
     _visibleFieldsBySensor[publicKeyHex] ?? _defaultVisibleFields,
   );
 
+  Set<String> effectiveVisibleFieldsFor(
+    String publicKeyHex,
+    Iterable<String> availableFieldKeys,
+  ) {
+    final storedVisibleFields =
+        _visibleFieldsBySensor[publicKeyHex] ?? _defaultVisibleFields;
+    if (!_shouldAutoIncludeAvailableFields(publicKeyHex, storedVisibleFields)) {
+      return Set<String>.unmodifiable(storedVisibleFields);
+    }
+
+    return Set<String>.unmodifiable(<String>{
+      ...storedVisibleFields,
+      ...availableFieldKeys,
+    });
+  }
+
   bool showsField(String publicKeyHex, String fieldKey) =>
       visibleFieldsFor(publicKeyHex).contains(fieldKey);
 
@@ -258,7 +286,7 @@ class SensorsProvider with ChangeNotifier {
       _autoRefreshMinutesBySensor[publicKeyHex] ?? 0;
 
   Future<void> setAutoRefreshMinutes(String publicKeyHex, int minutes) async {
-    final normalizedMinutes = minutes <= 0 ? 0 : minutes;
+    final normalizedMinutes = _normalizeAutoRefreshMinutes(minutes);
     final currentMinutes = autoRefreshMinutesFor(publicKeyHex);
     if (currentMinutes == normalizedMinutes) {
       return;
@@ -271,6 +299,32 @@ class SensorsProvider with ChangeNotifier {
     }
     await _persistAutoRefreshMinutes();
     notifyListeners();
+  }
+
+  static int _normalizeAutoRefreshMinutes(int minutes) {
+    if (minutes <= 0) {
+      return 0;
+    }
+
+    if (supportedAutoRefreshIntervals.contains(minutes)) {
+      return minutes;
+    }
+
+    final positiveIntervals = supportedAutoRefreshIntervals.where(
+      (value) => value > 0,
+    );
+    var bestMatch = positiveIntervals.first;
+    var bestDistance = (minutes - bestMatch).abs();
+
+    for (final interval in positiveIntervals.skip(1)) {
+      final distance = (minutes - interval).abs();
+      if (distance < bestDistance) {
+        bestMatch = interval;
+        bestDistance = distance;
+      }
+    }
+
+    return bestMatch;
   }
 
   List<String> dueAutoRefreshSensorKeys({DateTime? now}) {
@@ -403,20 +457,51 @@ class SensorsProvider with ChangeNotifier {
     }
 
     _watchedSensorKeys.add(contact.publicKeyHex);
+    final initialVisibleFields = _initialVisibleFieldsForContact(contact);
     await _persistWatchedSensors();
-    _visibleFieldsBySensor[contact.publicKeyHex] = Set<String>.from(
-      _defaultVisibleFields,
-    );
+    _visibleFieldsBySensor[contact.publicKeyHex] = initialVisibleFields;
     _fieldSpansBySensor[contact.publicKeyHex] = <String, int>{'gps': 2};
     _metricLabelsBySensor[contact.publicKeyHex] = <String, String>{};
-    _metricOrderBySensor[contact.publicKeyHex] = List<String>.from(
-      _defaultMetricOrder,
+    _metricOrderBySensor[contact.publicKeyHex] = metricOrderFor(
+      contact.publicKeyHex,
+      initialVisibleFields,
     );
     await _persistVisibleMetrics();
     await _persistFieldSpans();
     await _persistMetricLabels();
     await _persistMetricOrder();
     notifyListeners();
+  }
+
+  bool _shouldAutoIncludeAvailableFields(
+    String publicKeyHex,
+    Set<String> storedVisibleFields,
+  ) {
+    if (!setEquals(storedVisibleFields, _defaultVisibleFields)) {
+      return false;
+    }
+
+    final storedOrder = _metricOrderBySensor[publicKeyHex];
+    if (storedOrder != null && !listEquals(storedOrder, _defaultMetricOrder)) {
+      return false;
+    }
+
+    final storedLabels = _metricLabelsBySensor[publicKeyHex];
+    if (storedLabels != null && storedLabels.isNotEmpty) {
+      return false;
+    }
+
+    final storedSpans = _fieldSpansBySensor[publicKeyHex];
+    if (storedSpans != null &&
+        !(storedSpans.length == 1 && storedSpans['gps'] == 2)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  Set<String> _initialVisibleFieldsForContact(Contact contact) {
+    return <String>{..._defaultVisibleFields, ...sensorMetricKeysFor(contact)};
   }
 
   Future<void> removeSensor(String publicKeyHex) async {

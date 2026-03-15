@@ -50,9 +50,10 @@ void main() {
               'temperature': 'Ambient',
               'extra:illuminance_2': 'Light',
             },
-            fieldSpans: sensorFullWidthFieldSpans(
-              const {'temperature', 'extra:illuminance_2'},
-            ),
+            fieldSpans: sensorFullWidthFieldSpans(const {
+              'temperature',
+              'extra:illuminance_2',
+            }),
           ),
         ),
       ),
@@ -111,18 +112,12 @@ void main() {
               'temperature',
               'extra:illuminance_2',
             },
-            fieldOrder: const [
-              'extra:illuminance_2',
-              'temperature',
+            fieldOrder: const ['extra:illuminance_2', 'temperature', 'battery'],
+            fieldSpans: sensorFullWidthFieldSpans(const {
               'battery',
-            ],
-            fieldSpans: sensorFullWidthFieldSpans(
-              const {
-                'battery',
-                'temperature',
-                'extra:illuminance_2',
-              },
-            ),
+              'temperature',
+              'extra:illuminance_2',
+            }),
           ),
         ),
       ),
@@ -140,5 +135,56 @@ void main() {
 
     expect(illuminanceTop.dy, lessThan(temperatureTop.dy));
     expect(temperatureTop.dy, lessThan(batteryTop.dy));
+  });
+
+  testWidgets('renders MeshCore custom weather metrics', (tester) async {
+    final publicKey = Uint8List(32);
+    publicKey[0] = 0x46;
+    final contact = Contact(
+      publicKey: publicKey,
+      type: ContactType.sensor,
+      flags: 0,
+      outPathLen: 0,
+      outPath: Uint8List(64),
+      advName: 'WX Station',
+      lastAdvert: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      advLat: 0,
+      advLon: 0,
+      lastMod: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      telemetry: ContactTelemetry(
+        timestamp: DateTime.now().subtract(const Duration(minutes: 1)),
+        extraSensorData: const {'gust_2': 3.7, 'dew_2': 2.0, 'rain_2': 12.3},
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: SensorTelemetryCard(
+            contact: contact,
+            state: SensorRefreshState.idle,
+            visibleFields: const {
+              'extra:gust_2',
+              'extra:dew_2',
+              'extra:rain_2',
+            },
+            fieldSpans: sensorFullWidthFieldSpans(const {
+              'extra:gust_2',
+              'extra:dew_2',
+              'extra:rain_2',
+            }),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Wind gust'), findsOneWidget);
+    expect(find.text('Dew point'), findsOneWidget);
+    expect(find.text('Rain'), findsOneWidget);
+    expect(find.text('3.7 m/s'), findsOneWidget);
+    expect(find.text('2°C'), findsOneWidget);
+    expect(find.text('12.3 mm'), findsOneWidget);
   });
 }

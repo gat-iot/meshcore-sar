@@ -75,6 +75,42 @@ void main() {
     );
   }
 
+  Contact buildTelemetrySensorContact() {
+    final publicKey = Uint8List(32);
+    publicKey[0] = 0x55;
+
+    return Contact(
+      publicKey: publicKey,
+      type: ContactType.sensor,
+      flags: 0,
+      outPathLen: 0,
+      outPath: Uint8List(64),
+      advName: 'Weather Station',
+      lastAdvert: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      advLat: 0,
+      advLon: 0,
+      lastMod: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      telemetry: ContactTelemetry(
+        temperature: 11.8,
+        humidity: 51,
+        pressure: 921.9,
+        timestamp: DateTime.now(),
+        extraSensorData: const {
+          '__source_channel:temperature': 3,
+          '__source_channel:humidity': 2,
+          '__source_channel:pressure': 2,
+          'illuminance_2': 19150.0,
+          'temperature_2': 1.99,
+          'voltage_2': 5.2,
+          'switch_2': 0,
+          'speed_2': 2.8,
+          'speed_3': 3.7,
+          'uv_2': 1.0,
+        },
+      ),
+    );
+  }
+
   test('metric label overrides persist across reloads', () async {
     SharedPreferences.setMockInitialValues({});
     final contact = buildSensorContact();
@@ -148,15 +184,30 @@ void main() {
     final provider = SensorsProvider();
     await waitUntilLoaded(provider);
     await provider.addSensor(contact);
-    await provider.setAutoRefreshMinutes(contact.publicKeyHex, 5);
+    await provider.setAutoRefreshMinutes(contact.publicKeyHex, 1440);
 
-    expect(provider.autoRefreshMinutesFor(contact.publicKeyHex), 5);
+    expect(provider.autoRefreshMinutesFor(contact.publicKeyHex), 1440);
 
     final reloadedProvider = SensorsProvider();
     await waitUntilLoaded(reloadedProvider);
 
-    expect(reloadedProvider.autoRefreshMinutesFor(contact.publicKeyHex), 5);
+    expect(reloadedProvider.autoRefreshMinutesFor(contact.publicKeyHex), 1440);
   });
+
+  test(
+    'unsupported auto refresh minutes normalize to nearest option',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final contact = buildSensorContact();
+
+      final provider = SensorsProvider();
+      await waitUntilLoaded(provider);
+      await provider.addSensor(contact);
+      await provider.setAutoRefreshMinutes(contact.publicKeyHex, 1);
+
+      expect(provider.autoRefreshMinutesFor(contact.publicKeyHex), 5);
+    },
+  );
 
   test('refreshDueSensors respects per-contact interval', () async {
     SharedPreferences.setMockInitialValues({});
@@ -191,4 +242,32 @@ void main() {
     );
     expect(connectionProvider.pingCalls, 2);
   });
+
+  test(
+    'addSensor includes available extra telemetry fields by default',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final contact = buildTelemetrySensorContact();
+
+      final provider = SensorsProvider();
+      await waitUntilLoaded(provider);
+      await provider.addSensor(contact);
+
+      expect(
+        provider.visibleFieldsFor(contact.publicKeyHex),
+        containsAll(<String>{
+          'temperature',
+          'humidity',
+          'pressure',
+          'extra:illuminance_2',
+          'extra:temperature_2',
+          'extra:voltage_2',
+          'extra:switch_2',
+          'extra:speed_2',
+          'extra:speed_3',
+          'extra:uv_2',
+        }),
+      );
+    },
+  );
 }
