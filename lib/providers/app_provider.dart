@@ -948,7 +948,7 @@ class AppProvider with ChangeNotifier {
               contactName: contact.advName.trim().isEmpty
                   ? null
                   : contact.advName,
-                ),
+            ),
           );
         }
         if (contact.type == ContactType.repeater &&
@@ -966,9 +966,6 @@ class AppProvider with ChangeNotifier {
         devicePublicKey: devicePublicKey,
       );
       unawaited(_pathHistoryService.recordLearnedPath(contact));
-
-      // Broadcast to SSE clients if server is running
-      connectionProvider.broadcastContactToSseClients(contact);
     };
 
     // When all contacts are received
@@ -982,11 +979,6 @@ class AppProvider with ChangeNotifier {
         unawaited(_pathHistoryService.recordLearnedPath(contact));
       }
       debugPrint('Received ${contacts.length} contacts');
-
-      // Broadcast all contacts to SSE clients if server is running
-      for (final contact in contacts) {
-        connectionProvider.broadcastContactToSseClients(contact);
-      }
     };
 
     // Setup callback for ConnectionProvider to query channel info
@@ -1212,9 +1204,6 @@ class AppProvider with ChangeNotifier {
             contactLocationSnapshot: contactLocationSnapshot,
             receptionDetailsSnapshot: receptionDetailsSnapshot,
           );
-
-          // Broadcast drawing message to SSE clients if server is running
-          connectionProvider.broadcastMessageToSseClients(updatedMessage);
         } else {
           debugPrint('⚠️ [AppProvider] Failed to parse drawing message');
         }
@@ -1255,7 +1244,6 @@ class AppProvider with ChangeNotifier {
           contactLocationSnapshot: contactLocationSnapshot,
           receptionDetailsSnapshot: receptionDetailsSnapshot,
         );
-        connectionProvider.broadcastMessageToSseClients(enrichedMessage);
         return;
       }
 
@@ -1289,7 +1277,6 @@ class AppProvider with ChangeNotifier {
           contactLocationSnapshot: contactLocationSnapshot,
           receptionDetailsSnapshot: receptionDetailsSnapshot,
         );
-        connectionProvider.broadcastMessageToSseClients(enrichedMessage);
         return;
       }
 
@@ -1314,9 +1301,6 @@ class AppProvider with ChangeNotifier {
         contactLocationSnapshot: contactLocationSnapshot,
         receptionDetailsSnapshot: receptionDetailsSnapshot,
       );
-
-      // Broadcast message to SSE clients if server is running
-      connectionProvider.broadcastMessageToSseClients(enrichedMessage);
     };
 
     // Keep a compact receive-time snapshot because packet logs roll over.
@@ -1353,20 +1337,21 @@ class AppProvider with ChangeNotifier {
     connectionProvider.onRawDataReceived = (payload, snrRaw, rssiDbm) {
       final parsedAdvert = _tryParseRawAdvert(payload);
       if (parsedAdvert != null) {
-        final isNewPendingAdvert = contactsProvider.addOrUpdatePendingAdvertMetadata(
-          publicKey: parsedAdvert.publicKey,
-          typeValue: parsedAdvert.typeValue,
-          devicePublicKey: connectionProvider.deviceInfo.publicKey,
-          flags: parsedAdvert.flags,
-          advName: parsedAdvert.advName,
-          lastAdvert: parsedAdvert.lastAdvert,
-          advLat: parsedAdvert.advLat,
-          advLon: parsedAdvert.advLon,
-          signedEncodedPathLen: parsedAdvert.signedEncodedPathLen,
-          paddedPathBytes: parsedAdvert.paddedPathBytes,
-          rxRssiDbm: rssiDbm,
-          rxSnrRaw: snrRaw,
-        );
+        final isNewPendingAdvert = contactsProvider
+            .addOrUpdatePendingAdvertMetadata(
+              publicKey: parsedAdvert.publicKey,
+              typeValue: parsedAdvert.typeValue,
+              devicePublicKey: connectionProvider.deviceInfo.publicKey,
+              flags: parsedAdvert.flags,
+              advName: parsedAdvert.advName,
+              lastAdvert: parsedAdvert.lastAdvert,
+              advLat: parsedAdvert.advLat,
+              advLon: parsedAdvert.advLon,
+              signedEncodedPathLen: parsedAdvert.signedEncodedPathLen,
+              paddedPathBytes: parsedAdvert.paddedPathBytes,
+              rxRssiDbm: rssiDbm,
+              rxSnrRaw: snrRaw,
+            );
         if (isNewPendingAdvert) {
           final contactKey = parsedAdvert.publicKey
               .map((b) => b.toRadixString(16).padLeft(2, '0'))
@@ -1382,7 +1367,9 @@ class AppProvider with ChangeNotifier {
           unawaited(_requestRepeaterStatus(parsedAdvert.publicKey));
           unawaited(_maybeRequestRepeaterOwnerInfo(parsedAdvert.publicKey));
         }
-        if (contactsProvider.shouldEnrichPendingAdvert(parsedAdvert.publicKey)) {
+        if (contactsProvider.shouldEnrichPendingAdvert(
+          parsedAdvert.publicKey,
+        )) {
           unawaited(connectionProvider.previewContact(parsedAdvert.publicKey));
         }
         return;
@@ -1669,7 +1656,9 @@ class AppProvider with ChangeNotifier {
           unawaited(
             _notificationService.showContactDiscoveredNotification(
               contactKey: keyHex,
-              contactName: contactsProvider.pendingAdvertByKey(publicKey)?.advName,
+              contactName: contactsProvider
+                  .pendingAdvertByKey(publicKey)
+                  ?.advName,
             ),
           );
         }
@@ -2248,10 +2237,9 @@ class AppProvider with ChangeNotifier {
     }
 
     try {
-      final payload = utf8.decode(
-        responseData.sublist(4),
-        allowMalformed: true,
-      ).trim();
+      final payload = utf8
+          .decode(responseData.sublist(4), allowMalformed: true)
+          .trim();
       if (payload.isEmpty) {
         return null;
       }
@@ -2351,10 +2339,9 @@ class AppProvider with ChangeNotifier {
 
       String? advName;
       if (hasName && reader.remainingBytesCount > 0) {
-        final decodedName = utf8.decode(
-          reader.readRemainingBytes(),
-          allowMalformed: true,
-        ).trim();
+        final decodedName = utf8
+            .decode(reader.readRemainingBytes(), allowMalformed: true)
+            .trim();
         if (decodedName.isNotEmpty) {
           advName = decodedName;
         }

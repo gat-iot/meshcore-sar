@@ -31,7 +31,6 @@ import '../utils/image_message_parser.dart';
 import '../utils/voice_message_parser.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_localizations.dart';
-import '../widgets/connection_mode_selector.dart';
 import '../widgets/update_dialog.dart';
 import 'sar_template_management_screen.dart';
 import 'welcome_wizard_screen.dart';
@@ -1054,7 +1053,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
             SwitchListTile(
-            SwitchListTile(
               secondary: const Icon(Icons.contact_page_outlined),
               title: const Text('Discovery notifications'),
               subtitle: const Text(
@@ -1070,6 +1068,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               },
             ),
+            SwitchListTile(
               secondary: const Icon(Icons.system_update),
               title: const Text('Update notifications'),
               subtitle: const Text(
@@ -1553,11 +1552,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
           ]),
-
-          if (!kIsWeb) ...[
-            _buildSectionHeader('Network Sharing'),
-            const ConnectionModeSelector(),
-          ],
 
           _buildSectionHeader(AppLocalizations.of(context)!.permissionsSection),
           _buildSettingsCard([
