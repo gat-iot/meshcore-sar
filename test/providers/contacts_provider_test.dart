@@ -137,7 +137,7 @@ void main() {
     });
 
     test(
-      'retains last valid gps for any contact when telemetry gps is invalid or missing',
+      'clears telemetry gps on refresh when gps is invalid or missing but keeps fallback display location',
       () {
         final contactTypes = <ContactType>[
           ContactType.chat,
@@ -165,23 +165,24 @@ void main() {
           );
           scopedProvider.updateTelemetry(scopedKey.sublist(0, 6), validGps);
 
-          // No GPS frame should keep previous valid GPS.
+          // No GPS frame should clear telemetry GPS but keep the last known
+          // contact location as display fallback.
           final batteryOnly = CayenneLppParser.createBatteryData(3.8);
           scopedProvider.updateTelemetry(scopedKey.sublist(0, 6), batteryOnly);
 
           var updated = scopedProvider.findContactByKey(scopedKey)!;
           expect(updated.telemetry, isNotNull);
-          expect(updated.telemetry!.gpsLocation, isNotNull);
+          expect(updated.telemetry!.gpsLocation, isNull);
           expect(
-            updated.telemetry!.gpsLocation!.latitude,
+            updated.displayLocation!.latitude,
             closeTo(45.1234, 0.0001),
           );
           expect(
-            updated.telemetry!.gpsLocation!.longitude,
+            updated.displayLocation!.longitude,
             closeTo(13.8765, 0.0001),
           );
 
-          // Invalid 0,0 GPS frame should also keep previous valid GPS.
+          // Invalid 0,0 GPS frame should behave the same way.
           final invalidGps = CayenneLppParser.createGpsData(
             latitude: 0.0,
             longitude: 0.0,
@@ -190,13 +191,13 @@ void main() {
 
           updated = scopedProvider.findContactByKey(scopedKey)!;
           expect(updated.telemetry, isNotNull);
-          expect(updated.telemetry!.gpsLocation, isNotNull);
+          expect(updated.telemetry!.gpsLocation, isNull);
           expect(
-            updated.telemetry!.gpsLocation!.latitude,
+            updated.displayLocation!.latitude,
             closeTo(45.1234, 0.0001),
           );
           expect(
-            updated.telemetry!.gpsLocation!.longitude,
+            updated.displayLocation!.longitude,
             closeTo(13.8765, 0.0001),
           );
         }
@@ -360,13 +361,22 @@ void main() {
 
       final updated = provider.findContactByKey(publicKey)!;
       expect(updated.telemetry, isNotNull);
-      expect(updated.telemetry!.gpsLocation, const LatLng(46.0569, 14.5058));
+      expect(updated.telemetry!.gpsLocation, isNull);
+      expect(updated.displayLocation, const LatLng(46.0569, 14.5058));
       expect(updated.telemetry!.batteryMilliVolts, isNotNull);
       expect(updated.telemetry!.batteryPercentage, isNotNull);
       expect(updated.telemetry!.temperature, equals(19.5));
       expect(updated.telemetry!.humidity, equals(58.0));
       expect(updated.telemetry!.pressure, equals(1011.2));
-      expect(updated.telemetry!.extraSensorData, isNull);
+      expect(
+        updated.telemetry!.extraSensorData,
+        containsPair('__source_channel:battery', 0),
+      );
+      expect(
+        updated.telemetry!.extraSensorData,
+        containsPair('__source_channel:voltage', 0),
+      );
+      expect(updated.telemetry!.extraSensorData, isNot(contains('pm25')));
     });
 
     test('replaces old source-channel mappings when a metric moves channels', () {

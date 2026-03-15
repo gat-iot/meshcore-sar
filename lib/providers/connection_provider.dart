@@ -1257,6 +1257,10 @@ class ConnectionProvider with ChangeNotifier {
         channelName: channelName,
         secret: secretBytes,
       );
+
+      // Reconcile local state from the device after the write completes,
+      // matching the delete flow so channel/contact lists refresh immediately.
+      await _activeService.getChannel(slotIdx);
     } catch (e) {
       if (_isChannelRefreshTimeoutError(e)) {
         debugPrint(

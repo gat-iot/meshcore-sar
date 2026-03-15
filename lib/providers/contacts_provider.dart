@@ -875,7 +875,7 @@ class ContactsProvider with ChangeNotifier {
           telemetry.gpsLocation,
         )) {
           debugPrint(
-            '  ⚠️ Retaining last valid GPS. Incoming telemetry GPS is invalid/missing: $incomingGps',
+            '  ⚠️ Incoming telemetry GPS is invalid/missing; keeping last known contact location as fallback: $incomingGps',
           );
         }
         telemetry = ContactTelemetry(
