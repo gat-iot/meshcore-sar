@@ -336,7 +336,7 @@ void main() {
       expect(updated.telemetry!.extraSensorData, containsPair('co2', 415.0));
     });
 
-    test('retains prior telemetry fields across sparse telemetry updates', () {
+    test('retains scalar telemetry but wipes stale extra sensor fields on refresh', () {
       final fullTelemetry = ContactTelemetry(
         gpsLocation: const LatLng(46.0569, 14.5058),
         batteryPercentage: 54.0,
@@ -366,7 +366,55 @@ void main() {
       expect(updated.telemetry!.temperature, equals(19.5));
       expect(updated.telemetry!.humidity, equals(58.0));
       expect(updated.telemetry!.pressure, equals(1011.2));
-      expect(updated.telemetry!.extraSensorData, containsPair('pm25', 8.0));
+      expect(updated.telemetry!.extraSensorData, isNull);
+    });
+
+    test('replaces old source-channel mappings when a metric moves channels', () {
+      final initialTelemetry = ContactTelemetry(
+        gpsLocation: null,
+        batteryPercentage: null,
+        batteryMilliVolts: null,
+        temperature: 21.5,
+        timestamp: DateTime.now().subtract(const Duration(minutes: 2)),
+        humidity: null,
+        pressure: null,
+        extraSensorData: const {
+          '__source_channel:temperature': 2,
+          'temperature_2': 21.5,
+          'humidity_4': 66.0,
+        },
+      );
+
+      provider.addOrUpdateContact(
+        createContact(
+          key: publicKey,
+          type: ContactType.chat,
+        ).copyWith(telemetry: initialTelemetry),
+      );
+
+      final movedChannelTelemetry = CayenneLppParser.createTemperatureData(
+        23.5,
+        channel: 3,
+      );
+
+      provider.updateTelemetry(publicKey.sublist(0, 6), movedChannelTelemetry);
+
+      final updated = provider.findContactByKey(publicKey)!;
+      expect(updated.telemetry, isNotNull);
+      expect(updated.telemetry!.temperature, closeTo(23.5, 0.1));
+      expect(
+        updated.telemetry!.extraSensorData,
+        containsPair('__source_channel:temperature', 3),
+      );
+      expect(
+        updated.telemetry!.extraSensorData,
+        containsPair('temperature_3', closeTo(23.5, 0.1)),
+      );
+      expect(
+        updated.telemetry!.extraSensorData,
+        isNot(contains('temperature_2')),
+      );
+      expect(updated.telemetry!.extraSensorData, isNot(contains('humidity_4')));
     });
 
     test('builds message snapshot from latest valid telemetry', () {

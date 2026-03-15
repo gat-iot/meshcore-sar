@@ -878,7 +878,16 @@ class ContactsProvider with ChangeNotifier {
             '  ⚠️ Retaining last valid GPS. Incoming telemetry GPS is invalid/missing: $incomingGps',
           );
         }
-        telemetry = mergedTelemetry;
+        telemetry = ContactTelemetry(
+          gpsLocation: telemetry.gpsLocation,
+          batteryPercentage: mergedTelemetry.batteryPercentage,
+          batteryMilliVolts: mergedTelemetry.batteryMilliVolts,
+          temperature: mergedTelemetry.temperature,
+          timestamp: mergedTelemetry.timestamp,
+          humidity: mergedTelemetry.humidity,
+          pressure: mergedTelemetry.pressure,
+          extraSensorData: telemetry.extraSensorData,
+        );
       }
 
       // Update contact with new telemetry AND last seen time
@@ -993,10 +1002,10 @@ class ContactsProvider with ChangeNotifier {
     // last known reading for any field that is omitted in the incoming update.
     final incomingGps = _getValidGpsOrNull(incomingTelemetry.gpsLocation);
     final previousGps = _getValidGpsOrNull(existingTelemetry?.gpsLocation);
-    final mergedExtraSensorData = <String, dynamic>{
-      ...?existingTelemetry?.extraSensorData,
-      ...?incomingTelemetry.extraSensorData,
-    };
+    final mergedExtraSensorData = _mergeExtraSensorData(
+      existingTelemetry?.extraSensorData,
+      incomingTelemetry.extraSensorData,
+    );
 
     return ContactTelemetry(
       gpsLocation: incomingGps ?? previousGps,
@@ -1015,6 +1024,49 @@ class ContactsProvider with ChangeNotifier {
           ? null
           : mergedExtraSensorData,
     );
+  }
+
+  Map<String, dynamic> _mergeExtraSensorData(
+    Map<String, dynamic>? existingExtraSensorData,
+    Map<String, dynamic>? incomingExtraSensorData,
+  ) {
+    final merged = <String, dynamic>{...?existingExtraSensorData};
+    if (incomingExtraSensorData == null || incomingExtraSensorData.isEmpty) {
+      return merged;
+    }
+
+    final incomingMetricFamilies = incomingExtraSensorData.keys
+        .map(_telemetryMetricFamilyForKey)
+        .whereType<String>()
+        .toSet();
+    if (incomingMetricFamilies.isNotEmpty) {
+      merged.removeWhere((key, _) {
+        final family = _telemetryMetricFamilyForKey(key);
+        return family != null && incomingMetricFamilies.contains(family);
+      });
+    }
+
+    merged.addAll(incomingExtraSensorData);
+    return merged;
+  }
+
+  String? _telemetryMetricFamilyForKey(String key) {
+    const sourcePrefix = '__source_channel:';
+    if (key.startsWith(sourcePrefix)) {
+      return key.substring(sourcePrefix.length);
+    }
+
+    final separatorIndex = key.lastIndexOf('_');
+    if (separatorIndex <= 0 || separatorIndex == key.length - 1) {
+      return key;
+    }
+
+    final suffix = key.substring(separatorIndex + 1);
+    if (int.tryParse(suffix) == null) {
+      return key;
+    }
+
+    return key.substring(0, separatorIndex);
   }
 
   int _coordinateToAdvertMicrodegrees(double coordinate) {
