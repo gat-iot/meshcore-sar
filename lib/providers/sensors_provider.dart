@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/contact.dart';
+import '../widgets/sensors/sensor_telemetry_card.dart';
 import 'connection_provider.dart';
 import 'contacts_provider.dart';
 
@@ -223,6 +224,22 @@ class SensorsProvider with ChangeNotifier {
     _visibleFieldsBySensor[publicKeyHex] ?? _defaultVisibleFields,
   );
 
+  Set<String> effectiveVisibleFieldsFor(
+    String publicKeyHex,
+    Iterable<String> availableFieldKeys,
+  ) {
+    final storedVisibleFields =
+        _visibleFieldsBySensor[publicKeyHex] ?? _defaultVisibleFields;
+    if (!_shouldAutoIncludeAvailableFields(publicKeyHex, storedVisibleFields)) {
+      return Set<String>.unmodifiable(storedVisibleFields);
+    }
+
+    return Set<String>.unmodifiable(<String>{
+      ...storedVisibleFields,
+      ...availableFieldKeys,
+    });
+  }
+
   bool showsField(String publicKeyHex, String fieldKey) =>
       visibleFieldsFor(publicKeyHex).contains(fieldKey);
 
@@ -440,20 +457,51 @@ class SensorsProvider with ChangeNotifier {
     }
 
     _watchedSensorKeys.add(contact.publicKeyHex);
+    final initialVisibleFields = _initialVisibleFieldsForContact(contact);
     await _persistWatchedSensors();
-    _visibleFieldsBySensor[contact.publicKeyHex] = Set<String>.from(
-      _defaultVisibleFields,
-    );
+    _visibleFieldsBySensor[contact.publicKeyHex] = initialVisibleFields;
     _fieldSpansBySensor[contact.publicKeyHex] = <String, int>{'gps': 2};
     _metricLabelsBySensor[contact.publicKeyHex] = <String, String>{};
-    _metricOrderBySensor[contact.publicKeyHex] = List<String>.from(
-      _defaultMetricOrder,
+    _metricOrderBySensor[contact.publicKeyHex] = metricOrderFor(
+      contact.publicKeyHex,
+      initialVisibleFields,
     );
     await _persistVisibleMetrics();
     await _persistFieldSpans();
     await _persistMetricLabels();
     await _persistMetricOrder();
     notifyListeners();
+  }
+
+  bool _shouldAutoIncludeAvailableFields(
+    String publicKeyHex,
+    Set<String> storedVisibleFields,
+  ) {
+    if (!setEquals(storedVisibleFields, _defaultVisibleFields)) {
+      return false;
+    }
+
+    final storedOrder = _metricOrderBySensor[publicKeyHex];
+    if (storedOrder != null && !listEquals(storedOrder, _defaultMetricOrder)) {
+      return false;
+    }
+
+    final storedLabels = _metricLabelsBySensor[publicKeyHex];
+    if (storedLabels != null && storedLabels.isNotEmpty) {
+      return false;
+    }
+
+    final storedSpans = _fieldSpansBySensor[publicKeyHex];
+    if (storedSpans != null &&
+        !(storedSpans.length == 1 && storedSpans['gps'] == 2)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  Set<String> _initialVisibleFieldsForContact(Contact contact) {
+    return <String>{..._defaultVisibleFields, ...sensorMetricKeysFor(contact)};
   }
 
   Future<void> removeSensor(String publicKeyHex) async {

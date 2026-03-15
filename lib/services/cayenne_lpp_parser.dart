@@ -19,7 +19,61 @@ class CayenneLppParser {
   static const int _lppDirection = 132;
   static const int _lppUnixTime = 133;
   static const int _lppColour = 135;
+  static const int _lppGust = 137;
+  static const int _lppDewPoint = 138;
+  static const int _lppRain = 139;
   static const int _lppSwitch = 142;
+  static const int _lppBinaryBool = 143;
+  static const int _lppBinaryPowerSwitch = 144;
+  static const int _lppBinaryOpen = 145;
+  static const int _lppBinaryBatteryLow = 146;
+  static const int _lppBinaryCharging = 147;
+  static const int _lppBinaryCarbonMonoxide = 148;
+  static const int _lppBinaryCold = 149;
+  static const int _lppBinaryConnectivity = 150;
+  static const int _lppBinaryDoor = 151;
+  static const int _lppBinaryGarageDoor = 152;
+  static const int _lppBinaryGas = 153;
+  static const int _lppBinaryHeat = 154;
+  static const int _lppBinaryLight = 155;
+  static const int _lppBinaryLock = 156;
+  static const int _lppBinaryMoisture = 157;
+  static const int _lppBinaryMotion = 158;
+  static const int _lppBinaryMoving = 159;
+  static const int _lppBinaryOccupancy = 160;
+  static const int _lppBinaryPlug = 161;
+  static const int _lppBinaryPresence = 162;
+  static const int _lppBinaryProblem = 163;
+  static const int _lppBinaryRunning = 164;
+  static const int _lppBinarySafety = 165;
+  static const int _lppBinarySmoke = 166;
+  static const int _lppBinarySound = 167;
+  static const int _lppBinaryTamper = 168;
+  static const int _lppBinaryVibration = 169;
+  static const int _lppBinaryWindow = 170;
+  static const int _lppButtonEvent = 171;
+  static const int _lppDimmer = 172;
+  static const int _lppUv = 173;
+  static const int _lppLightLevel = 174;
+  static const int _lppPm25 = 175;
+  static const int _lppPm10 = 176;
+  static const int _lppCo2 = 177;
+  static const int _lppTvoc = 178;
+  static const int _lppRpm = 179;
+  static const int _lppConductivity = 180;
+  static const int _lppRotation = 181;
+  static const int _lppDuration = 182;
+  static const int _lppAcceleration = 183;
+  static const int _lppGyroRate = 184;
+  static const int _lppVolume = 185;
+  static const int _lppFlowRate = 186;
+  static const int _lppVolumeStorage = 187;
+  static const int _lppWater = 188;
+  static const int _lppGasVolume = 189;
+  static const int _lppMass = 190;
+  static const int _lppSignedSpeed = 191;
+  static const int _lppSignedPower = 192;
+  static const int _lppSignedCurrent = 193;
 
   /// Parse Cayenne LPP data into ContactTelemetry
   static ContactTelemetry parse(Uint8List data) {
@@ -345,6 +399,212 @@ class CayenneLppParser {
             };
             break;
 
+          case _lppGust:
+            final rawValue = reader.readUInt16BE();
+            final value = rawValue / 100.0;
+            debugPrint('      Gust: ${value}m/s');
+            extraSensorData['gust_$channel'] = value;
+            break;
+
+          case _lppDewPoint:
+            final rawValue = reader.readInt16BE();
+            final value = rawValue / 10.0;
+            debugPrint('      Dew point: ${value.toStringAsFixed(1)}°C');
+            extraSensorData['dew_$channel'] = value;
+            break;
+
+          case _lppRain:
+            final rawValue = reader.readUInt16BE();
+            final value = rawValue / 10.0;
+            debugPrint('      Rain: ${value}mm');
+            extraSensorData['rain_$channel'] = value;
+            break;
+
+          case _lppBinaryBool:
+          case _lppBinaryPowerSwitch:
+          case _lppBinaryOpen:
+          case _lppBinaryBatteryLow:
+          case _lppBinaryCharging:
+          case _lppBinaryCarbonMonoxide:
+          case _lppBinaryCold:
+          case _lppBinaryConnectivity:
+          case _lppBinaryDoor:
+          case _lppBinaryGarageDoor:
+          case _lppBinaryGas:
+          case _lppBinaryHeat:
+          case _lppBinaryLight:
+          case _lppBinaryLock:
+          case _lppBinaryMoisture:
+          case _lppBinaryMotion:
+          case _lppBinaryMoving:
+          case _lppBinaryOccupancy:
+          case _lppBinaryPlug:
+          case _lppBinaryPresence:
+          case _lppBinaryProblem:
+          case _lppBinaryRunning:
+          case _lppBinarySafety:
+          case _lppBinarySmoke:
+          case _lppBinarySound:
+          case _lppBinaryTamper:
+          case _lppBinaryVibration:
+          case _lppBinaryWindow:
+            final value = reader.readByte();
+            debugPrint('      Binary state: $value');
+            extraSensorData['${_binaryMetricKeyForType(type)}_$channel'] =
+                value;
+            break;
+
+          case _lppButtonEvent:
+            final value = reader.readByte();
+            debugPrint('      Button event: $value');
+            extraSensorData['button_event_$channel'] = value;
+            break;
+
+          case _lppDimmer:
+            final value = _readInt8(reader);
+            debugPrint('      Dimmer: $value');
+            extraSensorData['dimmer_$channel'] = value;
+            break;
+
+          case _lppUv:
+            final value = reader.readByte() / 10.0;
+            debugPrint('      UV index: $value');
+            extraSensorData['uv_$channel'] = value;
+            break;
+
+          case _lppLightLevel:
+            final value = reader.readByte();
+            debugPrint('      Light level: $value');
+            extraSensorData['light_level_$channel'] = value;
+            break;
+
+          case _lppPm25:
+            final value = reader.readUInt16BE().toDouble();
+            debugPrint('      PM2.5: $value');
+            extraSensorData['pm25_$channel'] = value;
+            break;
+
+          case _lppPm10:
+            final value = reader.readUInt16BE().toDouble();
+            debugPrint('      PM10: $value');
+            extraSensorData['pm10_$channel'] = value;
+            break;
+
+          case _lppCo2:
+            final value = reader.readUInt16BE().toDouble();
+            debugPrint('      CO2: $value');
+            extraSensorData['co2_$channel'] = value;
+            break;
+
+          case _lppTvoc:
+            final value = reader.readUInt16BE().toDouble();
+            debugPrint('      TVOC: $value');
+            extraSensorData['tvoc_$channel'] = value;
+            break;
+
+          case _lppRpm:
+            final value = reader.readUInt16BE().toDouble();
+            debugPrint('      RPM: $value');
+            extraSensorData['rpm_$channel'] = value;
+            break;
+
+          case _lppConductivity:
+            final value = reader.readUInt16BE().toDouble();
+            debugPrint('      Conductivity: $value');
+            extraSensorData['conductivity_$channel'] = value;
+            break;
+
+          case _lppRotation:
+            final rawValue = reader.readInt16BE();
+            final value = rawValue / 10.0;
+            debugPrint('      Rotation: $value');
+            extraSensorData['rotation_$channel'] = value;
+            break;
+
+          case _lppDuration:
+            final rawValue = _readUInt32BE(reader);
+            final value = rawValue / 1000.0;
+            debugPrint('      Duration: $value s');
+            extraSensorData['duration_$channel'] = value;
+            break;
+
+          case _lppAcceleration:
+            final rawValue = _readInt32BE(reader);
+            final value = rawValue / 1000000.0;
+            debugPrint('      Acceleration: $value');
+            extraSensorData['acceleration_$channel'] = value;
+            break;
+
+          case _lppGyroRate:
+            final rawValue = _readInt32BE(reader);
+            final value = rawValue / 1000.0;
+            debugPrint('      Gyro rate: $value');
+            extraSensorData['gyro_rate_$channel'] = value;
+            break;
+
+          case _lppVolume:
+            final rawValue = _readUInt32BE(reader);
+            final value = rawValue / 1000.0;
+            debugPrint('      Volume: $value');
+            extraSensorData['volume_$channel'] = value;
+            break;
+
+          case _lppFlowRate:
+            final rawValue = _readUInt32BE(reader);
+            final value = rawValue / 1000.0;
+            debugPrint('      Flow rate: $value');
+            extraSensorData['flow_rate_$channel'] = value;
+            break;
+
+          case _lppVolumeStorage:
+            final rawValue = _readUInt32BE(reader);
+            final value = rawValue / 1000.0;
+            debugPrint('      Storage volume: $value');
+            extraSensorData['volume_storage_$channel'] = value;
+            break;
+
+          case _lppWater:
+            final rawValue = _readUInt32BE(reader);
+            final value = rawValue / 1000.0;
+            debugPrint('      Water: $value');
+            extraSensorData['water_$channel'] = value;
+            break;
+
+          case _lppGasVolume:
+            final rawValue = _readUInt32BE(reader);
+            final value = rawValue / 1000.0;
+            debugPrint('      Gas volume: $value');
+            extraSensorData['gas_volume_$channel'] = value;
+            break;
+
+          case _lppMass:
+            final rawValue = _readUInt32BE(reader);
+            final value = rawValue / 1000.0;
+            debugPrint('      Mass: $value');
+            extraSensorData['mass_$channel'] = value;
+            break;
+
+          case _lppSignedSpeed:
+            final rawValue = _readInt32BE(reader);
+            final value = rawValue / 1000000.0;
+            debugPrint('      Signed speed: $value');
+            extraSensorData['signed_speed_$channel'] = value;
+            break;
+
+          case _lppSignedPower:
+            final rawValue = _readInt32BE(reader);
+            final value = rawValue / 100.0;
+            debugPrint('      Signed power: $value');
+            extraSensorData['signed_power_$channel'] = value;
+            break;
+
+          case _lppSignedCurrent:
+            final rawValue = _readInt32BE(reader);
+            final value = rawValue / 1000.0;
+            debugPrint('      Signed current: $value');
+            extraSensorData['signed_current_$channel'] = value;
+            break;
+
           case _lppSwitch:
             final value = reader.readByte();
             debugPrint('      Switch: $value');
@@ -352,11 +612,16 @@ class CayenneLppParser {
             break;
 
           default:
-            debugPrint(
-              '      ⚠️ Unknown type, skipping remaining ${reader.remainingBytesCount} bytes',
-            );
-            // Unknown type, skip remaining to avoid parsing errors
-            reader.skip(reader.remainingBytesCount);
+            final size = _payloadSizeForType(type);
+            if (size == null || reader.remainingBytesCount < size) {
+              debugPrint(
+                '      ⚠️ Unknown type $type with unsupported size, stopping parse',
+              );
+              reader.skip(reader.remainingBytesCount);
+              break;
+            }
+            debugPrint('      ⚠️ Unknown type $type, skipping $size bytes');
+            reader.skip(size);
             break;
         }
       } catch (e) {
@@ -420,7 +685,154 @@ class CayenneLppParser {
     return (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
   }
 
-  static String _sourceChannelKey(String fieldKey) => '__source_channel:$fieldKey';
+  static int _readInt32BE(BufferReader reader) {
+    final value = _readUInt32BE(reader);
+    if ((value & 0x80000000) != 0) {
+      return value - 0x100000000;
+    }
+    return value;
+  }
+
+  static int _readInt8(BufferReader reader) {
+    final value = reader.readByte();
+    if ((value & 0x80) != 0) {
+      return value - 0x100;
+    }
+    return value;
+  }
+
+  static String _sourceChannelKey(String fieldKey) =>
+      '__source_channel:$fieldKey';
+
+  static String _binaryMetricKeyForType(int type) {
+    switch (type) {
+      case _lppBinaryBool:
+        return 'binary_bool';
+      case _lppBinaryPowerSwitch:
+        return 'binary_power_switch';
+      case _lppBinaryOpen:
+        return 'binary_open';
+      case _lppBinaryBatteryLow:
+        return 'binary_battery_low';
+      case _lppBinaryCharging:
+        return 'binary_charging';
+      case _lppBinaryCarbonMonoxide:
+        return 'binary_carbon_monoxide';
+      case _lppBinaryCold:
+        return 'binary_cold';
+      case _lppBinaryConnectivity:
+        return 'binary_connectivity';
+      case _lppBinaryDoor:
+        return 'binary_door';
+      case _lppBinaryGarageDoor:
+        return 'binary_garage_door';
+      case _lppBinaryGas:
+        return 'binary_gas';
+      case _lppBinaryHeat:
+        return 'binary_heat';
+      case _lppBinaryLight:
+        return 'binary_light';
+      case _lppBinaryLock:
+        return 'binary_lock';
+      case _lppBinaryMoisture:
+        return 'binary_moisture';
+      case _lppBinaryMotion:
+        return 'binary_motion';
+      case _lppBinaryMoving:
+        return 'binary_moving';
+      case _lppBinaryOccupancy:
+        return 'binary_occupancy';
+      case _lppBinaryPlug:
+        return 'binary_plug';
+      case _lppBinaryPresence:
+        return 'binary_presence';
+      case _lppBinaryProblem:
+        return 'binary_problem';
+      case _lppBinaryRunning:
+        return 'binary_running';
+      case _lppBinarySafety:
+        return 'binary_safety';
+      case _lppBinarySmoke:
+        return 'binary_smoke';
+      case _lppBinarySound:
+        return 'binary_sound';
+      case _lppBinaryTamper:
+        return 'binary_tamper';
+      case _lppBinaryVibration:
+        return 'binary_vibration';
+      case _lppBinaryWindow:
+        return 'binary_window';
+    }
+    return 'binary_state';
+  }
+
+  static int? _payloadSizeForType(int type) {
+    if (type >= _lppBinaryBool && type <= _lppBinaryWindow) {
+      return 1;
+    }
+    switch (type) {
+      case MeshCoreConstants.lppDigitalInput:
+      case MeshCoreConstants.lppDigitalOutput:
+      case MeshCoreConstants.lppPresenceSensor:
+      case MeshCoreConstants.lppHumiditySensor:
+      case _lppPercentage:
+      case _lppSwitch:
+      case _lppButtonEvent:
+      case _lppDimmer:
+      case _lppUv:
+      case _lppLightLevel:
+        return 1;
+      case MeshCoreConstants.lppAnalogInput:
+      case MeshCoreConstants.lppAnalogOutput:
+      case MeshCoreConstants.lppIlluminanceSensor:
+      case MeshCoreConstants.lppTemperatureSensor:
+      case MeshCoreConstants.lppBarometer:
+      case MeshCoreConstants.lppVoltageSensor:
+      case _lppCurrent:
+      case _lppAltitude:
+      case _lppConcentration:
+      case _lppPower:
+      case _lppSpeed:
+      case _lppDirection:
+      case _lppGust:
+      case _lppDewPoint:
+      case _lppRain:
+      case _lppPm25:
+      case _lppPm10:
+      case _lppCo2:
+      case _lppTvoc:
+      case _lppRpm:
+      case _lppConductivity:
+      case _lppRotation:
+        return 2;
+      case MeshCoreConstants.lppAccelerometer:
+      case MeshCoreConstants.lppGyrometer:
+        return 6;
+      case MeshCoreConstants.lppGps:
+        return 9;
+      case _lppGenericSensor:
+      case _lppFrequency:
+      case _lppDistance:
+      case _lppEnergy:
+      case _lppUnixTime:
+      case _lppDuration:
+      case _lppAcceleration:
+      case _lppGyroRate:
+      case _lppVolume:
+      case _lppFlowRate:
+      case _lppVolumeStorage:
+      case _lppWater:
+      case _lppGasVolume:
+      case _lppMass:
+      case _lppSignedSpeed:
+      case _lppSignedPower:
+      case _lppSignedCurrent:
+        return 4;
+      case _lppColour:
+        return 3;
+    }
+    return null;
+  }
 
   static bool _isZeroPaddedTail(Uint8List data, int remainingBytes) {
     final start = data.length - remainingBytes;

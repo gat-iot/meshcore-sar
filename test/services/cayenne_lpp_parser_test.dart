@@ -373,6 +373,9 @@ void main() {
       const lppDirection = 132;
       const lppUnixTime = 133;
       const lppColour = 135;
+      const lppGust = 137;
+      const lppDewPoint = 138;
+      const lppRain = 139;
       const lppSwitch = 142;
 
       final payload = Uint8List.fromList([
@@ -388,6 +391,9 @@ void main() {
         11, lppDirection, 0x01, 0x0E, // 270 deg
         12, lppUnixTime, 0x65, 0xF0, 0x00, 0x00, // 1710221312
         13, lppColour, 0xFF, 0x80, 0x40, // #FF8040
+        15, lppGust, 0x01, 0x72, // 3.70 m/s
+        16, lppDewPoint, 0x00, 0x14, // 2.0 C
+        17, lppRain, 0x00, 0x7B, // 12.3 mm
         14, lppSwitch, 0x01, // on
       ]);
 
@@ -409,7 +415,57 @@ void main() {
         decoded.extraSensorData!['colour_13'],
         equals({'r': 255, 'g': 128, 'b': 64}),
       );
+      expect(decoded.extraSensorData!['gust_15'], closeTo(3.7, 0.001));
+      expect(decoded.extraSensorData!['dew_16'], closeTo(2.0, 0.001));
+      expect(decoded.extraSensorData!['rain_17'], closeTo(12.3, 0.001));
       expect(decoded.extraSensorData!['switch_14'], equals(1));
+    });
+
+    test('new MeshCore custom telemetry types decode without truncation', () {
+      const lppBinaryMoisture = 157;
+      const lppButtonEvent = 171;
+      const lppDimmer = 172;
+      const lppUv = 173;
+      const lppPm25 = 175;
+      const lppConductivity = 180;
+      const lppDuration = 182;
+      const lppSignedSpeed = 191;
+      const lppSignedPower = 192;
+      const lppSignedCurrent = 193;
+
+      final payload = Uint8List.fromList([
+        2, lppBinaryMoisture, 0x01,
+        3, lppButtonEvent, 0x04,
+        4, lppDimmer, 0xFB, // -5
+        5, lppUv, 0x0A, // 1.0
+        6, lppPm25, 0x00, 0x0C, // 12
+        7, lppConductivity, 0x01, 0xF4, // 500
+        8, lppDuration, 0x00, 0x00, 0x13, 0x88, // 5.0 s
+        9, lppSignedSpeed, 0xFF, 0xE1, 0x7B, 0x80, // -2.0 m/s
+        10, lppSignedPower, 0xFF, 0xFF, 0xFC, 0x18, // -10.0 W
+        11, lppSignedCurrent, 0xFF, 0xFF, 0xFC, 0x18, // -1.0 A
+        12, MeshCoreConstants.lppTemperatureSensor, 0x00, 0x76, // 11.8 C
+      ]);
+
+      final decoded = CayenneLppParser.parse(payload);
+
+      expect(decoded.extraSensorData!['binary_moisture_2'], equals(1));
+      expect(decoded.extraSensorData!['button_event_3'], equals(4));
+      expect(decoded.extraSensorData!['dimmer_4'], equals(-5));
+      expect(decoded.extraSensorData!['uv_5'], closeTo(1.0, 0.001));
+      expect(decoded.extraSensorData!['pm25_6'], equals(12.0));
+      expect(decoded.extraSensorData!['conductivity_7'], equals(500.0));
+      expect(decoded.extraSensorData!['duration_8'], closeTo(5.0, 0.001));
+      expect(decoded.extraSensorData!['signed_speed_9'], closeTo(-2.0, 0.001));
+      expect(
+        decoded.extraSensorData!['signed_power_10'],
+        closeTo(-10.0, 0.001),
+      );
+      expect(
+        decoded.extraSensorData!['signed_current_11'],
+        closeTo(-1.0, 0.001),
+      );
+      expect(decoded.temperature, closeTo(11.8, 0.1));
     });
 
     test(

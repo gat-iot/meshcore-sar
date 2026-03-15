@@ -294,19 +294,20 @@ class _SensorsTabState extends State<SensorsTab> {
                         break;
                       }
                     }
+                    final availableFieldKeys = sensorMetricKeysFor(contact);
+                    final visibleFields = sensorsProvider
+                        .effectiveVisibleFieldsFor(key, availableFieldKeys);
                     return SensorTelemetryCard(
                       contact: contact,
                       state: sensorsProvider.stateFor(key),
-                      visibleFields: sensorsProvider.visibleFieldsFor(key),
+                      visibleFields: visibleFields,
                       fieldOrder: sensorsProvider.metricOrderFor(
                         key,
-                        sensorsProvider.visibleFieldsFor(key),
+                        availableFieldKeys,
                       ),
                       labelOverrides: sensorsProvider.labelOverridesFor(key),
                       fieldSpans: {
-                        for (final field in sensorsProvider.visibleFieldsFor(
-                          key,
-                        ))
+                        for (final field in visibleFields)
                           field: sensorsProvider.fieldSpanFor(key, field),
                       },
                       onRemove: () async {
@@ -359,13 +360,16 @@ class _SensorCustomizeView extends StatelessWidget {
           }
         }
 
-        final visibleFields = sensorsProvider.visibleFieldsFor(publicKeyHex);
-        final autoRefreshMinutes = sensorsProvider.autoRefreshMinutesFor(
-          publicKeyHex,
-        );
         final options = sensorMetricOptionsFor(
           contact,
           labelOverrides: sensorsProvider.labelOverridesFor(publicKeyHex),
+        );
+        final visibleFields = sensorsProvider.effectiveVisibleFieldsFor(
+          publicKeyHex,
+          options.map((option) => option.key),
+        );
+        final autoRefreshMinutes = sensorsProvider.autoRefreshMinutesFor(
+          publicKeyHex,
         );
         final orderedFieldKeys = sensorsProvider.metricOrderFor(
           publicKeyHex,

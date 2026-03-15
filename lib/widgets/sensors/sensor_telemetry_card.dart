@@ -253,6 +253,17 @@ SensorMetricCardData? _buildOptionPreviewCardData(
     return null;
   }
 
+  if (_isBinaryMetricBaseKey(metricKey.baseKey)) {
+    return SensorMetricCardData(
+      fieldKey: fieldKey,
+      icon: previewValue == 'On' ? Icons.toggle_on : Icons.toggle_off,
+      label: label,
+      value: previewValue,
+      accent: const Color(0xFF4B7B5A),
+      channel: metricKey.channel,
+    );
+  }
+
   switch (metricKey.baseKey) {
     case 'altitude':
       return SensorMetricCardData(
@@ -350,7 +361,35 @@ SensorMetricCardData? _buildOptionPreviewCardData(
         accent: const Color(0xFF3E657C),
         channel: metricKey.channel,
       );
+    case 'button_event':
+      return SensorMetricCardData(
+        fieldKey: fieldKey,
+        icon: Icons.touch_app_outlined,
+        label: label,
+        value: previewValue,
+        accent: const Color(0xFF6C4F96),
+        channel: metricKey.channel,
+      );
+    case 'dimmer':
+    case 'light_level':
+      return SensorMetricCardData(
+        fieldKey: fieldKey,
+        icon: Icons.tune,
+        label: label,
+        value: previewValue,
+        accent: const Color(0xFF5A6C84),
+        channel: metricKey.channel,
+      );
     case 'current':
+      return SensorMetricCardData(
+        fieldKey: fieldKey,
+        icon: Icons.electric_bolt,
+        label: label,
+        value: previewValue,
+        accent: const Color(0xFF1C7C54),
+        channel: metricKey.channel,
+      );
+    case 'signed_current':
       return SensorMetricCardData(
         fieldKey: fieldKey,
         icon: Icons.electric_bolt,
@@ -389,6 +428,7 @@ SensorMetricCardData? _buildOptionPreviewCardData(
         channel: metricKey.channel,
       );
     case 'power':
+    case 'signed_power':
       return SensorMetricCardData(
         fieldKey: fieldKey,
         icon: Icons.flash_on_outlined,
@@ -406,10 +446,55 @@ SensorMetricCardData? _buildOptionPreviewCardData(
         accent: const Color(0xFF2B78A0),
         channel: metricKey.channel,
       );
+    case 'signed_speed':
+      return SensorMetricCardData(
+        fieldKey: fieldKey,
+        icon: Icons.air,
+        label: label,
+        value: previewValue,
+        accent: const Color(0xFF2B78A0),
+        channel: metricKey.channel,
+      );
+    case 'gust':
+      return SensorMetricCardData(
+        fieldKey: fieldKey,
+        icon: Icons.air,
+        label: label,
+        value: previewValue,
+        accent: const Color(0xFF1E88A8),
+        channel: metricKey.channel,
+      );
+    case 'dew':
+      return SensorMetricCardData(
+        fieldKey: fieldKey,
+        icon: Icons.device_thermostat,
+        label: label,
+        value: previewValue,
+        accent: const Color(0xFF2F7AA1),
+        channel: metricKey.channel,
+      );
+    case 'rain':
+      return SensorMetricCardData(
+        fieldKey: fieldKey,
+        icon: Icons.grain,
+        label: label,
+        value: previewValue,
+        accent: const Color(0xFF2C6BA0),
+        channel: metricKey.channel,
+      );
     case 'distance':
       return SensorMetricCardData(
         fieldKey: fieldKey,
         icon: Icons.straighten,
+        label: label,
+        value: previewValue,
+        accent: const Color(0xFF577590),
+        channel: metricKey.channel,
+      );
+    case 'duration':
+      return SensorMetricCardData(
+        fieldKey: fieldKey,
+        icon: Icons.timer_outlined,
         label: label,
         value: previewValue,
         accent: const Color(0xFF577590),
@@ -424,7 +509,22 @@ SensorMetricCardData? _buildOptionPreviewCardData(
         accent: const Color(0xFF9C6644),
         channel: metricKey.channel,
       );
+    case 'volume':
+    case 'flow_rate':
+    case 'volume_storage':
+    case 'water':
+    case 'gas_volume':
+    case 'mass':
+      return SensorMetricCardData(
+        fieldKey: fieldKey,
+        icon: Icons.inventory_2_outlined,
+        label: label,
+        value: previewValue,
+        accent: const Color(0xFF5F7C8A),
+        channel: metricKey.channel,
+      );
     case 'direction':
+    case 'rotation':
       final degrees = _previewAsDouble(value);
       return SensorMetricCardData(
         fieldKey: fieldKey,
@@ -479,6 +579,33 @@ SensorMetricCardData? _buildOptionPreviewCardData(
         label: label,
         value: previewValue,
         accent: const Color(0xFF0A7D61),
+        channel: metricKey.channel,
+      );
+    case 'conductivity':
+      return SensorMetricCardData(
+        fieldKey: fieldKey,
+        icon: Icons.science_outlined,
+        label: label,
+        value: previewValue,
+        accent: const Color(0xFF4D6D9A),
+        channel: metricKey.channel,
+      );
+    case 'acceleration':
+      return SensorMetricCardData(
+        fieldKey: fieldKey,
+        icon: Icons.speed_outlined,
+        label: label,
+        value: previewValue,
+        accent: const Color(0xFF5A4C99),
+        channel: metricKey.channel,
+      );
+    case 'gyro_rate':
+      return SensorMetricCardData(
+        fieldKey: fieldKey,
+        icon: Icons.sync,
+        label: label,
+        value: previewValue,
+        accent: const Color(0xFF6C4F96),
         channel: metricKey.channel,
       );
     case 'pm25':
@@ -543,6 +670,12 @@ String _previewFormatCardinalDirection(double degrees) {
 String? _sensorMetricPreviewValue(String rawKey, dynamic value) {
   final metricKey = _parseMetricKey(rawKey);
 
+  if (_isBinaryMetricBaseKey(metricKey.baseKey)) {
+    final isOn = _previewAsBool(value);
+    if (isOn == null) return null;
+    return isOn ? 'On' : 'Off';
+  }
+
   switch (metricKey.baseKey) {
     case 'altitude':
       final meters = _previewAsDouble(value);
@@ -568,9 +701,20 @@ String? _sensorMetricPreviewValue(String rawKey, dynamic value) {
     case 'analog_input':
     case 'analog_output':
     case 'generic_sensor':
+    case 'light_level':
       final reading = _previewAsDouble(value);
       if (reading == null) return null;
       return _formatPreviewNumber(reading, maxFractionDigits: 3);
+
+    case 'button_event':
+      final eventCode = _previewAsInt(value);
+      if (eventCode == null) return null;
+      return _formatButtonEvent(eventCode);
+
+    case 'dimmer':
+      final reading = _previewAsInt(value);
+      if (reading == null) return null;
+      return reading.toString();
 
     case 'accelerometer':
       final vector = _previewAsVector3(value);
@@ -587,6 +731,11 @@ String? _sensorMetricPreviewValue(String rawKey, dynamic value) {
           'Z ${_formatPreviewNumber(vector.z)} deg/s';
 
     case 'current':
+      final amps = _previewAsDouble(value);
+      if (amps == null) return null;
+      return _formatPreviewCurrent(amps);
+
+    case 'signed_current':
       final amps = _previewAsDouble(value);
       if (amps == null) return null;
       return _formatPreviewCurrent(amps);
@@ -613,25 +762,74 @@ String? _sensorMetricPreviewValue(String rawKey, dynamic value) {
       if (watts == null) return null;
       return _formatPreviewPower(watts);
 
+    case 'signed_power':
+      final watts = _previewAsDouble(value);
+      if (watts == null) return null;
+      return _formatPreviewPower(watts);
+
     case 'speed':
       final metersPerSecond = _previewAsDouble(value);
       if (metersPerSecond == null) return null;
       return '${_formatPreviewNumber(metersPerSecond, maxFractionDigits: 2)} m/s';
+
+    case 'signed_speed':
+      final metersPerSecond = _previewAsDouble(value);
+      if (metersPerSecond == null) return null;
+      return '${_formatPreviewNumber(metersPerSecond, maxFractionDigits: 2)} m/s';
+
+    case 'gust':
+      final metersPerSecond = _previewAsDouble(value);
+      if (metersPerSecond == null) return null;
+      return '${_formatPreviewNumber(metersPerSecond, maxFractionDigits: 2)} m/s';
+
+    case 'dew':
+      final degreesCelsius = _previewAsDouble(value);
+      if (degreesCelsius == null) return null;
+      return '${_formatPreviewNumber(degreesCelsius, maxFractionDigits: 1)}°C';
+
+    case 'rain':
+      final millimeters = _previewAsDouble(value);
+      if (millimeters == null) return null;
+      return '${_formatPreviewNumber(millimeters, maxFractionDigits: 1)} mm';
 
     case 'distance':
       final meters = _previewAsDouble(value);
       if (meters == null) return null;
       return _formatPreviewDistance(meters);
 
+    case 'duration':
+      final seconds = _previewAsDouble(value);
+      if (seconds == null) return null;
+      return '${_formatPreviewNumber(seconds, maxFractionDigits: 2)} s';
+
     case 'energy':
       final kilowattHours = _previewAsDouble(value);
       if (kilowattHours == null) return null;
       return _formatPreviewEnergy(kilowattHours);
 
+    case 'volume':
+    case 'flow_rate':
+    case 'volume_storage':
+    case 'water':
+    case 'gas_volume':
+      final liters = _previewAsDouble(value);
+      if (liters == null) return null;
+      return '${_formatPreviewNumber(liters, maxFractionDigits: 3)} L';
+
+    case 'mass':
+      final kilograms = _previewAsDouble(value);
+      if (kilograms == null) return null;
+      return '${_formatPreviewNumber(kilograms, maxFractionDigits: 3)} kg';
+
     case 'direction':
       final degrees = _previewAsDouble(value);
       if (degrees == null) return null;
       return '${_formatPreviewNumber(degrees, maxFractionDigits: 0)} deg';
+
+    case 'rotation':
+      final degrees = _previewAsDouble(value);
+      if (degrees == null) return null;
+      return '${_formatPreviewNumber(degrees, maxFractionDigits: 1)} deg';
 
     case 'unixtime':
       final seconds = _previewAsInt(value);
@@ -658,6 +856,21 @@ String? _sensorMetricPreviewValue(String rawKey, dynamic value) {
       final volts = _previewAsDouble(value);
       if (volts == null) return null;
       return '${_formatPreviewNumber(volts, maxFractionDigits: 3)} V';
+
+    case 'conductivity':
+      final reading = _previewAsDouble(value);
+      if (reading == null) return null;
+      return _formatPreviewNumber(reading, maxFractionDigits: 0);
+
+    case 'acceleration':
+      final reading = _previewAsDouble(value);
+      if (reading == null) return null;
+      return '${_formatPreviewNumber(reading, maxFractionDigits: 3)} m/s2';
+
+    case 'gyro_rate':
+      final reading = _previewAsDouble(value);
+      if (reading == null) return null;
+      return '${_formatPreviewNumber(reading, maxFractionDigits: 3)} deg/s';
 
     case 'pm25':
     case 'pm10':
@@ -1179,6 +1392,19 @@ class SensorTelemetryCard extends StatelessWidget {
       labelOverrides: labelOverrides,
     );
 
+    if (_isBinaryMetricBaseKey(metricKey.baseKey)) {
+      final isOn = _asBool(value);
+      if (isOn == null) return null;
+      return SensorMetricCardData(
+        fieldKey: _extraFieldKey(rawKey),
+        icon: isOn ? Icons.toggle_on : Icons.toggle_off,
+        label: label,
+        value: isOn ? 'On' : 'Off',
+        accent: const Color(0xFF4B7B5A),
+        channel: metricKey.channel,
+      );
+    }
+
     switch (metricKey.baseKey) {
       case 'altitude':
         final meters = _asDouble(value);
@@ -1310,7 +1536,44 @@ class SensorTelemetryCard extends StatelessWidget {
           channel: metricKey.channel,
         );
 
+      case 'button_event':
+        final reading = _asInt(value);
+        if (reading == null) return null;
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.touch_app_outlined,
+          label: label,
+          value: _formatButtonEvent(reading),
+          accent: const Color(0xFF6C4F96),
+          channel: metricKey.channel,
+        );
+
+      case 'dimmer':
+      case 'light_level':
+        final reading = _asDouble(value);
+        if (reading == null) return null;
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.tune,
+          label: label,
+          value: _formatNumber(reading, maxFractionDigits: 2),
+          accent: const Color(0xFF5A6C84),
+          channel: metricKey.channel,
+        );
+
       case 'current':
+        final amps = _asDouble(value);
+        if (amps == null) return null;
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.electric_bolt,
+          label: label,
+          value: _formatCurrent(amps),
+          accent: const Color(0xFF1C7C54),
+          channel: metricKey.channel,
+        );
+
+      case 'signed_current':
         final amps = _asDouble(value);
         if (amps == null) return null;
         return SensorMetricCardData(
@@ -1370,6 +1633,18 @@ class SensorTelemetryCard extends StatelessWidget {
           channel: metricKey.channel,
         );
 
+      case 'signed_power':
+        final watts = _asDouble(value);
+        if (watts == null) return null;
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.flash_on_outlined,
+          label: label,
+          value: _formatPower(watts),
+          accent: const Color(0xFFB5622E),
+          channel: metricKey.channel,
+        );
+
       case 'speed':
         final metersPerSecond = _asDouble(value);
         if (metersPerSecond == null) return null;
@@ -1382,6 +1657,54 @@ class SensorTelemetryCard extends StatelessWidget {
           channel: metricKey.channel,
         );
 
+      case 'signed_speed':
+        final metersPerSecond = _asDouble(value);
+        if (metersPerSecond == null) return null;
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.air,
+          label: label,
+          value: '${_formatNumber(metersPerSecond, maxFractionDigits: 2)} m/s',
+          accent: const Color(0xFF2B78A0),
+          channel: metricKey.channel,
+        );
+
+      case 'gust':
+        final metersPerSecond = _asDouble(value);
+        if (metersPerSecond == null) return null;
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.air,
+          label: label,
+          value: '${_formatNumber(metersPerSecond, maxFractionDigits: 2)} m/s',
+          accent: const Color(0xFF1E88A8),
+          channel: metricKey.channel,
+        );
+
+      case 'dew':
+        final degreesCelsius = _asDouble(value);
+        if (degreesCelsius == null) return null;
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.device_thermostat,
+          label: label,
+          value: '${_formatNumber(degreesCelsius, maxFractionDigits: 1)}°C',
+          accent: const Color(0xFF2F7AA1),
+          channel: metricKey.channel,
+        );
+
+      case 'rain':
+        final millimeters = _asDouble(value);
+        if (millimeters == null) return null;
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.grain,
+          label: label,
+          value: '${_formatNumber(millimeters, maxFractionDigits: 1)} mm',
+          accent: const Color(0xFF2C6BA0),
+          channel: metricKey.channel,
+        );
+
       case 'distance':
         final meters = _asDouble(value);
         if (meters == null) return null;
@@ -1390,6 +1713,18 @@ class SensorTelemetryCard extends StatelessWidget {
           icon: Icons.straighten,
           label: label,
           value: _formatDistance(meters),
+          accent: const Color(0xFF577590),
+          channel: metricKey.channel,
+        );
+
+      case 'duration':
+        final seconds = _asDouble(value);
+        if (seconds == null) return null;
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.timer_outlined,
+          label: label,
+          value: '${_formatNumber(seconds, maxFractionDigits: 2)} s',
           accent: const Color(0xFF577590),
           channel: metricKey.channel,
         );
@@ -1406,6 +1741,24 @@ class SensorTelemetryCard extends StatelessWidget {
           channel: metricKey.channel,
         );
 
+      case 'volume':
+      case 'flow_rate':
+      case 'volume_storage':
+      case 'water':
+      case 'gas_volume':
+      case 'mass':
+        final reading = _asDouble(value);
+        if (reading == null) return null;
+        final unit = metricKey.baseKey == 'mass' ? 'kg' : 'L';
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.inventory_2_outlined,
+          label: label,
+          value: '${_formatNumber(reading, maxFractionDigits: 3)} $unit',
+          accent: const Color(0xFF5F7C8A),
+          channel: metricKey.channel,
+        );
+
       case 'direction':
         final degrees = _asDouble(value);
         if (degrees == null) return null;
@@ -1415,6 +1768,18 @@ class SensorTelemetryCard extends StatelessWidget {
           label: label,
           value: '${_formatNumber(degrees, maxFractionDigits: 0)} deg',
           secondaryValue: _formatCardinalDirection(degrees),
+          accent: const Color(0xFF8A5A44),
+          channel: metricKey.channel,
+        );
+
+      case 'rotation':
+        final degrees = _asDouble(value);
+        if (degrees == null) return null;
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.explore_outlined,
+          label: label,
+          value: '${_formatNumber(degrees, maxFractionDigits: 1)} deg',
           accent: const Color(0xFF8A5A44),
           channel: metricKey.channel,
         );
@@ -1473,6 +1838,42 @@ class SensorTelemetryCard extends StatelessWidget {
           label: label,
           value: '${_formatNumber(volts, maxFractionDigits: 3)} V',
           accent: const Color(0xFF0A7D61),
+          channel: metricKey.channel,
+        );
+
+      case 'conductivity':
+        final reading = _asDouble(value);
+        if (reading == null) return null;
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.science_outlined,
+          label: label,
+          value: _formatNumber(reading, maxFractionDigits: 0),
+          accent: const Color(0xFF4D6D9A),
+          channel: metricKey.channel,
+        );
+
+      case 'acceleration':
+        final reading = _asDouble(value);
+        if (reading == null) return null;
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.speed_outlined,
+          label: label,
+          value: '${_formatNumber(reading, maxFractionDigits: 3)} m/s2',
+          accent: const Color(0xFF5A4C99),
+          channel: metricKey.channel,
+        );
+
+      case 'gyro_rate':
+        final reading = _asDouble(value);
+        if (reading == null) return null;
+        return SensorMetricCardData(
+          fieldKey: _extraFieldKey(rawKey),
+          icon: Icons.sync,
+          label: label,
+          value: '${_formatNumber(reading, maxFractionDigits: 3)} deg/s',
+          accent: const Color(0xFF6C4F96),
           channel: metricKey.channel,
         );
     }
@@ -2135,6 +2536,32 @@ String _selectorMetricLabel(String label, int? channel) {
   return '$label (ch $channel)';
 }
 
+bool _isBinaryMetricBaseKey(String baseKey) {
+  return baseKey.startsWith('binary_');
+}
+
+String _formatButtonEvent(int value) {
+  switch (value) {
+    case 0:
+      return 'None';
+    case 1:
+      return 'Press';
+    case 2:
+      return 'Double press';
+    case 3:
+      return 'Triple press';
+    case 4:
+      return 'Long press';
+    case 5:
+      return 'Long double';
+    case 6:
+      return 'Long triple';
+    case 128:
+      return 'Hold';
+  }
+  return value.toString();
+}
+
 String _formatExtraFieldLabel(String rawKey) {
   final metricKey = _parseMetricKey(rawKey);
   return _knownMetricLabels[metricKey.baseKey] ??
@@ -2168,13 +2595,60 @@ const List<String> _knownMetricBaseKeys = <String>[
   'energy',
   'power',
   'speed',
+  'gust',
+  'dew',
+  'rain',
   'pm25',
   'pm10',
   'tvoc',
   'co2',
   'rpm',
-  'cond',
+  'conductivity',
   'uv',
+  'button_event',
+  'dimmer',
+  'light_level',
+  'rotation',
+  'duration',
+  'acceleration',
+  'gyro_rate',
+  'volume',
+  'flow_rate',
+  'volume_storage',
+  'water',
+  'gas_volume',
+  'mass',
+  'signed_speed',
+  'signed_power',
+  'signed_current',
+  'binary_bool',
+  'binary_power_switch',
+  'binary_open',
+  'binary_battery_low',
+  'binary_charging',
+  'binary_carbon_monoxide',
+  'binary_cold',
+  'binary_connectivity',
+  'binary_door',
+  'binary_garage_door',
+  'binary_gas',
+  'binary_heat',
+  'binary_light',
+  'binary_lock',
+  'binary_moisture',
+  'binary_motion',
+  'binary_moving',
+  'binary_occupancy',
+  'binary_plug',
+  'binary_presence',
+  'binary_problem',
+  'binary_running',
+  'binary_safety',
+  'binary_smoke',
+  'binary_sound',
+  'binary_tamper',
+  'binary_vibration',
+  'binary_window',
 ];
 
 const Map<String, String> _knownMetricLabels = <String, String>{
@@ -2185,32 +2659,78 @@ const Map<String, String> _knownMetricLabels = <String, String>{
   'co2': 'CO2',
   'colour': 'Color',
   'concentration': 'Concentration',
-  'cond': 'Conductivity',
+  'conductivity': 'Conductivity',
   'current': 'Current',
+  'button_event': 'Button',
+  'dimmer': 'Dimmer',
   'digital_input': 'Digital input',
   'digital_output': 'Digital output',
   'direction': 'Direction',
   'distance': 'Distance',
+  'duration': 'Duration',
   'energy': 'Energy',
   'frequency': 'Frequency',
+  'flow_rate': 'Flow rate',
+  'gas_volume': 'Gas volume',
   'generic_sensor': 'Generic sensor',
+  'gyro_rate': 'Gyro rate',
   'gyrometer': 'Gyrometer',
   'humidity': 'Humidity',
   'illuminance': 'Illuminance',
+  'light_level': 'Light level',
+  'mass': 'Mass',
   'percentage': 'Percentage',
   'pm10': 'PM10',
   'pm25': 'PM2.5',
   'power': 'Power',
   'presence': 'Presence',
   'pressure': 'Pressure',
+  'rain': 'Rain',
+  'rotation': 'Rotation',
   'rpm': 'RPM',
+  'gust': 'Wind gust',
+  'signed_current': 'Signed current',
+  'signed_power': 'Signed power',
+  'signed_speed': 'Signed speed',
   'speed': 'Speed',
   'switch': 'Switch',
+  'dew': 'Dew point',
   'temperature': 'Temperature',
   'tvoc': 'TVOC',
   'unixtime': 'Time',
   'uv': 'UV index',
+  'volume': 'Volume',
+  'volume_storage': 'Storage volume',
   'voltage': 'Voltage',
+  'water': 'Water',
+  'binary_battery_low': 'Battery low',
+  'binary_bool': 'Binary',
+  'binary_carbon_monoxide': 'Carbon monoxide',
+  'binary_charging': 'Charging',
+  'binary_cold': 'Cold',
+  'binary_connectivity': 'Connectivity',
+  'binary_door': 'Door',
+  'binary_garage_door': 'Garage door',
+  'binary_gas': 'Gas',
+  'binary_heat': 'Heat',
+  'binary_light': 'Light',
+  'binary_lock': 'Lock',
+  'binary_moisture': 'Moisture',
+  'binary_motion': 'Motion',
+  'binary_moving': 'Moving',
+  'binary_occupancy': 'Occupancy',
+  'binary_open': 'Open',
+  'binary_plug': 'Plug',
+  'binary_power_switch': 'Power switch',
+  'binary_presence': 'Presence',
+  'binary_problem': 'Problem',
+  'binary_running': 'Running',
+  'binary_safety': 'Safety',
+  'binary_smoke': 'Smoke',
+  'binary_sound': 'Sound',
+  'binary_tamper': 'Tamper',
+  'binary_vibration': 'Vibration',
+  'binary_window': 'Window',
 };
 
 _ParsedMetricKey _parseMetricKey(String rawKey) {
