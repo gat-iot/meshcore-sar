@@ -13,6 +13,7 @@ import '../providers/contacts_provider.dart';
 import '../providers/drawing_provider.dart';
 import '../providers/map_provider.dart';
 import '../providers/messages_provider.dart';
+import '../providers/sensors_provider.dart';
 import 'app_config_snapshot_service.dart';
 import 'contact_storage_service.dart';
 import 'device_config_applicator.dart';
@@ -27,6 +28,7 @@ class ProfileWorkspaceCoordinator {
     required this.connectionProvider,
     required this.contactsProvider,
     required this.messagesProvider,
+    required this.sensorsProvider,
     required this.mapProvider,
     required this.drawingProvider,
     required this.channelsProvider,
@@ -51,6 +53,7 @@ class ProfileWorkspaceCoordinator {
   final ConnectionProvider connectionProvider;
   final ContactsProvider contactsProvider;
   final MessagesProvider messagesProvider;
+  final SensorsProvider sensorsProvider;
   final MapProvider mapProvider;
   final DrawingProvider drawingProvider;
   final ChannelsProvider channelsProvider;
@@ -280,6 +283,7 @@ class ProfileWorkspaceCoordinator {
       namespace: ProfileStorageScope.effectiveNamespace,
       devicePublicKey: connectionProvider.deviceInfo.publicKey,
     );
+    await sensorsProvider.reloadProfileScopedState();
     await drawingProvider.reloadProfileScopedState();
     await mapProvider.reloadProfileScopedState();
     await appProvider.reloadProfileScopedSettings();

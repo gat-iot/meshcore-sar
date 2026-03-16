@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/contact.dart';
+import '../services/profiles_feature_service.dart';
 import '../widgets/sensors/sensor_telemetry_card.dart';
 import 'connection_provider.dart';
 import 'contacts_provider.dart';
@@ -68,6 +69,8 @@ class SensorsProvider with ChangeNotifier {
     unawaited(_loadWatchedSensors());
   }
 
+  String _key(String baseKey) => ProfileStorageScope.scopedKey(baseKey);
+
   List<String> get watchedSensorKeys => List.unmodifiable(_watchedSensorKeys);
   bool get isLoaded => _isLoaded;
   bool get isRefreshingAll => _isRefreshingAll;
@@ -78,20 +81,26 @@ class SensorsProvider with ChangeNotifier {
   Future<void> _loadWatchedSensors() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final stored = prefs.getStringList(_watchedSensorsKey) ?? <String>[];
-      final storedMetricsJson = prefs.getString(_visibleSensorMetricsKey);
-      final storedSpansJson = prefs.getString(_fieldSpanKey);
-      final storedLabelsJson = prefs.getString(_metricLabelKey);
-      final storedOrderJson = prefs.getString(_metricOrderKey);
-      final storedAutoRefreshJson = prefs.getString(_autoRefreshMinutesKey);
+      final stored =
+          prefs.getStringList(_key(_watchedSensorsKey)) ?? <String>[];
+      final storedMetricsJson = prefs.getString(_key(_visibleSensorMetricsKey));
+      final storedSpansJson = prefs.getString(_key(_fieldSpanKey));
+      final storedLabelsJson = prefs.getString(_key(_metricLabelKey));
+      final storedOrderJson = prefs.getString(_key(_metricOrderKey));
+      final storedAutoRefreshJson = prefs.getString(
+        _key(_autoRefreshMinutesKey),
+      );
       _watchedSensorKeys
         ..clear()
         ..addAll(stored);
+      _refreshStates.clear();
+      _refreshStateUpdatedAt.clear();
       _visibleFieldsBySensor.clear();
       _fieldSpansBySensor.clear();
       _metricLabelsBySensor.clear();
       _metricOrderBySensor.clear();
       _autoRefreshMinutesBySensor.clear();
+      _lastRefreshAttemptAt.clear();
       if (storedMetricsJson != null && storedMetricsJson.isNotEmpty) {
         final decoded = jsonDecode(storedMetricsJson) as Map<String, dynamic>;
         for (final entry in decoded.entries) {
@@ -159,10 +168,15 @@ class SensorsProvider with ChangeNotifier {
     }
   }
 
+  Future<void> reloadProfileScopedState() async {
+    _isLoaded = false;
+    await _loadWatchedSensors();
+  }
+
   Future<void> _persistWatchedSensors() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(_watchedSensorsKey, _watchedSensorKeys);
+      await prefs.setStringList(_key(_watchedSensorsKey), _watchedSensorKeys);
     } catch (e) {
       debugPrint('Error saving watched sensors: $e');
     }
@@ -175,7 +189,10 @@ class SensorsProvider with ChangeNotifier {
       for (final entry in _visibleFieldsBySensor.entries) {
         encoded[entry.key] = entry.value.toList();
       }
-      await prefs.setString(_visibleSensorMetricsKey, jsonEncode(encoded));
+      await prefs.setString(
+        _key(_visibleSensorMetricsKey),
+        jsonEncode(encoded),
+      );
     } catch (e) {
       debugPrint('Error saving visible sensor metrics: $e');
     }
@@ -184,7 +201,10 @@ class SensorsProvider with ChangeNotifier {
   Future<void> _persistFieldSpans() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_fieldSpanKey, jsonEncode(_fieldSpansBySensor));
+      await prefs.setString(
+        _key(_fieldSpanKey),
+        jsonEncode(_fieldSpansBySensor),
+      );
     } catch (e) {
       debugPrint('Error saving sensor field spans: $e');
     }
@@ -193,7 +213,10 @@ class SensorsProvider with ChangeNotifier {
   Future<void> _persistMetricLabels() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_metricLabelKey, jsonEncode(_metricLabelsBySensor));
+      await prefs.setString(
+        _key(_metricLabelKey),
+        jsonEncode(_metricLabelsBySensor),
+      );
     } catch (e) {
       debugPrint('Error saving sensor metric labels: $e');
     }
@@ -202,7 +225,10 @@ class SensorsProvider with ChangeNotifier {
   Future<void> _persistMetricOrder() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_metricOrderKey, jsonEncode(_metricOrderBySensor));
+      await prefs.setString(
+        _key(_metricOrderKey),
+        jsonEncode(_metricOrderBySensor),
+      );
     } catch (e) {
       debugPrint('Error saving sensor metric order: $e');
     }
@@ -212,7 +238,7 @@ class SensorsProvider with ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-        _autoRefreshMinutesKey,
+        _key(_autoRefreshMinutesKey),
         jsonEncode(_autoRefreshMinutesBySensor),
       );
     } catch (e) {

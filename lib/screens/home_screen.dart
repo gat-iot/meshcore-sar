@@ -597,6 +597,9 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     context.watch<AppProvider>();
+    final activeProfileId = context.select<ProfileManager, String>(
+      (manager) => manager.activeProfileId,
+    );
 
     final enabledTabs = _enabledTabs;
     final isMapTabActive = _currentTab == _HomeTab.map;
@@ -844,6 +847,7 @@ class _HomeScreenState extends State<HomeScreen>
               );
             case _HomeTab.map:
               return MapTab(
+                key: ValueKey<String>('map:$activeProfileId'),
                 onFullscreenChanged: (isFullscreen) {
                   setState(() {
                     _isMapFullscreen = isFullscreen;

@@ -13,6 +13,7 @@ import 'package:meshcore_sar_app/providers/contacts_provider.dart';
 import 'package:meshcore_sar_app/providers/drawing_provider.dart';
 import 'package:meshcore_sar_app/providers/map_provider.dart';
 import 'package:meshcore_sar_app/providers/messages_provider.dart';
+import 'package:meshcore_sar_app/providers/sensors_provider.dart';
 import 'package:meshcore_sar_app/services/app_config_snapshot_service.dart';
 import 'package:meshcore_sar_app/services/contact_storage_service.dart';
 import 'package:meshcore_sar_app/services/device_config_applicator.dart';
@@ -196,6 +197,7 @@ ProfileWorkspaceCoordinator _buildCoordinator({
     connectionProvider: connectionProvider ?? _FakeConnectionProvider(),
     contactsProvider: _FakeContactsProvider(),
     messagesProvider: _FakeMessagesProvider(),
+    sensorsProvider: _FakeSensorsProvider(),
     mapProvider: _FakeMapProvider(),
     drawingProvider: _FakeDrawingProvider(),
     channelsProvider: _FakeChannelsProvider(),
@@ -312,6 +314,14 @@ class _FakeMapProvider implements MapProvider {
 }
 
 class _FakeDrawingProvider implements DrawingProvider {
+  @override
+  Future<void> reloadProfileScopedState() async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeSensorsProvider implements SensorsProvider {
   @override
   Future<void> reloadProfileScopedState() async {}
 

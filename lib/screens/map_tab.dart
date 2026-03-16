@@ -1965,7 +1965,7 @@ class _MapTabState extends State<MapTab> with AutomaticKeepAliveClientMixin {
                       ? _customMapMaxZoom
                       : _currentLayer.maxZoom,
                   cameraConstraint: isCustomMapMode
-                      ? CameraConstraint.contain(
+                      ? CameraConstraint.containCenter(
                           bounds: customMapConfig.displayBounds,
                         )
                       : const CameraConstraint.unconstrained(),

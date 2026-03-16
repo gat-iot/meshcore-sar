@@ -6,6 +6,7 @@ import 'package:meshcore_sar_app/models/device_info.dart';
 import 'package:meshcore_sar_app/providers/connection_provider.dart';
 import 'package:meshcore_sar_app/providers/contacts_provider.dart';
 import 'package:meshcore_sar_app/providers/sensors_provider.dart';
+import 'package:meshcore_sar_app/services/profiles_feature_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeContactsProvider extends ContactsProvider {
@@ -49,6 +50,13 @@ class _FakeConnectionProvider extends ConnectionProvider {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    ProfileStorageScope.setScope(
+      profilesEnabled: false,
+      activeProfileId: 'default',
+    );
+  });
 
   Future<void> waitUntilLoaded(SensorsProvider provider) async {
     for (var i = 0; i < 20 && !provider.isLoaded; i++) {
@@ -192,6 +200,68 @@ void main() {
     await waitUntilLoaded(reloadedProvider);
 
     expect(reloadedProvider.autoRefreshMinutesFor(contact.publicKeyHex), 1440);
+  });
+
+  test('watched sensors and preferences are isolated per profile', () async {
+    SharedPreferences.setMockInitialValues({});
+    final contact = buildSensorContact();
+
+    ProfileStorageScope.setScope(
+      profilesEnabled: false,
+      activeProfileId: 'default',
+    );
+    final defaultProvider = SensorsProvider();
+    await waitUntilLoaded(defaultProvider);
+    await defaultProvider.addSensor(contact);
+    await defaultProvider.setMetricLabel(
+      contact.publicKeyHex,
+      'voltage',
+      'Default Voltage',
+    );
+
+    ProfileStorageScope.setScope(
+      profilesEnabled: true,
+      activeProfileId: 'alpha',
+    );
+    final customProvider = SensorsProvider();
+    await waitUntilLoaded(customProvider);
+
+    expect(customProvider.watchedSensorKeys, isEmpty);
+    expect(
+      customProvider.labelOverrideFor(contact.publicKeyHex, 'voltage'),
+      isNull,
+    );
+
+    await customProvider.addSensor(contact);
+    await customProvider.setMetricLabel(
+      contact.publicKeyHex,
+      'voltage',
+      'Alpha Voltage',
+    );
+
+    ProfileStorageScope.setScope(
+      profilesEnabled: false,
+      activeProfileId: 'default',
+    );
+    final reloadedDefaultProvider = SensorsProvider();
+    await waitUntilLoaded(reloadedDefaultProvider);
+    expect(reloadedDefaultProvider.watchedSensorKeys, [contact.publicKeyHex]);
+    expect(
+      reloadedDefaultProvider.labelOverrideFor(contact.publicKeyHex, 'voltage'),
+      'Default Voltage',
+    );
+
+    ProfileStorageScope.setScope(
+      profilesEnabled: true,
+      activeProfileId: 'alpha',
+    );
+    final reloadedCustomProvider = SensorsProvider();
+    await waitUntilLoaded(reloadedCustomProvider);
+    expect(reloadedCustomProvider.watchedSensorKeys, [contact.publicKeyHex]);
+    expect(
+      reloadedCustomProvider.labelOverrideFor(contact.publicKeyHex, 'voltage'),
+      'Alpha Voltage',
+    );
   });
 
   test(
