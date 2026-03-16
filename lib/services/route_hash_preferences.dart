@@ -23,10 +23,13 @@ class RouteHashPreferences {
 
   static int normalizeSync(int value) => _normalize(value);
 
+  /// Valid hash sizes per the MeshCore protocol.
+  /// The path encoding uses 2 bits: 00=1B, 01=2B, 10=3B, 11=4B.
+  /// The official app offers 1, 2, 4 (skipping 3).
+  static const List<int> supportedSizes = [1, 2, 4];
+
   static int _normalize(int value) {
-    if (value < 1 || value > 3) {
-      return defaultHashSize;
-    }
-    return value;
+    if (supportedSizes.contains(value)) return value;
+    return defaultHashSize;
   }
 }

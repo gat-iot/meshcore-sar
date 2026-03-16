@@ -20,6 +20,14 @@ class MeshMapNode {
     required this.updatedAtMs,
   });
 
+  bool get hasValidCoordinates =>
+      latitude >= -90 &&
+      latitude <= 90 &&
+      longitude >= -180 &&
+      longitude <= 180 &&
+      latitude != 0 &&
+      longitude != 0;
+
   factory MeshMapNode.fromJson(Map<String, dynamic> json) {
     return MeshMapNode(
       type: (json['type'] as num?)?.toInt() ?? 0,
@@ -77,9 +85,7 @@ class MeshMapNodesService {
     final nodes = nodesRaw
         .whereType<Map<String, dynamic>>()
         .map(MeshMapNode.fromJson)
-        .where(
-          (n) => n.publicKey.isNotEmpty && n.latitude != 0 && n.longitude != 0,
-        )
+        .where((n) => n.publicKey.isNotEmpty && n.hasValidCoordinates)
         .toList();
 
     await _storeCache(nodes, cachedAt: now);
@@ -116,9 +122,7 @@ class MeshMapNodesService {
     final nodes = decoded
         .whereType<Map<String, dynamic>>()
         .map(MeshMapNode.fromJson)
-        .where(
-          (n) => n.publicKey.isNotEmpty && n.latitude != 0 && n.longitude != 0,
-        )
+        .where((n) => n.publicKey.isNotEmpty && n.hasValidCoordinates)
         .toList();
     _cachedNodes = nodes;
     _cachedAt = cachedAt;

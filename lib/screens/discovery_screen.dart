@@ -169,8 +169,13 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     });
 
     try {
+      final contactsProvider = context.read<ContactsProvider>();
       for (final advert in adverts) {
         if (!mounted) break;
+        // Skip already-resolved contacts
+        if (contactsProvider.findContactByKey(advert.publicKey) != null) {
+          continue;
+        }
         await _resolveAdvert(advert);
       }
     } finally {

@@ -95,6 +95,7 @@ class _ContactTraceSheetState extends State<ContactTraceSheet> {
           final concreteNodes = routeEntries
               .where((entry) => entry.resolved.node != null)
               .map((entry) => entry.resolved.node!)
+              .where((node) => node.hasValidCoordinates)
               .toList();
           final mapPoints = concreteNodes
               .map((node) => LatLng(node.latitude, node.longitude))
@@ -395,6 +396,7 @@ class _ContactTraceSheetState extends State<ContactTraceSheet> {
           );
         })
         .whereType<MeshMapNode>()
+        .where((node) => node.hasValidCoordinates)
         .toList();
 
     final selfNode = _selfNode(connectionProvider);
@@ -415,7 +417,7 @@ class _ContactTraceSheetState extends State<ContactTraceSheet> {
       return null;
     }
 
-    return MeshMapNode(
+    final node = MeshMapNode(
       type: -1,
       name: connectionProvider.deviceInfo.selfName?.trim().isNotEmpty == true
           ? connectionProvider.deviceInfo.selfName!.trim()
@@ -428,6 +430,7 @@ class _ContactTraceSheetState extends State<ContactTraceSheet> {
       longitude: advLon / 1e6,
       updatedAtMs: DateTime.now().millisecondsSinceEpoch,
     );
+    return node.hasValidCoordinates ? node : null;
   }
 
   List<MeshMapNode> _mergeNodes(

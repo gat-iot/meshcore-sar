@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -26,22 +28,34 @@ class CustomMapConfig {
 
   bool get isCalibrated => metersPerPixel != null && metersPerPixel! > 0;
 
-  LatLngBounds get bounds => LatLngBounds(
-    const LatLng(0, 0),
-    LatLng(imageHeight.toDouble(), imageWidth.toDouble()),
-  );
+  double get _displayScale {
+    final heightScale = imageHeight / 90.0;
+    final widthScale = imageWidth / 180.0;
+    return math.max(1.0, math.max(heightScale, widthScale));
+  }
 
-  LatLngBounds get displayBounds => LatLngBounds(
-    LatLng(imageHeight.toDouble(), 0),
-    LatLng(0, imageWidth.toDouble()),
-  );
+  double get _displayHeight => imageHeight / _displayScale;
+
+  double get _displayWidth => imageWidth / _displayScale;
+
+  LatLngBounds get bounds =>
+      LatLngBounds(const LatLng(0, 0), LatLng(_displayHeight, _displayWidth));
+
+  LatLngBounds get displayBounds =>
+      LatLngBounds(LatLng(_displayHeight, 0), LatLng(0, _displayWidth));
 
   LatLng toDisplayPoint(LatLng point) {
-    return LatLng(imageHeight.toDouble() - point.latitude, point.longitude);
+    return LatLng(
+      _displayHeight - (point.latitude / _displayScale),
+      point.longitude / _displayScale,
+    );
   }
 
   LatLng fromDisplayPoint(LatLng point) {
-    return LatLng(imageHeight.toDouble() - point.latitude, point.longitude);
+    return LatLng(
+      (_displayHeight - point.latitude) * _displayScale,
+      point.longitude * _displayScale,
+    );
   }
 
   Map<String, dynamic> toJson() {

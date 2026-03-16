@@ -735,7 +735,10 @@ class MessagesProvider with ChangeNotifier {
     }
 
     if (message.isContactMessage) {
-      return existing.senderKeyShort == message.senderKeyShort;
+      // Match by sender key + sender timestamp (matches official app's DB
+      // uniqueness: contactPublicKey + senderTimestamp + text + txtType).
+      return existing.senderKeyShort == message.senderKeyShort &&
+          existing.senderTimestamp == message.senderTimestamp;
     }
 
     if (message.isChannelMessage) {

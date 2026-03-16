@@ -980,7 +980,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => SimpleDialog(
         title: const Text('Route path byte size'),
         children: [
-          for (final value in [1, 2, 3])
+          for (final value in RouteHashPreferences.supportedSizes)
             SimpleDialogOption(
               onPressed: () => Navigator.of(context).pop(value),
               child: Row(
@@ -990,7 +990,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('$value byte${value == 1 ? '' : 's'}'),
+                        Text('$value-byte (max ${64 ~/ value} hops)'),
                         Text(
                           'Use ${value * 2} hex characters per hop',
                           style: Theme.of(context).textTheme.bodySmall,

@@ -94,4 +94,37 @@ void main() {
     expect(await MeshMapNodesService.loadCachedNodes(), isEmpty);
     expect(await MeshMapNodesService.cachedAt(), isNull);
   });
+
+  test('fetchNodes ignores nodes with invalid coordinates', () async {
+    final client = MockClient(
+      (_) async => http.Response(
+        jsonEncode({
+          'nodes': [
+            {
+              'type': 1,
+              'name': 'Broken',
+              'public_key': 'bad123',
+              'latitude': 3213.0,
+              'longitude': 14.50,
+              'updated_at': 123456,
+            },
+            {
+              'type': 1,
+              'name': 'Alpha',
+              'public_key': 'aa11bb22',
+              'latitude': 46.05,
+              'longitude': 14.50,
+              'updated_at': 123456,
+            },
+          ],
+        }),
+        200,
+      ),
+    );
+
+    final nodes = await MeshMapNodesService.fetchNodes(client: client);
+
+    expect(nodes, hasLength(1));
+    expect(nodes.first.name, 'Alpha');
+  });
 }

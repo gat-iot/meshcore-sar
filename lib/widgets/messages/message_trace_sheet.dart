@@ -144,6 +144,7 @@ class _MessageTraceSheetState extends State<MessageTraceSheet> {
           final concretePathNodes = routeEntries
               .where((entry) => entry.resolved.node != null)
               .map((entry) => entry.resolved.node!)
+              .where((node) => node.hasValidCoordinates)
               .toList();
           final mapPoints = concretePathNodes
               .map((n) => LatLng(n.latitude, n.longitude))
@@ -390,6 +391,7 @@ class _MessageTraceSheetState extends State<MessageTraceSheet> {
           );
         })
         .whereType<MeshMapNode>()
+        .where((node) => node.hasValidCoordinates)
         .toList();
   }
 
