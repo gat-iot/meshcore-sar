@@ -149,8 +149,6 @@ class _MessageTraceSheetState extends State<MessageTraceSheet> {
               .map((n) => LatLng(n.latitude, n.longitude))
               .toList();
           final hasMapPath = mapPoints.length >= 2;
-          final relayNodes = _relayNodes(trace);
-
           return SizedBox(
             height: MediaQuery.of(context).size.height * 0.75,
             child: Column(
@@ -317,39 +315,11 @@ class _MessageTraceSheetState extends State<MessageTraceSheet> {
                           ),
                           title: Text(entry.value.label),
                           subtitle: Text(
-                            'Relay${entry.value.keyLabel == null ? '' : ' • ${entry.value.keyLabel}'}${entry.value.matchSummary == null ? '' : ' • ${entry.value.matchSummary}'}${entry.value.resolved.cycleSummary == null ? '' : ' • ${entry.value.resolved.cycleSummary}'}',
+                            'Path node${entry.value.keyLabel == null ? '' : ' • ${entry.value.keyLabel}'}${entry.value.matchSummary == null ? '' : ' • ${entry.value.matchSummary}'}${entry.value.resolved.cycleSummary == null ? '' : ' • ${entry.value.resolved.cycleSummary}'}',
                           ),
                           trailing: entry.value.resolved.canCycle
                               ? const Icon(Icons.sync_alt)
                               : null,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'Relays (${relayNodes.length})',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ),
-                      if (relayNodes.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          child: Text(
-                            'No relay nodes could be matched for this message.',
-                          ),
-                        ),
-                      ...relayNodes.map(
-                        (node) => ListTile(
-                          leading: const Icon(Icons.router),
-                          title: Text(node.name),
-                          subtitle: Text(
-                            '${node.publicKey.substring(0, math.min(12, node.publicKey.length))} • '
-                            '${node.latitude.toStringAsFixed(5)}, ${node.longitude.toStringAsFixed(5)}',
-                          ),
                         ),
                       ),
                     ],
@@ -361,25 +331,6 @@ class _MessageTraceSheetState extends State<MessageTraceSheet> {
         },
       ),
     );
-  }
-
-  List<MeshMapNode> _relayNodes(_TraceResult trace) {
-    final concrete = trace.matchedPathNodes
-        .map((entry) => entry.node)
-        .whereType<MeshMapNode>()
-        .toList();
-    if (concrete.isEmpty) return const [];
-
-    if (trace.mode == TraceMode.packetPath) {
-      if (widget.message == null) {
-        return concrete;
-      }
-      if (concrete.length <= 1) return const [];
-      return concrete.sublist(1);
-    }
-
-    if (concrete.length <= 2) return const [];
-    return concrete.sublist(1, concrete.length - 1);
   }
 
   List<_RouteDisplayEntry> _displayRouteEntries(_TraceResult trace) {

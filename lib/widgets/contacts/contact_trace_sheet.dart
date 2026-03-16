@@ -265,7 +265,7 @@ class _ContactTraceSheetState extends State<ContactTraceSheet> {
                           ),
                           title: Text(entry.value.label),
                           subtitle: Text(
-                            'Relay${entry.value.keyLabel == null ? '' : ' • ${entry.value.keyLabel}'}${entry.value.matchSummary == null ? '' : ' • ${entry.value.matchSummary}'}${entry.value.resolved.cycleSummary == null ? '' : ' • ${entry.value.resolved.cycleSummary}'}',
+                            'Path node${entry.value.keyLabel == null ? '' : ' • ${entry.value.keyLabel}'}${entry.value.matchSummary == null ? '' : ' • ${entry.value.matchSummary}'}${entry.value.resolved.cycleSummary == null ? '' : ' • ${entry.value.resolved.cycleSummary}'}',
                           ),
                           trailing: entry.value.resolved.canCycle
                               ? const Icon(Icons.sync_alt)

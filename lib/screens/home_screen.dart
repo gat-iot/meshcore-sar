@@ -402,6 +402,30 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _buildMiniSignalBars({
+    required int activeBars,
+    required Color color,
+  }) {
+    final inactive = Colors.grey.withValues(alpha: 0.3);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (var i = 0; i < 5; i++) ...[
+          if (i > 0) const SizedBox(width: 1.5),
+          Container(
+            width: 2.5,
+            height: 4.0 + (i * 2),
+            decoration: BoxDecoration(
+              color: i < activeBars ? color : inactive,
+              borderRadius: BorderRadius.circular(1.5),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildCompactActivityIndicator({
     required bool rxActive,
     required bool txActive,
@@ -1008,17 +1032,11 @@ class _HomeScreenState extends State<HomeScreen>
                                   if (!isTcpConnected &&
                                       deviceInfo.signalRssi != null) ...[
                                     const SizedBox(width: 4),
-                                    SizedBox(
-                                      width: 28,
-                                      child: Text(
-                                        '${deviceInfo.signalRssi}',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: signalColor,
-                                        ),
-                                        maxLines: 1,
+                                    _buildMiniSignalBars(
+                                      activeBars: BatteryDisplayHelper.getSignalBars(
+                                        deviceInfo.signalRssi!,
                                       ),
+                                      color: signalColor,
                                     ),
                                   ],
                                   if (deviceInfo.batteryPercent != null) ...[
@@ -1033,20 +1051,16 @@ class _HomeScreenState extends State<HomeScreen>
                                             deviceInfo.batteryPercent!,
                                           ),
                                     ),
-                                    const SizedBox(width: 4),
-                                    SizedBox(
-                                      width: 30,
-                                      child: Text(
-                                        '${deviceInfo.batteryPercent!.round()}%',
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color:
-                                              BatteryDisplayHelper.getBatteryColor(
-                                                deviceInfo.batteryPercent!,
-                                              ),
-                                        ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      '${deviceInfo.batteryPercent!.round()}%',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color:
+                                            BatteryDisplayHelper.getBatteryColor(
+                                              deviceInfo.batteryPercent!,
+                                            ),
                                       ),
                                     ),
                                   ],

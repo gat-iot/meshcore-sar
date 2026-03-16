@@ -905,12 +905,6 @@ class _MessageBubbleState extends State<MessageBubble> {
                                 label: l10n.floodFallback,
                                 value: l10n.yes,
                               ),
-                            if (routeMetadata?.relayName case final relayName?)
-                              _detailRow(
-                                sheetContext,
-                                label: 'Relay',
-                                value: relayName,
-                              ),
                             if (routeMetadata?.canonicalPath
                                 case final routePath?)
                               _detailRow(

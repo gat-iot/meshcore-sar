@@ -24,4 +24,14 @@ class BatteryDisplayHelper {
     if (rssi > -70) return Colors.orange;
     return Colors.red;
   }
+
+  /// Number of active signal bars (0-5) for a BLE RSSI value.
+  static int getSignalBars(int rssi) {
+    if (rssi > -50) return 5;
+    if (rssi > -60) return 4;
+    if (rssi > -70) return 3;
+    if (rssi > -80) return 2;
+    if (rssi > -90) return 1;
+    return 0;
+  }
 }
