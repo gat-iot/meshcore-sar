@@ -516,7 +516,6 @@ class _MessagesTabState extends State<MessagesTab> {
   }
 
   Future<void> _replyToMessage(Message message) async {
-    final l10n = AppLocalizations.of(context)!;
     final contactsProvider = context.read<ContactsProvider>();
     Contact? senderContact;
     String? senderDisplayName;

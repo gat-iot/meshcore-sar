@@ -682,8 +682,6 @@ class _MessageBubbleState extends State<MessageBubble> {
       }
     }
 
-    final l10n = AppLocalizations.of(context)!;
-
     void copyField(String value) {
       Clipboard.setData(ClipboardData(text: value));
       ToastLogger.success(context, AppLocalizations.of(context)!.textCopiedToClipboard);
@@ -1408,7 +1406,6 @@ class _MessageBubbleState extends State<MessageBubble> {
       return;
     }
 
-    final l10n = AppLocalizations.of(context)!;
     final coords = widget.message.sarGpsCoordinates!;
 
     // Get SAR marker type emoji/name
@@ -1817,7 +1814,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     final displayName = isOwnMessage
         ? AppLocalizations.of(context)!.you
         : message.getRichDisplayName(senderContact);
-    final l10n = AppLocalizations.of(context)!;
 
     // Look up destination/source display labels for direct/channel messages
     dynamic recipientContact;

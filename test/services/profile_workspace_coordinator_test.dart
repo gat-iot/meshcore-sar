@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meshcore_client/meshcore_client.dart';
 import 'package:meshcore_sar_app/models/config_profile.dart';
-import 'package:meshcore_sar_app/models/contact.dart';
 import 'package:meshcore_sar_app/models/contact_group.dart';
 import 'package:meshcore_sar_app/models/device_info.dart';
 import 'package:meshcore_sar_app/providers/app_provider.dart';
