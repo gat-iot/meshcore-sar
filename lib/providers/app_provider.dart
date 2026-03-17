@@ -1176,15 +1176,14 @@ class AppProvider with ChangeNotifier {
         );
       }
 
-      // Estimate location for contacts without GPS using RSSI + last-hop repeater
+      // Estimate location for contacts without GPS using received path
       if (senderContact != null &&
           senderContact.displayLocation == null &&
-          receptionDetailsSnapshot?.rssiDbm != null &&
-          senderContact.routeHasPath &&
-          senderContact.routeHopCount > 0) {
-        _estimateContactLocationFromRssi(
+          receivedPathBytes != null &&
+          receivedPathBytes.isNotEmpty) {
+        _estimateContactLocationFromReceivedPath(
           contact: senderContact,
-          rssiDbm: receptionDetailsSnapshot!.rssiDbm!,
+          receivedPathBytes: receivedPathBytes,
         );
       }
 
@@ -2016,40 +2015,51 @@ class AppProvider with ChangeNotifier {
     return bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
   }
 
-  /// Record RSSI observation from last-hop repeater for trilateration.
-  void _estimateContactLocationFromRssi({
+  /// Estimate contact location from the received message path.
+  ///
+  /// When we receive a message, the path bytes describe how it traveled:
+  ///   Sender → first_hop (near sender) → ... → last_hop (near us) → Us
+  ///
+  /// The FIRST hop in the received path is the repeater nearest to the sender.
+  /// We don't have the actual RSSI between sender and that repeater, so we
+  /// use a conservative estimate to place them within typical LoRa range.
+  void _estimateContactLocationFromReceivedPath({
     required Contact contact,
-    required int rssiDbm,
+    required List<int> receivedPathBytes,
   }) {
-    final pathHopCount = contact.routeHopCount;
-    final pathHashSize = contact.routeHashSize;
-    if (pathHopCount <= 0 || pathHashSize <= 0) return;
+    if (receivedPathBytes.isEmpty) return;
 
-    final pathBytes = contact.routePathBytes;
-    if (pathBytes.length < pathHashSize) return;
-    final firstHopHash = pathBytes
-        .sublist(0, pathHashSize)
+    // Infer hash size from the contact's known path encoding, or default to 1
+    final hashSize = contact.routeHasPath ? contact.routeHashSize : 1;
+    if (receivedPathBytes.length < hashSize) return;
+
+    // First hop in received path = repeater nearest to sender
+    final firstHopHash = receivedPathBytes
+        .sublist(0, hashSize)
         .map((b) => b.toRadixString(16).padLeft(2, '0'))
         .join()
         .toLowerCase();
 
-    Contact? lastHopRepeater;
+    Contact? nearSenderRepeater;
     for (final c in contactsProvider.contacts) {
       if (c.publicKeyHex.toLowerCase().startsWith(firstHopHash) &&
           c.displayLocation != null) {
-        lastHopRepeater = c;
+        nearSenderRepeater = c;
         break;
       }
     }
-    if (lastHopRepeater == null) return;
+    if (nearSenderRepeater == null) return;
 
-    // Record observation for trilateration
+    // We don't have the RSSI between sender and their repeater.
+    // Use -70 dBm as conservative estimate (~300m in open terrain).
+    const int estimatedRssi = -70;
+
     contactsProvider.addRssiObservation(
       contactPublicKeyHex: contact.publicKeyHex,
       contactPublicKey: contact.publicKey,
       observation: RssiObservation(
-        repeaterLocation: lastHopRepeater.displayLocation!,
-        rssiDbm: rssiDbm,
+        repeaterLocation: nearSenderRepeater.displayLocation!,
+        rssiDbm: estimatedRssi,
         observedAt: DateTime.now(),
       ),
     );
