@@ -25,7 +25,8 @@ class MessageRetryManager {
   static const int maxRetryAttemptsWithPath = 5;
 
   /// No retries for flood-only contacts (no known path).
-  static const int maxRetryAttemptsFloodOnly = 1;
+  /// Value 0 means: don't retry at all, go straight to fallback/fail.
+  static const int maxRetryAttemptsFloodOnly = 0;
 
   @Deprecated('Use maxRetryAttemptsForContact instead')
   static const int maxRetryAttempts = maxRetryAttemptsWithPath;
@@ -75,8 +76,8 @@ class MessageRetryManager {
       }
     }
 
-    // Add random jitter: 1000-8000ms (matches official app)
-    final jitterMs = 1000 + _rng.nextInt(7001);
+    // Add random jitter: 500-2000ms to avoid collision
+    final jitterMs = 500 + _rng.nextInt(1501);
     return baseTimeout + jitterMs;
   }
 
@@ -90,11 +91,14 @@ class MessageRetryManager {
     return message.retryAttempt < maxRetryAttemptsForContact(contact);
   }
 
-  /// Whether the next attempt is the last one.
+  /// Whether this is the last retry attempt.
   /// When true, the caller should reset the path to force flood mode.
+  ///
+  /// Note: called AFTER retryAttempt has been incremented, so we compare
+  /// directly against maxAttempts (not +1).
   bool isLastAttempt(Message message, Contact contact) {
     final maxAttempts = maxRetryAttemptsForContact(contact);
-    return maxAttempts > 1 && message.retryAttempt + 1 >= maxAttempts;
+    return maxAttempts > 1 && message.retryAttempt >= maxAttempts;
   }
 
   /// Track a retry attempt for a message
