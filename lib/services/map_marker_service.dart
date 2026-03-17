@@ -41,10 +41,12 @@ class MapMarkerService {
     Function(Contact)? onTap,
     double mapRotation = 0,
     Position? userPosition,
+    Map<String, LatLng>? estimatedLocations,
   }) {
     return contacts
         .map((contact) {
-          final location = contact.displayLocation;
+          final location = contact.displayLocation ??
+              estimatedLocations?[contact.publicKeyHex];
           if (location == null) return null;
 
           return Marker(

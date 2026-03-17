@@ -128,6 +128,7 @@ class ContactsProvider with ChangeNotifier {
   final Map<String, Contact> _contacts = {};
   final List<SavedContactGroup> _savedContactGroups = <SavedContactGroup>[];
   final Map<String, PendingAdvert> _pendingAdverts = {};
+  final Map<String, LatLng> _estimatedLocations = {};
   final ContactStorageService _storageService = ContactStorageService();
   bool _isInitialized = false;
   bool _isPersisting = false;
@@ -501,13 +502,33 @@ class ContactsProvider with ChangeNotifier {
       ..sort(_sortByLastSeen);
   }
 
+  /// All estimated locations (for passing to map marker service).
+  Map<String, LatLng> get estimatedLocations =>
+      Map.unmodifiable(_estimatedLocations);
+
+  /// Get estimated location for a contact (RSSI-based, near last-hop repeater).
+  LatLng? estimatedLocationFor(String publicKeyHex) =>
+      _estimatedLocations[publicKeyHex];
+
+  /// Set an estimated location for a contact that has no GPS.
+  void setEstimatedLocation(String publicKeyHex, LatLng location) {
+    _estimatedLocations[publicKeyHex] = location;
+    notifyListeners();
+  }
+
+  /// Effective location: own GPS/advert > estimated from RSSI.
+  LatLng? effectiveLocationFor(Contact contact) {
+    return contact.displayLocation ?? _estimatedLocations[contact.publicKeyHex];
+  }
+
   /// Get contacts with location (for map display)
+  /// Includes contacts with estimated locations from RSSI.
   List<Contact> get contactsWithLocation =>
-      contacts.where((c) => c.displayLocation != null).toList();
+      contacts.where((c) => effectiveLocationFor(c) != null).toList();
 
   /// Get chat contacts with location (team members on map)
   List<Contact> get chatContactsWithLocation =>
-      chatContacts.where((c) => c.displayLocation != null).toList();
+      chatContacts.where((c) => effectiveLocationFor(c) != null).toList();
 
   MessageContactLocation? buildMessageContactLocationSnapshot(
     Contact contact, {

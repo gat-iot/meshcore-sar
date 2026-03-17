@@ -18,6 +18,7 @@ import '../services/messaging_route_preferences.dart';
 import '../services/nearest_router_selector.dart';
 import '../services/packet_capture_storage_service.dart';
 import '../services/path_history_service.dart';
+import '../utils/rssi_location_estimator.dart';
 import '../services/profiles_feature_service.dart';
 import '../services/route_hash_preferences.dart';
 import '../services/notification_service.dart';
@@ -1175,6 +1176,18 @@ class AppProvider with ChangeNotifier {
         );
       }
 
+      // Estimate location for contacts without GPS using RSSI + last-hop repeater
+      if (senderContact != null &&
+          senderContact.displayLocation == null &&
+          receptionDetailsSnapshot?.rssiDbm != null &&
+          senderContact.routeHasPath &&
+          senderContact.routeHopCount > 0) {
+        _estimateContactLocationFromRssi(
+          contact: senderContact,
+          rssiDbm: receptionDetailsSnapshot!.rssiDbm!,
+        );
+      }
+
       // Check if message is a drawing broadcast
       if (DrawingMessageParser.isDrawingMessage(enrichedMessage.text)) {
         debugPrint('🎨 [AppProvider] Drawing message received, parsing...');
@@ -2001,6 +2014,46 @@ class AppProvider with ChangeNotifier {
   String _key6(Uint8List publicKey) {
     final bytes = publicKey.sublist(0, math.min(6, publicKey.length));
     return bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  /// Estimate a contact's location from the last-hop repeater + RSSI distance.
+  void _estimateContactLocationFromRssi({
+    required Contact contact,
+    required int rssiDbm,
+  }) {
+    // Find the first-hop repeater from the contact's path
+    final pathHopCount = contact.routeHopCount;
+    final pathHashSize = contact.routeHashSize;
+    if (pathHopCount <= 0 || pathHashSize <= 0) return;
+
+    // Get first hop hash from path
+    final pathBytes = contact.routePathBytes;
+    if (pathBytes.length < pathHashSize) return;
+    final firstHopHash = pathBytes
+        .sublist(0, pathHashSize)
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join()
+        .toLowerCase();
+
+    // Find a repeater whose public key starts with this hash
+    Contact? lastHopRepeater;
+    for (final c in contactsProvider.contacts) {
+      if (c.publicKeyHex.toLowerCase().startsWith(firstHopHash) &&
+          c.displayLocation != null) {
+        lastHopRepeater = c;
+        break;
+      }
+    }
+    if (lastHopRepeater == null) return;
+
+    final estimated = RssiLocationEstimator.estimateFromRepeater(
+      repeaterLocation: lastHopRepeater.displayLocation!,
+      rssiDbm: rssiDbm,
+      contactPublicKey: contact.publicKey,
+    );
+    if (estimated != null) {
+      contactsProvider.setEstimatedLocation(contact.publicKeyHex, estimated);
+    }
   }
 
   Future<void> _learnPathFromPublicMessage({

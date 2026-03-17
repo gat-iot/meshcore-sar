@@ -2604,6 +2604,7 @@ class _MapTabState extends State<MapTab> with AutomaticKeepAliveClientMixin {
                           context: context,
                           mapRotation: _getMapRotation(),
                           userPosition: _locationService.currentPosition,
+                          estimatedLocations: contactsProvider.estimatedLocations,
                           onTap: (contact) {
                             _showDetailedCompassWithContact(
                               context,
