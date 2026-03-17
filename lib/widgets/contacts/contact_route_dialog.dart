@@ -11,6 +11,7 @@ import '../../providers/app_provider.dart';
 import '../../providers/connection_provider.dart';
 import '../../services/contact_route_resolver.dart';
 import '../../services/path_history_service.dart';
+import '../../services/relay_candidate_sorter.dart';
 import '../../services/route_hash_preferences.dart';
 
 class ContactRouteDialogResult {
@@ -72,6 +73,8 @@ class _ContactRouteDialogState extends State<ContactRouteDialog> {
   late final TextEditingController _controller;
   late final TextEditingController _relaySearchController;
   final PathHistoryService _pathHistoryService = PathHistoryService();
+  final RelayCandidateSorter _relayCandidateSorter =
+      const RelayCandidateSorter();
   int _selectedHashSize = RouteHashPreferences.defaultHashSize;
   ParsedContactRoute? _parsedRoute;
   String? _errorText;
@@ -133,13 +136,16 @@ class _ContactRouteDialogState extends State<ContactRouteDialog> {
     }
   }
 
-  List<Contact> get _routeCandidates =>
-      widget.availableContacts
-          .where(
-            (contact) => contact.isRepeater && contact.displayLocation != null,
-          )
-          .toList()
-        ..sort((a, b) => a.displayName.compareTo(b.displayName));
+  List<Contact> _routeCandidates({required LatLng? selfPoint}) =>
+      _relayCandidateSorter.sortByDistanceFromSelf(
+        widget.availableContacts
+            .where(
+              (contact) =>
+                  contact.isRepeater && contact.displayLocation != null,
+            )
+            .toList(),
+        selfPoint: selfPoint,
+      );
 
   List<Contact> _mapSelectionForText(String text) {
     final tokens = text
@@ -169,7 +175,8 @@ class _ContactRouteDialogState extends State<ContactRouteDialog> {
     final contactHashSize = widget.contact.hasPath
         ? widget.contact.pathHashSize
         : null;
-    final hashSize = contactHashSize ?? await RouteHashPreferences.getHashSize();
+    final hashSize =
+        contactHashSize ?? await RouteHashPreferences.getHashSize();
     if (!mounted) return;
     setState(() {
       _selectedHashSize = hashSize;
@@ -697,18 +704,12 @@ class _ContactRouteDialogState extends State<ContactRouteDialog> {
       children: [
         Row(
           children: [
-            Text(
-              'Path Size',
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
+            Text('Path Size', style: Theme.of(context).textTheme.labelLarge),
             const Spacer(),
             SegmentedButton<int>(
               segments: [
                 for (final size in RouteHashPreferences.supportedSizes)
-                  ButtonSegment<int>(
-                    value: size,
-                    label: Text('${size}B'),
-                  ),
+                  ButtonSegment<int>(value: size, label: Text('${size}B')),
               ],
               selected: {_selectedHashSize},
               onSelectionChanged: (selection) {
@@ -822,7 +823,6 @@ class _ContactRouteDialogState extends State<ContactRouteDialog> {
   @override
   Widget build(BuildContext context) {
     final appProvider = context.watch<AppProvider>();
-    final routeCandidates = _routeCandidates;
     final connectionProvider = context.watch<ConnectionProvider>();
     final selfPoint =
         connectionProvider.deviceInfo.advLat != null &&
@@ -834,6 +834,7 @@ class _ContactRouteDialogState extends State<ContactRouteDialog> {
             connectionProvider.deviceInfo.advLon! / 1e6,
           )
         : null;
+    final routeCandidates = _routeCandidates(selfPoint: selfPoint);
     final recipientLocation = widget.contact.displayLocation;
     final recipientPoint = recipientLocation == null
         ? null
