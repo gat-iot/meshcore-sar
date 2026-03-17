@@ -157,7 +157,7 @@ class _ContactRouteDialogState extends State<ContactRouteDialog> {
     final selected = <Contact>[];
     final seen = <String>{};
     for (final token in tokens) {
-      final match = _routeCandidates
+      final match = _routeCandidates(selfPoint: null)
           .where(
             (contact) => contact.publicKeyHex.toUpperCase().startsWith(token),
           )
@@ -276,7 +276,7 @@ class _ContactRouteDialogState extends State<ContactRouteDialog> {
         .toList();
     if (tokens.isEmpty) return null;
     final lastToken = tokens.last;
-    final match = _routeCandidates
+    final match = _routeCandidates(selfPoint: null)
         .where(
           (contact) => contact.publicKeyHex.toUpperCase().startsWith(lastToken),
         )
