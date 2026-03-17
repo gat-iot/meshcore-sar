@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'package:meshcore_client/meshcore_client.dart' hide Contact;
+import 'package:usb_serial/usb_serial.dart';
 import '../providers/connection_provider.dart';
 import '../providers/app_provider.dart';
 import '../services/network_scanner_service.dart';
@@ -55,7 +58,7 @@ class _ConnectionDialogState extends State<ConnectionDialog>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _connectionProvider = Provider.of<ConnectionProvider>(
       context,
       listen: false,
@@ -178,8 +181,9 @@ class _ConnectionDialogState extends State<ConnectionDialog>
                 TabBar(
                   controller: _tabController,
                   tabs: const [
-                    Tab(text: 'BLE Devices', icon: Icon(Icons.bluetooth)),
-                    Tab(text: 'Network Servers', icon: Icon(Icons.wifi)),
+                    Tab(text: 'BLE', icon: Icon(Icons.bluetooth)),
+                    Tab(text: 'Network', icon: Icon(Icons.wifi)),
+                    Tab(text: 'USB', icon: Icon(Icons.usb)),
                   ],
                 ),
               ],
@@ -196,6 +200,9 @@ class _ConnectionDialogState extends State<ConnectionDialog>
 
                 // Network Servers Tab
                 _buildNetworkServersTab(),
+
+                // USB Serial Tab
+                _buildUsbTab(connectionProvider),
               ],
             ),
           ),
@@ -627,6 +634,205 @@ class _ConnectionDialogState extends State<ConnectionDialog>
                   },
                 ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildUsbTab(ConnectionProvider connectionProvider) {
+    return _UsbDeviceList(
+      onConnected: () {
+        if (mounted) Navigator.of(context).pop();
+      },
+    );
+  }
+}
+
+class _UsbDeviceList extends StatefulWidget {
+  final VoidCallback onConnected;
+
+  const _UsbDeviceList({required this.onConnected});
+
+  @override
+  State<_UsbDeviceList> createState() => _UsbDeviceListState();
+}
+
+class _UsbDeviceListState extends State<_UsbDeviceList> {
+  List<UsbDevice> _devices = [];
+  bool _isScanning = false;
+  bool _isConnecting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      _scanDevices();
+    }
+  }
+
+  Future<void> _scanDevices() async {
+    setState(() => _isScanning = true);
+    try {
+      final devices = await UsbSerial.listDevices();
+      if (!mounted) return;
+      setState(() {
+        _devices = devices;
+        _isScanning = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _devices = [];
+        _isScanning = false;
+      });
+    }
+  }
+
+  Future<void> _connectToDevice(UsbDevice device) async {
+    setState(() => _isConnecting = true);
+    try {
+      final connectionProvider = context.read<ConnectionProvider>();
+      final service = MeshCoreSerialService(appName: 'MeshCore SAR');
+
+      final port = await device.create();
+      if (port == null) {
+        if (mounted) {
+          setState(() => _isConnecting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to create USB port')),
+          );
+        }
+        return;
+      }
+
+      final opened = await port.open();
+      if (!opened) {
+        if (mounted) {
+          setState(() => _isConnecting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to open USB port')),
+          );
+        }
+        return;
+      }
+
+      await port.setDTR(true);
+      await port.setRTS(true);
+      await port.setPortParameters(
+        115200,
+        UsbPort.DATABITS_8,
+        UsbPort.STOPBITS_1,
+        UsbPort.PARITY_NONE,
+      );
+
+      service.writeRaw = (data) async {
+        await port.write(data);
+      };
+
+      port.inputStream?.listen(
+        (data) => service.feedRawBytes(data),
+        onError: (_) {
+          service.markDisconnected();
+          port.close();
+        },
+        onDone: () {
+          service.markDisconnected();
+        },
+      );
+
+      final sessionOk = await service.markConnected();
+      if (!sessionOk) {
+        await port.close();
+        if (mounted) {
+          setState(() => _isConnecting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('USB session initialization failed')),
+          );
+        }
+        return;
+      }
+
+      final success = await connectionProvider.connectSerial(service);
+      if (!mounted) return;
+
+      if (success) {
+        widget.onConnected();
+      } else {
+        await port.close();
+        setState(() => _isConnecting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to connect via USB')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isConnecting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('USB error: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            kIsWeb
+                ? 'Web Serial is not yet supported.\nUse BLE or Network instead.'
+                : 'USB serial is available on Android only.\nConnect via OTG cable.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    if (_isScanning) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: OutlinedButton.icon(
+            onPressed: _isConnecting ? null : _scanDevices,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Scan USB devices'),
+          ),
+        ),
+        if (_devices.isEmpty)
+          const Expanded(
+            child: Center(
+              child: Text(
+                'No USB serial devices found.\nConnect a MeshCore device via OTG cable.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: ListView.builder(
+              itemCount: _devices.length,
+              itemBuilder: (context, index) {
+                final device = _devices[index];
+                return ListTile(
+                  leading: const Icon(Icons.usb),
+                  title: Text(device.productName ?? 'USB Device'),
+                  subtitle: Text(device.manufacturerName ?? ''),
+                  trailing: _isConnecting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.chevron_right),
+                  onTap: _isConnecting ? null : () => _connectToDevice(device),
+                );
+              },
+            ),
+          ),
       ],
     );
   }

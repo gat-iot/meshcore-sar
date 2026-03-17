@@ -72,15 +72,21 @@ class ConnectionProvider with ChangeNotifier {
   static const int _controlTypeNodeDiscoverReq = 0x80;
   final MeshCoreBleService _bleService = MeshCoreBleService();
   MeshCoreTcpService? _tcpService;
+  MeshCoreSerialService? _serialService;
 
   /// Expose BLE service for background location tracking
   MeshCoreBleService get bleService => _bleService;
 
-  /// Active service — BLE or TCP depending on current mode
-  MeshCoreServiceBase get _activeService =>
-      (_connectionMode == ConnectionMode.tcp && _tcpService != null)
-      ? _tcpService!
-      : _bleService;
+  /// Active service — BLE, TCP, or USB depending on current mode
+  MeshCoreServiceBase get _activeService {
+    if (_connectionMode == ConnectionMode.tcp && _tcpService != null) {
+      return _tcpService!;
+    }
+    if (_connectionMode == ConnectionMode.usb && _serialService != null) {
+      return _serialService!;
+    }
+    return _bleService;
+  }
 
   /// Current connection mode
   ConnectionMode _connectionMode = ConnectionMode.ble;
@@ -710,6 +716,56 @@ class ConnectionProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Connect via USB serial using a pre-configured [MeshCoreSerialService].
+  ///
+  /// The caller is responsible for opening the serial port and wiring
+  /// [service.writeRaw] + [service.feedRawBytes] before calling this.
+  /// After this call succeeds, [service.markConnected()] has already run.
+  Future<bool> connectSerial(MeshCoreSerialService service) async {
+    debugPrint('🔌 [Provider] connectSerial()');
+
+    _deviceInfo = _deviceInfo.copyWith(
+      deviceId: 'usb',
+      deviceName: 'USB Companion',
+      connectionState: ConnectionState.connecting,
+    );
+    _error = null;
+    _supportsAutoaddConfig = null;
+    notifyListeners();
+
+    _serialService?.dispose();
+    _serialService = service;
+    _wireServiceCallbacks(_serialService!);
+    _connectionMode = ConnectionMode.usb;
+
+    // markConnected() should already have been called by the transport.
+    // If it hasn't, the service won't be connected yet.
+    if (!service.isConnected) {
+      _deviceInfo = _deviceInfo.copyWith(
+        connectionState: ConnectionState.error,
+      );
+      notifyListeners();
+      return false;
+    }
+    return true;
+  }
+
+  /// Disconnect from USB serial device.
+  Future<void> disconnectSerial() async {
+    _serialService?.markDisconnected();
+    _serialService?.dispose();
+    _serialService = null;
+    _connectionMode = ConnectionMode.ble;
+    _supportsAutoaddConfig = null;
+    _resetSyncState();
+    _deviceInfo = DeviceInfo(connectionState: ConnectionState.disconnected);
+    _roomLoginManager.clearRoomLoginStates();
+    _pingTracker.clearAll();
+    _pendingSendOperations.clear();
+    _messageDeliveryTracker.clearTracking();
+    notifyListeners();
+  }
+
   /// Disconnect from device
   Future<void> disconnect() async {
     _deviceInfo = _deviceInfo.copyWith(
@@ -719,6 +775,10 @@ class ConnectionProvider with ChangeNotifier {
 
     if (_connectionMode == ConnectionMode.tcp) {
       await disconnectTcp();
+      return;
+    }
+    if (_connectionMode == ConnectionMode.usb) {
+      await disconnectSerial();
       return;
     }
 

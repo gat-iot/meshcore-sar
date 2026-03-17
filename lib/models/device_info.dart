@@ -16,6 +16,9 @@ enum ConnectionMode {
 
   /// Direct TCP/WiFi connection to MeshCore device (port 5000)
   tcp,
+
+  /// USB serial connection (Android OTG or Web Serial API)
+  usb,
 }
 
 extension ConnectionModeExtension on ConnectionMode {
@@ -25,6 +28,8 @@ extension ConnectionModeExtension on ConnectionMode {
         return 'Direct (BLE)';
       case ConnectionMode.tcp:
         return 'Direct (WiFi)';
+      case ConnectionMode.usb:
+        return 'Direct (USB)';
     }
   }
 
@@ -34,6 +39,8 @@ extension ConnectionModeExtension on ConnectionMode {
         return 'Direct BLE connection to MeshCore device';
       case ConnectionMode.tcp:
         return 'Direct WiFi/TCP connection to MeshCore device';
+      case ConnectionMode.usb:
+        return 'USB serial connection to MeshCore device';
     }
   }
 }

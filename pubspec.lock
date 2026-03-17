@@ -788,7 +788,7 @@ packages:
     description:
       path: "."
       ref: main
-      resolved-ref: b36f726c3e29fd2dd992abffa2b575d4058d721f
+      resolved-ref: abff892fac0dd0e8004bfa1f415df74b44b8eb52
       url: "https://github.com/dz0ny/meshcore_client.git"
     source: git
     version: "0.1.0"
@@ -1405,6 +1405,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.5"
+  usb_serial:
+    dependency: "direct main"
+    description:
+      name: usb_serial
+      sha256: a605a600e34e7f28d4e80851ca3999ef747e42e406138887b8a88b8c382a8b07
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.2"
   uuid:
     dependency: transitive
     description:

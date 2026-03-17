@@ -121,6 +121,7 @@ dependencies:
 
   # Network Service Discovery (Bonjour/mDNS)
   nsd: ^4.0.3
+  usb_serial: ^0.5.2
 
 dev_dependencies:
   flutter_test:
