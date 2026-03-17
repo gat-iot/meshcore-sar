@@ -605,10 +605,14 @@ class ContactTile extends StatelessWidget {
   }
 
   void _showNeighbours(BuildContext context, Contact contact) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => _NeighboursDialog(contact: contact),
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => _NeighboursSheet(contact: contact),
     );
   }
 
@@ -1233,17 +1237,17 @@ class _ContactNameOverrideSheetState extends State<_ContactNameOverrideSheet> {
   }
 }
 
-/// Dialog that sends "neighbors" text command to a repeater and shows results.
-class _NeighboursDialog extends StatefulWidget {
+/// Bottom sheet that sends "neighbors" text command to a repeater and shows results.
+class _NeighboursSheet extends StatefulWidget {
   final Contact contact;
 
-  const _NeighboursDialog({required this.contact});
+  const _NeighboursSheet({required this.contact});
 
   @override
-  State<_NeighboursDialog> createState() => _NeighboursDialogState();
+  State<_NeighboursSheet> createState() => _NeighboursSheetState();
 }
 
-class _NeighboursDialogState extends State<_NeighboursDialog> {
+class _NeighboursSheetState extends State<_NeighboursSheet> {
   bool _loading = true;
   String? _error;
   List<_Neighbour> _neighbours = const [];
@@ -1257,10 +1261,8 @@ class _NeighboursDialogState extends State<_NeighboursDialog> {
   Future<void> _fetchNeighbours() async {
     final connectionProvider = context.read<ConnectionProvider>();
 
-    // Listen for the response message
     String? responseText;
     void onMessage(message) {
-      // The neighbours response comes as a text message from the repeater
       if (message.senderPublicKeyPrefix != null &&
           widget.contact.publicKey
               .sublist(0, 6)
@@ -1271,7 +1273,6 @@ class _NeighboursDialogState extends State<_NeighboursDialog> {
 
     connectionProvider.onMessageReceived = (message) {
       onMessage(message);
-      // Keep the original callback chain
     };
 
     try {
@@ -1280,7 +1281,6 @@ class _NeighboursDialogState extends State<_NeighboursDialog> {
         text: 'neighbors',
       );
 
-      // Wait for response (up to 15s)
       for (int i = 0; i < 30; i++) {
         await Future.delayed(const Duration(milliseconds: 500));
         if (responseText != null) break;
@@ -1307,7 +1307,6 @@ class _NeighboursDialogState extends State<_NeighboursDialog> {
       if (text.toLowerCase().contains('-none-') || text.trim().isEmpty) {
         setState(() {
           _loading = false;
-          _neighbours = const [];
         });
         return;
       }
@@ -1356,59 +1355,92 @@ class _NeighboursDialogState extends State<_NeighboursDialog> {
     return keyHex.length > 12 ? '${keyHex.substring(0, 12)}...' : keyHex;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('Neighbours of ${widget.contact.displayName}'),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: _loading
-            ? const SizedBox(
-                height: 100,
-                child: Center(child: CircularProgressIndicator()),
-              )
-            : _error != null
-                ? Text(_error!)
-                : _neighbours.isEmpty
-                    ? const Text('No neighbours found')
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: _neighbours.length,
-                        itemBuilder: (context, index) {
-                          final n = _neighbours[index];
-                          final name = _resolveNeighbourName(n.publicKeyHex);
-                          final subtitle = <String>[
-                            if (n.snrDb != null)
-                              'SNR ${n.snrDb!.toStringAsFixed(1)} dB',
-                            if (n.lastSeenAt != null)
-                              _formatAge(n.lastSeenAt!),
-                            if (n.lastSeenMs != null)
-                              '${n.lastSeenMs}ms ago',
-                          ].join(' • ');
-                          return ListTile(
-                            dense: true,
-                            leading: const Icon(Icons.router_outlined, size: 20),
-                            title: Text(name),
-                            subtitle: subtitle.isNotEmpty ? Text(subtitle) : null,
-                          );
-                        },
-                      ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
-        ),
-      ],
-    );
-  }
-
   String _formatAge(DateTime when) {
     final diff = DateTime.now().difference(when);
     if (diff.inMinutes < 1) return 'just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.55,
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).dividerColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.hub_outlined),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Neighbours of ${widget.contact.displayName}',
+                      style: Theme.of(context).textTheme.titleMedium,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              _error!,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        )
+                      : _neighbours.isEmpty
+                          ? const Center(child: Text('No neighbours found'))
+                          : ListView.builder(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              itemCount: _neighbours.length,
+                              itemBuilder: (context, index) {
+                                final n = _neighbours[index];
+                                final name =
+                                    _resolveNeighbourName(n.publicKeyHex);
+                                final parts = <String>[
+                                  if (n.snrDb != null)
+                                    'SNR ${n.snrDb!.toStringAsFixed(1)} dB',
+                                  if (n.lastSeenAt != null)
+                                    _formatAge(n.lastSeenAt!),
+                                  if (n.lastSeenMs != null)
+                                    '${n.lastSeenMs}ms ago',
+                                ];
+                                return ListTile(
+                                  leading: const Icon(Icons.router_outlined),
+                                  title: Text(name),
+                                  subtitle: parts.isNotEmpty
+                                      ? Text(parts.join(' • '))
+                                      : null,
+                                );
+                              },
+                            ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
