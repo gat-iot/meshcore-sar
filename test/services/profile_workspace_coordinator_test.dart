@@ -184,6 +184,39 @@ void main() {
         expect(manager.activeProfileId, target.id);
       },
     );
+
+    test('syncActiveProfileForCurrentDevice uses per-device default', () async {
+      final manager = ProfileManager();
+      await manager.initialize();
+      await manager.setProfilesEnabled(true);
+
+      final alpha = ConfigProfile(
+        id: 'profile-alpha',
+        name: 'Alpha',
+        createdAt: DateTime.parse('2026-03-16T12:00:00Z'),
+        updatedAt: DateTime.parse('2026-03-16T12:00:00Z'),
+        sections: const ConfigProfileSections(),
+      );
+      await manager.upsertProfile(alpha);
+      await manager.setActiveProfileIdForDevice(
+        alpha.id,
+        deviceKey: 'pk:01020304',
+      );
+      await manager.setActiveProfileId(ConfigProfile.defaultProfileId);
+
+      final connectionProvider = _FakeConnectionProvider(
+        deviceInfo: DeviceInfo(publicKey: Uint8List.fromList([1, 2, 3, 4])),
+      );
+      final coordinator = _buildCoordinator(
+        profileManager: manager,
+        connectionProvider: connectionProvider,
+      );
+
+      await coordinator.syncActiveProfileForCurrentDevice();
+
+      expect(manager.activeProfileId, alpha.id);
+      expect(connectionProvider.disconnectCallCount, 0);
+    });
   });
 }
 
@@ -265,10 +298,18 @@ class _FakeDeviceConfigApplicator extends DeviceConfigApplicator {
 }
 
 class _FakeConnectionProvider implements ConnectionProvider {
+  _FakeConnectionProvider({
+    DeviceInfo? deviceInfo,
+    this.connectionMode = ConnectionMode.ble,
+  }) : deviceInfo = deviceInfo ?? DeviceInfo();
+
   int disconnectCallCount = 0;
 
   @override
-  DeviceInfo get deviceInfo => DeviceInfo();
+  final DeviceInfo deviceInfo;
+
+  @override
+  final ConnectionMode connectionMode;
 
   @override
   Future<void> disconnect() async {

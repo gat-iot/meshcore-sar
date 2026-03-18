@@ -19,6 +19,7 @@ import 'contact_storage_service.dart';
 import 'device_config_applicator.dart';
 import 'message_storage_service.dart';
 import 'profile_manager.dart';
+import 'profile_device_key_resolver.dart';
 import 'profiles_feature_service.dart';
 import 'map_workspace_snapshot_service.dart';
 
@@ -63,6 +64,7 @@ class ProfileWorkspaceCoordinator {
   final DeviceConfigApplicator _deviceConfigApplicator;
   final MessageStorageService _messageStorageService;
   final ContactStorageService _contactStorageService;
+  bool _isSyncingDeviceProfile = false;
 
   Future<void> setProfilesEnabled(bool enabled) async {
     final wasEnabled = profileManager.profilesEnabled;
@@ -77,6 +79,14 @@ class ProfileWorkspaceCoordinator {
       activeProfileId: enabled ? profileManager.activeProfileId : 'default',
     );
     if (enabled) {
+      final deviceKey = _currentDeviceProfileKey;
+      final targetProfileId = profileManager.profileIdForDevice(deviceKey);
+      if (targetProfileId != profileManager.activeProfileId) {
+        await profileManager.setActiveProfileIdForDevice(
+          targetProfileId,
+          deviceKey: deviceKey,
+        );
+      }
       if (wasEnabled) {
         await openProfile(profileManager.activeProfileId);
       } else {
@@ -181,9 +191,13 @@ class ProfileWorkspaceCoordinator {
   }
 
   Future<void> openProfile(String profileId) async {
+    final deviceKey = _currentDeviceProfileKey;
     await _saveActiveCustomProfileSnapshot();
     await connectionProvider.disconnect();
-    await profileManager.setActiveProfileId(profileId);
+    await profileManager.setActiveProfileIdForDevice(
+      profileId,
+      deviceKey: deviceKey,
+    );
     await _switchRuntimeScope(profileId);
 
     final profile = await resolveProfile(profileId);
@@ -270,6 +284,49 @@ class ProfileWorkspaceCoordinator {
     );
     return imported;
   }
+
+  Future<void> syncActiveProfileForCurrentDevice() async {
+    if (!profileManager.profilesEnabled || _isSyncingDeviceProfile) {
+      return;
+    }
+    final deviceKey = _currentDeviceProfileKey;
+    if (deviceKey == null) {
+      return;
+    }
+
+    final targetProfileId = profileManager.profileIdForDevice(deviceKey);
+    if (targetProfileId == profileManager.activeProfileId) {
+      return;
+    }
+
+    _isSyncingDeviceProfile = true;
+    try {
+      await _persistCurrentState();
+      await profileManager.setActiveProfileIdForDevice(
+        targetProfileId,
+        deviceKey: deviceKey,
+      );
+      await _switchRuntimeScope(targetProfileId);
+
+      final profile = await resolveProfile(targetProfileId);
+      await _appConfigSnapshotService.apply(
+        profile.sections.appSettings,
+        appProvider,
+      );
+      await _mapWorkspaceSnapshotService.apply(
+        profile.sections.mapWorkspace,
+        mapProvider: mapProvider,
+        drawingProvider: drawingProvider,
+      );
+    } finally {
+      _isSyncingDeviceProfile = false;
+    }
+  }
+
+  String? get _currentDeviceProfileKey => ProfileDeviceKeyResolver.resolve(
+    deviceInfo: connectionProvider.deviceInfo,
+    connectionMode: connectionProvider.connectionMode,
+  );
 
   Future<void> _switchRuntimeScope(String profileId) async {
     final runtimeProfilesEnabled = profileManager.profilesEnabled;

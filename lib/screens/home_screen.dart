@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -29,7 +31,9 @@ import '../widgets/connection_dialog.dart';
 import '../utils/battery_display_helper.dart';
 import '../services/developer_mode_service.dart';
 import '../services/mesh_map_nodes_service.dart';
+import '../services/profile_device_key_resolver.dart';
 import '../services/profile_manager.dart';
+import '../services/profile_workspace_coordinator.dart';
 import '../services/profiles_feature_service.dart';
 
 enum _HomeTab { messages, contacts, sensors, map }
@@ -60,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   late final AppProvider _appProvider;
+  late final ConnectionProvider _connectionProvider;
   int _currentIndex = 0;
   bool _isMapFullscreen = false;
   bool _showRxTxIndicators = true;
@@ -68,6 +73,7 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isContactsEnabled = true;
   bool _isSensorsEnabled = false;
   AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
+  String? _lastProfileDeviceKey;
 
   List<_HomeTab> get _enabledTabs {
     return [
@@ -91,6 +97,8 @@ class _HomeScreenState extends State<HomeScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _appProvider = context.read<AppProvider>();
+    _connectionProvider = context.read<ConnectionProvider>();
+    _connectionProvider.addListener(_handleConnectionProviderChanged);
     _isMapEnabled = _appProvider.isMapEnabled;
     _isContactsEnabled = _appProvider.isContactsEnabled;
     _isSensorsEnabled = _appProvider.isSensorsEnabled;
@@ -108,6 +116,10 @@ class _HomeScreenState extends State<HomeScreen>
         _showPermissionDialog();
       });
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleConnectionProviderChanged();
+    });
   }
 
   void _initTabController() {
@@ -223,6 +235,36 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  void _handleConnectionProviderChanged() {
+    final deviceKey = ProfileDeviceKeyResolver.resolve(
+      deviceInfo: _connectionProvider.deviceInfo,
+      connectionMode: _connectionProvider.connectionMode,
+    );
+    if (_lastProfileDeviceKey == deviceKey) {
+      return;
+    }
+    _lastProfileDeviceKey = deviceKey;
+    if (deviceKey == null || !mounted) {
+      return;
+    }
+    unawaited(
+      context
+          .read<ProfileWorkspaceCoordinator>()
+          .syncActiveProfileForCurrentDevice(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _connectionProvider.removeListener(_handleConnectionProviderChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    _appProvider.setFastLocationUiActive(false);
+    _appProvider.removeListener(_handleAppProviderChanged);
+    _tabController.removeListener(_onTabChanged);
+    _tabController.dispose();
+    super.dispose();
+  }
+
   void _openLiveTraffic(ConnectionProvider provider) {
     openLiveTrafficScreen(context, provider);
   }
@@ -255,16 +297,6 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() {
       _isDeveloperModeEnabled = isEnabled;
     });
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _appProvider.setFastLocationUiActive(false);
-    _appProvider.removeListener(_handleAppProviderChanged);
-    _tabController.removeListener(_onTabChanged);
-    _tabController.dispose();
-    super.dispose();
   }
 
   void _showPermissionDialog() {
@@ -402,10 +434,7 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildMiniSignalBars({
-    required int activeBars,
-    required Color color,
-  }) {
+  Widget _buildMiniSignalBars({required int activeBars, required Color color}) {
     final inactive = Colors.grey.withValues(alpha: 0.3);
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1033,9 +1062,10 @@ class _HomeScreenState extends State<HomeScreen>
                                       deviceInfo.signalRssi != null) ...[
                                     const SizedBox(width: 4),
                                     _buildMiniSignalBars(
-                                      activeBars: BatteryDisplayHelper.getSignalBars(
-                                        deviceInfo.signalRssi!,
-                                      ),
+                                      activeBars:
+                                          BatteryDisplayHelper.getSignalBars(
+                                            deviceInfo.signalRssi!,
+                                          ),
                                       color: signalColor,
                                     ),
                                   ],
@@ -1162,9 +1192,9 @@ class _HomeScreenState extends State<HomeScreen>
                       );
                     },
                     child: _buildCompactActivityIndicator(
-                            rxActive: provider.rxActivity,
-                            txActive: provider.txActivity,
-                          ),
+                      rxActive: provider.rxActivity,
+                      txActive: provider.txActivity,
+                    ),
                   )
                 else
                   const SizedBox(width: 24),

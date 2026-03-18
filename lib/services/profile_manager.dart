@@ -9,11 +9,14 @@ import 'profiles_feature_service.dart';
 class ProfileManager with ChangeNotifier {
   static const String _profilesKey = 'profiles_library';
   static const String activeProfileIdKey = 'profiles_active_profile_id';
+  static const String _deviceProfileDefaultsKey =
+      'profiles_device_active_profile_ids';
   static const String _transferHistoryKey = 'profiles_transfer_history';
 
   final List<ConfigProfile> _customProfiles = <ConfigProfile>[];
   final List<ProfileTransferRecord> _transferHistory =
       <ProfileTransferRecord>[];
+  final Map<String, String> _deviceProfileDefaults = <String, String>{};
   bool _isInitialized = false;
   bool _profilesEnabled = false;
   String _activeProfileId = ConfigProfile.defaultProfileId;
@@ -36,6 +39,19 @@ class ProfileManager with ChangeNotifier {
     _profilesEnabled = await ProfilesFeatureService.isEnabled();
     _activeProfileId =
         prefs.getString(activeProfileIdKey) ?? ConfigProfile.defaultProfileId;
+
+    final deviceDefaultsJson = prefs.getString(_deviceProfileDefaultsKey);
+    if (deviceDefaultsJson != null && deviceDefaultsJson.isNotEmpty) {
+      final decoded = jsonDecode(deviceDefaultsJson);
+      if (decoded is Map<String, dynamic>) {
+        _deviceProfileDefaults
+          ..clear()
+          ..addAll(
+            decoded.map((key, value) => MapEntry(key, value?.toString() ?? ''))
+              ..removeWhere((key, value) => value.isEmpty),
+          );
+      }
+    }
 
     final profilesJson = prefs.getString(_profilesKey);
     if (profilesJson != null && profilesJson.isNotEmpty) {
@@ -90,9 +106,30 @@ class ProfileManager with ChangeNotifier {
   }
 
   Future<void> setActiveProfileId(String id) async {
+    await setActiveProfileIdForDevice(id);
+  }
+
+  String profileIdForDevice(String? deviceKey) {
+    if (deviceKey == null || deviceKey.isEmpty) {
+      return _activeProfileId;
+    }
+    return _deviceProfileDefaults[deviceKey] ?? ConfigProfile.defaultProfileId;
+  }
+
+  Future<void> setActiveProfileIdForDevice(
+    String id, {
+    String? deviceKey,
+  }) async {
     _activeProfileId = id;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(activeProfileIdKey, id);
+    if (deviceKey != null && deviceKey.isNotEmpty) {
+      _deviceProfileDefaults[deviceKey] = id;
+      await prefs.setString(
+        _deviceProfileDefaultsKey,
+        jsonEncode(_deviceProfileDefaults),
+      );
+    }
     ProfileStorageScope.setScope(
       profilesEnabled: _profilesEnabled,
       activeProfileId: _activeProfileId,

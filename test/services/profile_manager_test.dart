@@ -82,5 +82,42 @@ void main() {
         expect(reloaded.activeProfileId, profile.id);
       },
     );
+
+    test('stores per-device default profiles independently', () async {
+      final manager = ProfileManager();
+      await manager.initialize();
+      await manager.setProfilesEnabled(true);
+
+      final profile = ConfigProfile(
+        id: 'profile-alpha',
+        name: 'Alpha',
+        createdAt: DateTime.parse('2026-03-16T12:00:00Z'),
+        updatedAt: DateTime.parse('2026-03-16T12:00:00Z'),
+        sections: const ConfigProfileSections(),
+      );
+
+      await manager.upsertProfile(profile);
+      await manager.setActiveProfileIdForDevice(
+        profile.id,
+        deviceKey: 'pk:device-a',
+      );
+      await manager.setActiveProfileIdForDevice(
+        ConfigProfile.defaultProfileId,
+        deviceKey: 'pk:device-b',
+      );
+
+      final reloaded = ProfileManager();
+      await reloaded.initialize();
+
+      expect(reloaded.profileIdForDevice('pk:device-a'), profile.id);
+      expect(
+        reloaded.profileIdForDevice('pk:device-b'),
+        ConfigProfile.defaultProfileId,
+      );
+      expect(
+        reloaded.profileIdForDevice('pk:device-c'),
+        ConfigProfile.defaultProfileId,
+      );
+    });
   });
 }
