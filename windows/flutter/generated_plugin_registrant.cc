@@ -10,6 +10,7 @@
 #include <file_selector_windows/file_selector_windows.h>
 #include <flutter_avif_windows/flutter_avif_windows_plugin.h>
 #include <flutter_blue_plus_winrt/flutter_blue_plus_plugin.h>
+#include <flutter_libserialport/flutter_libserialport_plugin.h>
 #include <geolocator_windows/geolocator_windows.h>
 #include <nsd_windows/nsd_windows_plugin_c_api.h>
 #include <permission_handler_windows/permission_handler_windows_plugin.h>
@@ -26,6 +27,8 @@ void RegisterPlugins(flutter::PluginRegistry* registry) {
       registry->GetRegistrarForPlugin("FlutterAvifWindowsPlugin"));
   FlutterBluePlusPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("FlutterBluePlusPlugin"));
+  FlutterLibserialportPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("FlutterLibserialportPlugin"));
   GeolocatorWindowsRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("GeolocatorWindows"));
   NsdWindowsPluginCApiRegisterWithRegistrar(

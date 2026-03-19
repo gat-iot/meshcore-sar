@@ -29,7 +29,7 @@ extension ConnectionModeExtension on ConnectionMode {
       case ConnectionMode.tcp:
         return 'Direct (WiFi)';
       case ConnectionMode.usb:
-        return 'Direct (USB)';
+        return 'Direct (Serial)';
     }
   }
 
@@ -40,7 +40,7 @@ extension ConnectionModeExtension on ConnectionMode {
       case ConnectionMode.tcp:
         return 'Direct WiFi/TCP connection to MeshCore device';
       case ConnectionMode.usb:
-        return 'USB serial connection to MeshCore device';
+        return 'Direct serial connection to MeshCore device';
     }
   }
 }

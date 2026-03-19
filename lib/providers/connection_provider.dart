@@ -73,6 +73,7 @@ class ConnectionProvider with ChangeNotifier {
   final MeshCoreBleService _bleService = MeshCoreBleService();
   MeshCoreTcpService? _tcpService;
   MeshCoreSerialService? _serialService;
+  Future<void> Function()? _serialDisconnectTransport;
 
   /// Expose BLE service for background location tracking
   MeshCoreBleService get bleService => _bleService;
@@ -246,7 +247,7 @@ class ConnectionProvider with ChangeNotifier {
     }
 
     if (activeMode != ConnectionMode.usb && _serialService != null) {
-      _disposeSerialService();
+      await _disposeSerialService();
     }
   }
 
@@ -260,10 +261,20 @@ class ConnectionProvider with ChangeNotifier {
     service.dispose();
   }
 
-  void _disposeSerialService() {
-    _serialService?.markDisconnected();
-    _serialService?.dispose();
+  Future<void> _disposeSerialService() async {
+    final service = _serialService;
+    final disconnectTransport = _serialDisconnectTransport;
     _serialService = null;
+    _serialDisconnectTransport = null;
+    if (service == null) {
+      return;
+    }
+    service.markDisconnected();
+    service.writeRaw = null;
+    if (disconnectTransport != null) {
+      await disconnectTransport();
+    }
+    service.dispose();
   }
 
   void _beginConnectionAttempt({
@@ -635,6 +646,13 @@ class ConnectionProvider with ChangeNotifier {
     debugPrint('✅ [Provider] Scan state initialized, notifying listeners');
 
     try {
+      final adapterError = await _awaitBleAdapterReady();
+      if (adapterError != null) {
+        debugPrint('⚠️ [Provider] BLE adapter not ready: $adapterError');
+        _error = adapterError;
+        return;
+      }
+
       await for (final scanResult in _bleService.scanForDevices(
         timeout: const Duration(seconds: 10),
       )) {
@@ -674,6 +692,53 @@ class ConnectionProvider with ChangeNotifier {
       _isScanning = false;
       _notifyListenersSafely();
     }
+  }
+
+  Future<String?> _awaitBleAdapterReady({
+    Duration timeout = const Duration(seconds: 4),
+  }) async {
+    if (!await FlutterBluePlus.isSupported) {
+      return 'Bluetooth is not supported on this device.';
+    }
+
+    var state = await FlutterBluePlus.adapterState.first;
+    debugPrint('🔵 [Provider] Initial BLE adapter state: $state');
+
+    if (state == BluetoothAdapterState.unknown ||
+        state == BluetoothAdapterState.turningOn) {
+      debugPrint('⏳ [Provider] Waiting for BLE adapter to finish initializing');
+      try {
+        state = await FlutterBluePlus.adapterState
+            .where(
+              (candidate) =>
+                  candidate != BluetoothAdapterState.unknown &&
+                  candidate != BluetoothAdapterState.turningOn,
+            )
+            .first
+            .timeout(timeout);
+      } on TimeoutException {
+        state = FlutterBluePlus.adapterStateNow;
+      }
+      debugPrint('🔵 [Provider] BLE adapter state after wait: $state');
+    }
+
+    if (state == BluetoothAdapterState.on) {
+      return null;
+    }
+
+    return switch (state) {
+      BluetoothAdapterState.off =>
+        'Bluetooth is turned off. Turn it on and try again.',
+      BluetoothAdapterState.turningOff =>
+        'Bluetooth is turning off. Turn it back on and try again.',
+      BluetoothAdapterState.unauthorized =>
+        'Bluetooth access is not allowed. Check app permissions in System Settings and try again.',
+      BluetoothAdapterState.unavailable =>
+        'Bluetooth hardware is unavailable. On macOS, verify Bluetooth access is enabled for this app target.',
+      BluetoothAdapterState.unknown || BluetoothAdapterState.turningOn =>
+        'Bluetooth is still initializing. Please try again in a moment.',
+      BluetoothAdapterState.on => null,
+    };
   }
 
   /// Stop scanning
@@ -762,16 +827,22 @@ class ConnectionProvider with ChangeNotifier {
   /// The caller is responsible for opening the serial port and wiring
   /// [service.writeRaw] + [service.feedRawBytes] before calling this.
   /// After this call succeeds, [service.markConnected()] has already run.
-  Future<bool> connectSerial(MeshCoreSerialService service) async {
+  Future<bool> connectSerial({
+    required MeshCoreSerialService service,
+    required Future<void> Function() disconnectTransport,
+    required String deviceId,
+    required String deviceName,
+  }) async {
     debugPrint('🔌 [Provider] connectSerial()');
     await _prepareForConnectionSwitch(ConnectionMode.usb);
-    _disposeSerialService();
+    await _disposeSerialService();
     _serialService = service;
+    _serialDisconnectTransport = disconnectTransport;
     _wireServiceCallbacks(_serialService!);
     _beginConnectionAttempt(
       mode: ConnectionMode.usb,
-      deviceId: 'usb',
-      deviceName: 'USB Companion',
+      deviceId: deviceId,
+      deviceName: deviceName,
     );
 
     // markConnected() should already have been called by the transport.
@@ -780,6 +851,7 @@ class ConnectionProvider with ChangeNotifier {
       _deviceInfo = _deviceInfo.copyWith(
         connectionState: ConnectionState.error,
       );
+      await _disposeSerialService();
       notifyListeners();
       return false;
     }
@@ -788,7 +860,7 @@ class ConnectionProvider with ChangeNotifier {
 
   /// Disconnect from USB serial device.
   Future<void> disconnectSerial() async {
-    _disposeSerialService();
+    await _disposeSerialService();
     _resetConnectionSession();
   }
 
@@ -2771,6 +2843,12 @@ class ConnectionProvider with ChangeNotifier {
     _rxActivityTimer?.cancel();
     _txActivityTimer?.cancel();
     _stopAckCleanupTimer();
+    final disconnectTransport = _serialDisconnectTransport;
+    if (disconnectTransport != null) {
+      unawaited(disconnectTransport());
+      _serialDisconnectTransport = null;
+    }
+    _serialService?.dispose();
     _bleService.dispose();
     _tcpService?.dispose();
     super.dispose();

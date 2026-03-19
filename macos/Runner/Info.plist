@@ -24,10 +24,16 @@
 	<false/>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>MeshCore SAR needs Bluetooth to discover and communicate with MeshCore devices during SAR operations</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>MeshCore SAR needs Bluetooth to discover and communicate with MeshCore devices during SAR operations</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
+	<key>NSLocationUsageDescription</key>
+	<string>MeshCore SAR needs your location to track your team, share your position over the mesh network, and show your location on the map during SAR operations</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>MeshCore SAR needs microphone access to send voice messages over the mesh radio network during SAR operations</string>
 	<key>NSPrincipalClass</key>

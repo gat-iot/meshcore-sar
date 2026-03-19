@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/contact.dart';
 import '../../../models/sar_marker.dart';
+import 'compass_math.dart';
 
 /// Header component for the compass dialog showing compass rose,
 /// heading, elevation, accuracy, and current location in multiple formats.
@@ -76,7 +77,11 @@ class CompassHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoRow(BuildContext context, double? heading, Position? position) {
+  Widget _buildInfoRow(
+    BuildContext context,
+    double? heading,
+    Position? position,
+  ) {
     final l10n = AppLocalizations.of(context)!;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -90,17 +95,13 @@ class CompassHeader extends StatelessWidget {
         _buildInfoCard(
           context,
           l10n.elevation,
-          position?.altitude != null
-              ? '${position!.altitude.round()}m'
-              : '--',
+          position?.altitude != null ? '${position!.altitude.round()}m' : '--',
           Icons.terrain,
         ),
         _buildInfoCard(
           context,
           l10n.accuracy,
-          position?.accuracy != null
-              ? '±${position!.accuracy.round()}m'
-              : '--',
+          position?.accuracy != null ? '±${position!.accuracy.round()}m' : '--',
           Icons.gps_fixed,
         ),
       ],
@@ -108,21 +109,22 @@ class CompassHeader extends StatelessWidget {
   }
 
   Widget _buildInfoCard(
-      BuildContext context, String label, String value, IconData icon) {
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon,
+  ) {
     return Column(
       children: [
         Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
         const SizedBox(height: 4),
         Text(
           value,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }
@@ -193,11 +195,16 @@ class _LargeCompassPainter extends CustomPainter {
 
     // Draw degree markers
     for (int i = 0; i < 360; i += 10) {
-      final angle = i * pi / 180 - pi / 2 + heading * pi / 180;
+      final angle = compassDialAngleRadians(
+        markerDegrees: i.toDouble(),
+        headingDegrees: heading,
+      );
       final isCardinal = i % 90 == 0;
       final isMajor = i % 30 == 0;
 
-      final startRadius = isCardinal ? radius - 25 : (isMajor ? radius - 15 : radius - 10);
+      final startRadius = isCardinal
+          ? radius - 25
+          : (isMajor ? radius - 15 : radius - 10);
       final start = Offset(
         center.dx + startRadius * cos(angle),
         center.dy + startRadius * sin(angle),
@@ -218,7 +225,10 @@ class _LargeCompassPainter extends CustomPainter {
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     final directions = ['N', 'E', 'S', 'W'];
     for (int i = 0; i < 4; i++) {
-      final angle = i * pi / 2 - pi / 2 + heading * pi / 180;
+      final angle = compassDialAngleRadians(
+        markerDegrees: (i * 90).toDouble(),
+        headingDegrees: heading,
+      );
       final x = center.dx + (radius - 35) * cos(angle);
       final y = center.dy + (radius - 35) * sin(angle);
 
@@ -243,20 +253,25 @@ class _LargeCompassPainter extends CustomPainter {
       final contactsWithDistance = contacts
           .where((c) => c.displayLocation != null)
           .map((contact) {
-        final bearing = _calculateBearing(
-          currentPosition!.latitude,
-          currentPosition!.longitude,
-          contact.displayLocation!.latitude,
-          contact.displayLocation!.longitude,
-        );
-        final distance = _calculateDistance(
-          currentPosition!.latitude,
-          currentPosition!.longitude,
-          contact.displayLocation!.latitude,
-          contact.displayLocation!.longitude,
-        );
-        return {'contact': contact, 'bearing': bearing, 'distance': distance};
-      }).toList();
+            final bearing = _calculateBearing(
+              currentPosition!.latitude,
+              currentPosition!.longitude,
+              contact.displayLocation!.latitude,
+              contact.displayLocation!.longitude,
+            );
+            final distance = _calculateDistance(
+              currentPosition!.latitude,
+              currentPosition!.longitude,
+              contact.displayLocation!.latitude,
+              contact.displayLocation!.longitude,
+            );
+            return {
+              'contact': contact,
+              'bearing': bearing,
+              'distance': distance,
+            };
+          })
+          .toList();
 
       if (contactsWithDistance.isEmpty) return;
 
@@ -277,7 +292,8 @@ class _LargeCompassPainter extends CustomPainter {
         double normalizedDistance = (distance / baseDistance).clamp(0.0, 1.0);
 
         // Calculate contact position radius (from center to rim based on distance)
-        final contactRadius = radius * normalizedDistance * 0.85; // 0.85 to keep inside rim
+        final contactRadius =
+            radius * normalizedDistance * 0.85; // 0.85 to keep inside rim
 
         // Position of contact dot
         final dotX = center.dx + contactRadius * cos(angle);
@@ -288,11 +304,7 @@ class _LargeCompassPainter extends CustomPainter {
           ..color = Colors.lightBlue.withValues(alpha: 0.3)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5;
-        canvas.drawLine(
-          center,
-          Offset(dotX, dotY),
-          linePaint,
-        );
+        canvas.drawLine(center, Offset(dotX, dotY), linePaint);
 
         // Draw contact dot (size varies with zoom)
         final dotSize = (6.0 * (1.0 + zoomLevel * 0.3)).clamp(4.0, 12.0);
@@ -341,7 +353,10 @@ class _LargeCompassPainter extends CustomPainter {
 
           textPainter.paint(
             canvas,
-            Offset(labelX - textPainter.width / 2, labelY - textPainter.height / 2),
+            Offset(
+              labelX - textPainter.width / 2,
+              labelY - textPainter.height / 2,
+            ),
           );
         }
       }
@@ -419,11 +434,7 @@ class _LargeCompassPainter extends CustomPainter {
           ..color = markerColor.withValues(alpha: 0.3)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2;
-        canvas.drawLine(
-          center,
-          Offset(dotX, dotY),
-          linePaint,
-        );
+        canvas.drawLine(center, Offset(dotX, dotY), linePaint);
 
         // Draw SAR marker dot (slightly larger than contacts)
         final dotSize = (8.0 * (1.0 + zoomLevel * 0.3)).clamp(6.0, 14.0);
@@ -472,7 +483,10 @@ class _LargeCompassPainter extends CustomPainter {
 
           textPainter.paint(
             canvas,
-            Offset(labelX - textPainter.width / 2, labelY - textPainter.height / 2),
+            Offset(
+              labelX - textPainter.width / 2,
+              labelY - textPainter.height / 2,
+            ),
           );
         }
       }
@@ -492,27 +506,31 @@ class _LargeCompassPainter extends CustomPainter {
     canvas.drawPath(path, indicatorPaint);
   }
 
-  double _calculateBearing(
-      double lat1, double lon1, double lat2, double lon2) {
+  double _calculateBearing(double lat1, double lon1, double lat2, double lon2) {
     final dLon = (lon2 - lon1) * pi / 180;
     final lat1Rad = lat1 * pi / 180;
     final lat2Rad = lat2 * pi / 180;
 
     final y = sin(dLon) * cos(lat2Rad);
-    final x = cos(lat1Rad) * sin(lat2Rad) -
-        sin(lat1Rad) * cos(lat2Rad) * cos(dLon);
+    final x =
+        cos(lat1Rad) * sin(lat2Rad) - sin(lat1Rad) * cos(lat2Rad) * cos(dLon);
 
     final bearing = atan2(y, x) * 180 / pi;
     return (bearing + 360) % 360;
   }
 
   double _calculateDistance(
-      double lat1, double lon1, double lat2, double lon2) {
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
     const R = 6371000; // Earth's radius in meters
     final dLat = (lat2 - lat1) * pi / 180;
     final dLon = (lon2 - lon1) * pi / 180;
 
-    final a = sin(dLat / 2) * sin(dLat / 2) +
+    final a =
+        sin(dLat / 2) * sin(dLat / 2) +
         cos(lat1 * pi / 180) *
             cos(lat2 * pi / 180) *
             sin(dLon / 2) *
@@ -572,7 +590,8 @@ class _LocationFormatToggleState extends State<_LocationFormatToggle> {
     final String displayText;
 
     if (_showDMS) {
-      displayText = '${_formatDMS(position.latitude, true)} ${_formatDMS(position.longitude, false)}';
+      displayText =
+          '${_formatDMS(position.latitude, true)} ${_formatDMS(position.longitude, false)}';
     } else {
       displayText = l10n.latLonFormat(
         position.latitude.toStringAsFixed(5),
@@ -598,9 +617,9 @@ class _LocationFormatToggleState extends State<_LocationFormatToggle> {
             displayText,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'monospace',
-                ),
+              fontWeight: FontWeight.w600,
+              fontFamily: 'monospace',
+            ),
           ),
         ),
       ),

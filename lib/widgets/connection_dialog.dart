@@ -1,13 +1,11 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:meshcore_client/meshcore_client.dart' hide Contact;
 import 'package:provider/provider.dart';
-import 'package:usb_serial/usb_serial.dart';
 
 import '../l10n/app_localizations.dart';
 import '../providers/app_provider.dart';
 import '../providers/connection_provider.dart';
 import '../services/network_scanner_service.dart';
+import '../services/serial/serial_transport.dart';
 
 /// Connection Dialog with tabs for BLE devices and Network servers
 class ConnectionDialog extends StatefulWidget {
@@ -166,7 +164,7 @@ class _ConnectionDialogState extends State<ConnectionDialog>
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Choose Bluetooth, WiFi, or USB transport',
+                            'Choose Bluetooth, WiFi, or Serial transport',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
@@ -192,7 +190,7 @@ class _ConnectionDialogState extends State<ConnectionDialog>
                   tabs: const [
                     Tab(text: 'BLE', icon: Icon(Icons.bluetooth_rounded)),
                     Tab(text: 'Network', icon: Icon(Icons.wifi_rounded)),
-                    Tab(text: 'USB', icon: Icon(Icons.usb_rounded)),
+                    Tab(text: 'Serial', icon: Icon(Icons.usb_rounded)),
                   ],
                 ),
               ],
@@ -244,6 +242,36 @@ class _ConnectionDialogState extends State<ConnectionDialog>
               color: theme.colorScheme.onPrimaryContainer,
             ),
             onPressed: onRefresh,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorBanner(String message) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.error_outline_rounded,
+            color: theme.colorScheme.onErrorContainer,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+              ),
+            ),
           ),
         ],
       ),
@@ -371,6 +399,8 @@ class _ConnectionDialogState extends State<ConnectionDialog>
           message: AppLocalizations.of(context)!.defaultPinInfo,
           onRefresh: _refreshBleDevices,
         ),
+        if (connectionProvider.error != null)
+          _buildErrorBanner(connectionProvider.error!),
         Expanded(
           child:
               connectionProvider.isScanning &&
@@ -597,7 +627,7 @@ class _ConnectionDialogState extends State<ConnectionDialog>
   }
 
   Widget _buildUsbTab() {
-    return _UsbDeviceList(
+    return _SerialDeviceList(
       buildTransportCard:
           ({
             required icon,
@@ -654,38 +684,48 @@ typedef _EmptyStateBuilder =
       required VoidCallback onAction,
     });
 
-class _UsbDeviceList extends StatefulWidget {
+class _SerialDeviceList extends StatefulWidget {
   final VoidCallback onConnected;
   final _TransportCardBuilder buildTransportCard;
   final _EmptyStateBuilder buildEmptyState;
 
-  const _UsbDeviceList({
+  const _SerialDeviceList({
     required this.onConnected,
     required this.buildTransportCard,
     required this.buildEmptyState,
   });
 
   @override
-  State<_UsbDeviceList> createState() => _UsbDeviceListState();
+  State<_SerialDeviceList> createState() => _SerialDeviceListState();
 }
 
-class _UsbDeviceListState extends State<_UsbDeviceList> {
-  List<UsbDevice> _devices = [];
+class _SerialDeviceListState extends State<_SerialDeviceList> {
+  final SerialTransport _transport = createSerialTransport();
+  List<SerialDeviceInfo> _devices = [];
   bool _isScanning = false;
   bool _isConnecting = false;
 
   @override
   void initState() {
     super.initState();
-    if (defaultTargetPlatform == TargetPlatform.android) {
+    if (_transport.isSupported) {
       _scanDevices();
     }
   }
 
+  @override
+  void dispose() {
+    _transport.dispose();
+    super.dispose();
+  }
+
   Future<void> _scanDevices() async {
+    if (!_transport.isSupported) {
+      return;
+    }
     setState(() => _isScanning = true);
     try {
-      final devices = await UsbSerial.listDevices();
+      final devices = await _transport.listDevices();
       if (!mounted) return;
       setState(() {
         _devices = devices;
@@ -700,81 +740,66 @@ class _UsbDeviceListState extends State<_UsbDeviceList> {
     }
   }
 
-  Future<void> _connectToDevice(UsbDevice device) async {
+  Future<void> _requestDevice() async {
+    if (!_transport.canRequestDevice) {
+      await _scanDevices();
+      return;
+    }
+
+    setState(() => _isScanning = true);
+    try {
+      final selectedDevice = await _transport.requestDevice();
+      final devices = await _transport.listDevices();
+      if (!mounted) return;
+      setState(() {
+        _devices = selectedDevice == null
+            ? devices
+            : _mergeDevices(devices, selectedDevice);
+        _isScanning = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isScanning = false;
+      });
+    }
+  }
+
+  List<SerialDeviceInfo> _mergeDevices(
+    List<SerialDeviceInfo> devices,
+    SerialDeviceInfo selectedDevice,
+  ) {
+    final merged = [...devices];
+    if (!merged.any((device) => device.id == selectedDevice.id)) {
+      merged.insert(0, selectedDevice);
+    }
+    return merged;
+  }
+
+  Future<void> _connectToDevice(SerialDeviceInfo device) async {
     setState(() => _isConnecting = true);
     try {
       final connectionProvider = context.read<ConnectionProvider>();
-      final service = MeshCoreSerialService(appName: 'MeshCore SAR');
-
-      final port = await device.create();
-      if (port == null) {
-        if (mounted) {
-          setState(() => _isConnecting = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to create USB port')),
-          );
-        }
-        return;
-      }
-
-      final opened = await port.open();
-      if (!opened) {
-        if (mounted) {
-          setState(() => _isConnecting = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to open USB port')),
-          );
-        }
-        return;
-      }
-
-      await port.setDTR(true);
-      await port.setRTS(true);
-      await port.setPortParameters(
-        115200,
-        UsbPort.DATABITS_8,
-        UsbPort.STOPBITS_1,
-        UsbPort.PARITY_NONE,
+      final appProvider = context.read<AppProvider>();
+      final connection = await _transport.connect(device);
+      final success = await connectionProvider.connectSerial(
+        service: connection.service,
+        disconnectTransport: connection.disconnect,
+        deviceId: connection.deviceId,
+        deviceName: connection.deviceName,
       );
-
-      service.writeRaw = (data) async {
-        await port.write(data);
-      };
-
-      port.inputStream?.listen(
-        (data) => service.feedRawBytes(data),
-        onError: (_) {
-          service.markDisconnected();
-          port.close();
-        },
-        onDone: () {
-          service.markDisconnected();
-        },
-      );
-
-      final sessionOk = await service.markConnected();
-      if (!sessionOk) {
-        await port.close();
-        if (mounted) {
-          setState(() => _isConnecting = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('USB session initialization failed')),
-          );
-        }
-        return;
-      }
-
-      final success = await connectionProvider.connectSerial(service);
       if (!mounted) return;
 
       if (success) {
+        await appProvider.initialize();
         widget.onConnected();
       } else {
-        await port.close();
+        await connection.disconnect();
+        connection.service.dispose();
         if (!mounted) return;
         setState(() => _isConnecting = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to connect via USB')),
+          const SnackBar(content: Text('Failed to connect via serial')),
         );
       }
     } catch (e) {
@@ -782,20 +807,18 @@ class _UsbDeviceListState extends State<_UsbDeviceList> {
       setState(() => _isConnecting = false);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('USB error: $e')));
+      ).showSnackBar(SnackBar(content: Text('Serial error: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (defaultTargetPlatform != TargetPlatform.android) {
+    if (!_transport.isSupported) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-            kIsWeb
-                ? 'Web Serial is not yet supported.\nUse BLE or Network instead.'
-                : 'USB serial is available on Android only.\nConnect via OTG cable.',
+            _transport.unsupportedMessage,
             textAlign: TextAlign.center,
           ),
         ),
@@ -811,19 +834,22 @@ class _UsbDeviceListState extends State<_UsbDeviceList> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: FilledButton.tonalIcon(
-            onPressed: _isConnecting ? null : _scanDevices,
+            onPressed: _isConnecting
+                ? null
+                : (_transport.canRequestDevice ? _requestDevice : _scanDevices),
             icon: const Icon(Icons.usb_rounded),
-            label: const Text('Scan USB devices'),
+            label: Text(_transport.actionLabel),
           ),
         ),
         if (_devices.isEmpty)
           Expanded(
             child: widget.buildEmptyState(
               icon: Icons.usb_off_rounded,
-              title:
-                  'No USB serial devices found.\nConnect a MeshCore device via OTG cable.',
-              actionLabel: 'Scan USB devices',
-              onAction: _scanDevices,
+              title: _transport.emptyStateTitle,
+              actionLabel: _transport.actionLabel,
+              onAction: _transport.canRequestDevice
+                  ? _requestDevice
+                  : _scanDevices,
             ),
           )
         else
@@ -835,10 +861,8 @@ class _UsbDeviceListState extends State<_UsbDeviceList> {
                 return widget.buildTransportCard(
                   icon: Icons.usb_rounded,
                   iconColor: Theme.of(context).colorScheme.primary,
-                  title: device.productName ?? 'USB Device',
-                  subtitle: (device.manufacturerName?.isNotEmpty ?? false)
-                      ? device.manufacturerName!
-                      : 'Ready over OTG serial',
+                  title: device.title,
+                  subtitle: device.subtitle,
                   trailing: _isConnecting
                       ? const SizedBox(
                           width: 24,

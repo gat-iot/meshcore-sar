@@ -1551,14 +1551,12 @@ class _SectionHeader extends StatelessWidget {
   final int count;
   final IconData icon;
   final Color accentColor;
-  final Widget? trailing;
 
   const _SectionHeader({
     required this.title,
     required this.count,
     required this.icon,
     required this.accentColor,
-    this.trailing,
   });
 
   @override
@@ -1596,46 +1594,25 @@ class _SectionHeader extends StatelessWidget {
       ],
     );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final useStackedLayout = trailing != null && constraints.maxWidth < 430;
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: accentColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: accentColor.withValues(alpha: 0.18),
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(icon, size: 20, color: accentColor),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(child: titleBlock),
-                  if (!useStackedLayout && trailing != null) ...[
-                    const SizedBox(width: 12),
-                    Flexible(child: trailing!),
-                  ],
-                ],
-              ),
-              if (useStackedLayout) ...[
-                const SizedBox(height: 10),
-                Align(alignment: Alignment.centerRight, child: trailing!),
-              ],
-            ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: accentColor.withValues(alpha: 0.18)),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 20, color: accentColor),
           ),
-        );
-      },
+          const SizedBox(width: 12),
+          Expanded(child: titleBlock),
+        ],
+      ),
     );
   }
 }

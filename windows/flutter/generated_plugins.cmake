@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
   flutter_avif_windows
   flutter_blue_plus_winrt
+  flutter_libserialport
   geolocator_windows
   nsd_windows
   permission_handler_windows

@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'compass/compass_math.dart';
 
 class CompassWidget extends StatelessWidget {
   final double heading;
@@ -21,9 +22,9 @@ class CompassWidget extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // Compass rose background - rotates to show true north at top
+            // Rotate the rose opposite the heading under the fixed needle.
             Transform.rotate(
-              angle: heading * pi / 180,
+              angle: compassRoseRotationRadians(heading),
               child: CustomPaint(
                 size: const Size(40, 40),
                 painter: _CompassRosePainter(),
@@ -76,9 +77,7 @@ class _CompassRosePainter extends CustomPainter {
     canvas.drawCircle(center, radius, paint);
 
     // Draw cardinal direction markers
-    final textPainter = TextPainter(
-      textDirection: TextDirection.ltr,
-    );
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     final directions = ['N', 'E', 'S', 'W'];
     for (int i = 0; i < 4; i++) {
