@@ -7,7 +7,7 @@ import 'package:meshcore_sar_app/l10n/app_localizations.dart';
 import 'package:meshcore_sar_app/models/channel.dart';
 import 'package:meshcore_sar_app/models/contact.dart';
 import 'package:meshcore_sar_app/models/contact_group.dart';
-import 'package:meshcore_sar_app/models/device_info.dart';
+import 'package:meshcore_sar_app/models/device_info.dart' as device_info;
 import 'package:meshcore_sar_app/providers/connection_provider.dart';
 import 'package:meshcore_sar_app/providers/contacts_provider.dart';
 import 'package:meshcore_sar_app/providers/map_provider.dart';
@@ -24,10 +24,10 @@ class _FakeConnectionProvider extends ConnectionProvider {
   final bool _isConnected;
 
   @override
-  DeviceInfo get deviceInfo => DeviceInfo(
+  device_info.DeviceInfo get deviceInfo => device_info.DeviceInfo(
     connectionState: _isConnected
-        ? ConnectionState.connected
-        : ConnectionState.disconnected,
+        ? device_info.ConnectionState.connected
+        : device_info.ConnectionState.disconnected,
   );
 }
 
