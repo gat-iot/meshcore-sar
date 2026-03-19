@@ -1134,16 +1134,31 @@ class AppProvider with ChangeNotifier {
         return;
       }
 
-      // Enrich message with sender name from contacts first
+      // Enrich message with sender name from contacts.
+      // For room-forwarded messages, resolve the original poster's name
+      // from roomPostAuthorPrefix instead of the room server's key.
       Message enrichedMessage = message;
       Contact? senderContact;
-      if (message.senderPublicKeyPrefix != null && message.senderName == null) {
-        final contact = contactsProvider.findContactByKey(
-          message.senderPublicKeyPrefix!,
-        );
-        if (contact != null) {
-          senderContact = contact;
-          enrichedMessage = message.copyWith(senderName: contact.advName);
+      if (message.senderName == null) {
+        // Try room post author first (the actual person who posted)
+        if (message.roomPostAuthorPrefix != null) {
+          final author = contactsProvider.findContactByPrefix(
+            message.roomPostAuthorPrefix!,
+          );
+          if (author != null) {
+            senderContact = author;
+            enrichedMessage = message.copyWith(senderName: author.advName);
+          }
+        }
+        // Fall back to sender key (direct messages, or room with unknown author)
+        if (senderContact == null && message.senderPublicKeyPrefix != null) {
+          final contact = contactsProvider.findContactByKey(
+            message.senderPublicKeyPrefix!,
+          );
+          if (contact != null) {
+            senderContact = contact;
+            enrichedMessage = message.copyWith(senderName: contact.advName);
+          }
         }
       }
       senderContact ??= message.senderPublicKeyPrefix != null

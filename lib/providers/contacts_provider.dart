@@ -1195,10 +1195,11 @@ class ContactsProvider with ChangeNotifier {
 
   /// Find contact by public key prefix (6 bytes)
   Contact? _findContactByPrefix(Uint8List prefix) {
-    if (prefix.length < 6) return null;
+    if (prefix.isEmpty) return null;
 
+    final takeLen = prefix.length < 6 ? prefix.length : 6;
     final prefixHex = prefix
-        .sublist(0, 6)
+        .sublist(0, takeLen)
         .map((b) => b.toRadixString(16).padLeft(2, '0'))
         .join('');
 
