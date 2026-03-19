@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vibration/vibration.dart';
 import '../providers/connection_provider.dart';
 import '../providers/app_provider.dart';
-import '../models/device_info.dart' show ConnectionMode;
+import '../models/device_info.dart' show ConnectionMode, DeviceInfo;
 import '../providers/messages_provider.dart';
 import '../providers/contacts_provider.dart';
 import '../theme/app_theme.dart';
@@ -430,6 +430,118 @@ class _HomeScreenState extends State<HomeScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showDeviceInfoSheet(BuildContext context, DeviceInfo deviceInfo) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).dividerColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                deviceInfo.selfName ?? deviceInfo.deviceName ?? 'Device',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 16),
+              _deviceInfoRow(
+                context,
+                Icons.bluetooth,
+                'BLE Signal',
+                deviceInfo.signalRssi != null
+                    ? '${deviceInfo.signalRssi} dBm'
+                    : 'N/A',
+              ),
+              if (deviceInfo.batteryPercent != null)
+                _deviceInfoRow(
+                  context,
+                  BatteryDisplayHelper.getBatteryIcon(
+                    deviceInfo.batteryPercent!,
+                  ),
+                  'Battery',
+                  '${deviceInfo.batteryPercent!.round()}%',
+                ),
+              if (deviceInfo.batteryMilliVolts != null)
+                _deviceInfoRow(
+                  context,
+                  Icons.bolt,
+                  'Voltage',
+                  '${(deviceInfo.batteryMilliVolts! / 1000).toStringAsFixed(2)}V',
+                ),
+              if (deviceInfo.storageUsedKb != null &&
+                  deviceInfo.storageTotalKb != null)
+                _deviceInfoRow(
+                  context,
+                  Icons.storage,
+                  'Storage',
+                  '${deviceInfo.storageUsedKb} / ${deviceInfo.storageTotalKb} KB',
+                ),
+              if (deviceInfo.firmwareVersion != null)
+                _deviceInfoRow(
+                  context,
+                  Icons.system_update,
+                  'Firmware',
+                  'v${deviceInfo.firmwareVersion}',
+                ),
+              if (deviceInfo.radioFreq != null)
+                _deviceInfoRow(
+                  context,
+                  Icons.radio,
+                  'Frequency',
+                  '${(deviceInfo.radioFreq! / 1000).toStringAsFixed(3)} MHz',
+                ),
+              if (deviceInfo.txPower != null)
+                _deviceInfoRow(
+                  context,
+                  Icons.power,
+                  'TX Power',
+                  '${deviceInfo.txPower} dBm',
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _deviceInfoRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          ),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1061,7 +1173,12 @@ class _HomeScreenState extends State<HomeScreen>
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 2),
-                              Row(
+                              GestureDetector(
+                                onTap: () => _showDeviceInfoSheet(
+                                  context,
+                                  deviceInfo,
+                                ),
+                                child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
@@ -1108,6 +1225,7 @@ class _HomeScreenState extends State<HomeScreen>
                                     ),
                                   ],
                                 ],
+                              ),
                               ),
                             ],
                           ),
