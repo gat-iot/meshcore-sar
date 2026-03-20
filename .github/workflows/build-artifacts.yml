@@ -193,6 +193,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Install macOS native build tools
+        run: brew install automake libtool
+
       - name: Build macOS release
         run: flutter build macos --release
 

@@ -474,6 +474,21 @@ class SensorsProvider with ChangeNotifier {
   bool isWatched(String publicKeyHex) =>
       _watchedSensorKeys.contains(publicKeyHex);
 
+  Contact? selfContact(
+    ContactsProvider contactsProvider,
+    ConnectionProvider connectionProvider,
+  ) {
+    final selfKey = connectionProvider.deviceInfo.publicKey;
+    if (selfKey == null || selfKey.isEmpty) {
+      return null;
+    }
+
+    final existing = contactsProvider.findContactByKey(
+      Uint8List.fromList(selfKey),
+    );
+    return existing ?? _buildSelfCandidate(connectionProvider);
+  }
+
   Future<void> addSensor(Contact contact) async {
     if (!contact.isChat && !contact.isRepeater && !contact.isSensor) {
       return;
@@ -549,15 +564,63 @@ class SensorsProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  List<Contact> availableCandidates(ContactsProvider contactsProvider) {
+  List<Contact> availableCandidates(
+    ContactsProvider contactsProvider, {
+    ConnectionProvider? connectionProvider,
+  }) {
     final candidates = <Contact>[
       ...contactsProvider.chatContacts,
       ...contactsProvider.repeaters,
       ...contactsProvider.sensorContacts,
     ];
+
+    // Add "myself" (own device) as a candidate if it has a public key
+    if (connectionProvider != null) {
+      final self = selfContact(contactsProvider, connectionProvider);
+      if (self != null &&
+          !candidates.any((c) => c.publicKeyHex == self.publicKeyHex)) {
+        candidates.insert(0, self);
+      }
+    }
+
     candidates.removeWhere((contact) => isWatched(contact.publicKeyHex));
     candidates.sort((a, b) => b.lastSeenTime.compareTo(a.lastSeenTime));
     return candidates;
+  }
+
+  List<String> displaySensorKeys({
+    required ContactsProvider contactsProvider,
+    required ConnectionProvider connectionProvider,
+  }) {
+    if (_watchedSensorKeys.isNotEmpty) {
+      return List<String>.unmodifiable(_watchedSensorKeys);
+    }
+
+    final self = selfContact(contactsProvider, connectionProvider);
+    if (self == null) {
+      return const <String>[];
+    }
+
+    return <String>[self.publicKeyHex];
+  }
+
+  Contact? contactForDisplay(
+    String publicKeyHex, {
+    required ContactsProvider contactsProvider,
+    required ConnectionProvider connectionProvider,
+  }) {
+    for (final entry in contactsProvider.contacts) {
+      if (entry.publicKeyHex == publicKeyHex) {
+        return entry;
+      }
+    }
+
+    final self = selfContact(contactsProvider, connectionProvider);
+    if (self?.publicKeyHex == publicKeyHex) {
+      return self;
+    }
+
+    return null;
   }
 
   Future<void> refreshAll({
@@ -597,13 +660,11 @@ class SensorsProvider with ChangeNotifier {
 
     _lastRefreshAttemptAt[publicKeyHex] = requestedAt ?? DateTime.now();
 
-    Contact? contact;
-    for (final entry in contactsProvider.contacts) {
-      if (entry.publicKeyHex == publicKeyHex) {
-        contact = entry;
-        break;
-      }
-    }
+    final contact = contactForDisplay(
+      publicKeyHex,
+      contactsProvider: contactsProvider,
+      connectionProvider: connectionProvider,
+    );
 
     if (contact == null) {
       _setRefreshState(publicKeyHex, SensorRefreshState.unavailable);
@@ -685,5 +746,26 @@ class SensorsProvider with ChangeNotifier {
     _refreshStates[publicKeyHex] = state;
     _refreshStateUpdatedAt[publicKeyHex] = DateTime.now();
     notifyListeners();
+  }
+
+  Contact? _buildSelfCandidate(ConnectionProvider connectionProvider) {
+    final deviceInfo = connectionProvider.deviceInfo;
+    final selfKey = deviceInfo.publicKey;
+    if (selfKey == null || selfKey.isEmpty) {
+      return null;
+    }
+
+    return Contact(
+      publicKey: Uint8List.fromList(selfKey),
+      type: ContactType.chat,
+      flags: 0,
+      outPathLen: 0,
+      outPath: Uint8List(64),
+      advName: deviceInfo.selfName ?? 'My Device',
+      lastAdvert: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      advLat: deviceInfo.advLat ?? 0,
+      advLon: deviceInfo.advLon ?? 0,
+      lastMod: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    );
   }
 }

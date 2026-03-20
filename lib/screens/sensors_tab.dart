@@ -100,7 +100,10 @@ class _SensorsTabState extends State<SensorsTab> {
   Future<void> _showAddSensorSheet(BuildContext context) async {
     final sensorsProvider = context.read<SensorsProvider>();
     final contactsProvider = context.read<ContactsProvider>();
-    final candidates = sensorsProvider.availableCandidates(contactsProvider);
+    final candidates = sensorsProvider.availableCandidates(
+      contactsProvider,
+      connectionProvider: context.read<ConnectionProvider>(),
+    );
 
     await showModalBottomSheet<void>(
       context: context,
@@ -127,7 +130,11 @@ class _SensorsTabState extends State<SensorsTab> {
                   'Add sensor node',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-                subtitle: Text(AppLocalizations.of(context)!.pickARelayOrNodeToWatchInSensors),
+                subtitle: Text(
+                  AppLocalizations.of(
+                    context,
+                  )!.pickARelayOrNodeToWatchInSensors,
+                ),
               ),
               ...candidates.map(
                 (contact) => ListTile(
@@ -275,58 +282,72 @@ class _SensorsTabState extends State<SensorsTab> {
         onPressed: () => _showAddSensorSheet(context),
         child: const Icon(Icons.add),
       ),
-      body: Consumer2<SensorsProvider, ContactsProvider>(
-        builder: (context, sensorsProvider, contactsProvider, child) {
-          final watchedKeys = sensorsProvider.watchedSensorKeys;
+      body: Consumer3<SensorsProvider, ContactsProvider, ConnectionProvider>(
+        builder:
+            (
+              context,
+              sensorsProvider,
+              contactsProvider,
+              connectionProvider,
+              child,
+            ) {
+              final displayKeys = sensorsProvider.displaySensorKeys(
+                contactsProvider: contactsProvider,
+                connectionProvider: connectionProvider,
+              );
+              final hasPersistedSensors =
+                  sensorsProvider.watchedSensorKeys.isNotEmpty;
 
-          return RefreshIndicator(
-            onRefresh: () => _refreshAll(context),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-              children: [
-                if (watchedKeys.isEmpty)
-                  const _EmptySensorsState()
-                else
-                  ...watchedKeys.map((key) {
-                    Contact? contact;
-                    for (final entry in contactsProvider.contacts) {
-                      if (entry.publicKeyHex == key) {
-                        contact = entry;
-                        break;
-                      }
-                    }
-                    final availableFieldKeys = sensorMetricKeysFor(contact);
-                    final visibleFields = sensorsProvider
-                        .effectiveVisibleFieldsFor(key, availableFieldKeys);
-                    return SensorTelemetryCard(
-                      contact: contact,
-                      state: sensorsProvider.stateFor(key),
-                      visibleFields: visibleFields,
-                      fieldOrder: sensorsProvider.metricOrderFor(
-                        key,
-                        availableFieldKeys,
-                      ),
-                      labelOverrides: sensorsProvider.labelOverridesFor(key),
-                      fieldSpans: {
-                        for (final field in visibleFields)
-                          field: sensorsProvider.fieldSpanFor(key, field),
-                      },
-                      onRemove: () async {
-                        await sensorsProvider.removeSensor(key);
-                      },
-                      onCustomize: () =>
-                          _showMetricSelector(context, key, contact),
-                      onRefresh: () => sensorsProvider.refreshSensor(
-                        publicKeyHex: key,
-                        contactsProvider: contactsProvider,
-                        connectionProvider: context.read<ConnectionProvider>(),
-                      ),
-                    );
-                  }),
-              ],
-            ),
-          );
-        },
+              return RefreshIndicator(
+                onRefresh: () => _refreshAll(context),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                  children: [
+                    if (displayKeys.isEmpty)
+                      const _EmptySensorsState()
+                    else
+                      ...displayKeys.map((key) {
+                        final contact = sensorsProvider.contactForDisplay(
+                          key,
+                          contactsProvider: contactsProvider,
+                          connectionProvider: connectionProvider,
+                        );
+                        final availableFieldKeys = sensorMetricKeysFor(contact);
+                        final visibleFields = sensorsProvider
+                            .effectiveVisibleFieldsFor(key, availableFieldKeys);
+                        return SensorTelemetryCard(
+                          contact: contact,
+                          state: sensorsProvider.stateFor(key),
+                          visibleFields: visibleFields,
+                          fieldOrder: sensorsProvider.metricOrderFor(
+                            key,
+                            availableFieldKeys,
+                          ),
+                          labelOverrides: sensorsProvider.labelOverridesFor(
+                            key,
+                          ),
+                          fieldSpans: {
+                            for (final field in visibleFields)
+                              field: sensorsProvider.fieldSpanFor(key, field),
+                          },
+                          onRemove: hasPersistedSensors
+                              ? () async {
+                                  await sensorsProvider.removeSensor(key);
+                                }
+                              : null,
+                          onCustomize: () =>
+                              _showMetricSelector(context, key, contact),
+                          onRefresh: () => sensorsProvider.refreshSensor(
+                            publicKeyHex: key,
+                            contactsProvider: contactsProvider,
+                            connectionProvider: connectionProvider,
+                          ),
+                        );
+                      }),
+                  ],
+                ),
+              );
+            },
       ),
     );
   }
@@ -876,55 +897,8 @@ class _EmptySensorsState extends StatefulWidget {
 }
 
 class _EmptySensorsStateState extends State<_EmptySensorsState> {
-  bool _discoveryTriggered = false;
-  bool _discoveryInProgress = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Auto-trigger sensor discovery when the empty state is shown
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _autoDiscover();
-    });
-  }
-
-  Future<void> _autoDiscover() async {
-    if (_discoveryTriggered || !mounted) return;
-    final connectionProvider = context.read<ConnectionProvider>();
-    if (!connectionProvider.deviceInfo.isConnected) return;
-
-    _discoveryTriggered = true;
-    setState(() => _discoveryInProgress = true);
-    try {
-      await connectionProvider.discoverNodeType(advertType: 4);
-    } finally {
-      if (mounted) setState(() => _discoveryInProgress = false);
-    }
-  }
-
-  Future<void> _discoverSensors() async {
-    if (_discoveryInProgress || !mounted) return;
-    final connectionProvider = context.read<ConnectionProvider>();
-    if (!connectionProvider.deviceInfo.isConnected) return;
-
-    setState(() => _discoveryInProgress = true);
-    try {
-      await connectionProvider.discoverNodeType(advertType: 4);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.sensorDiscoverySent)),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _discoveryInProgress = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isConnected =
-        context.watch<ConnectionProvider>().deviceInfo.isConnected;
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 64),
       child: Column(
@@ -951,28 +925,9 @@ class _EmptySensorsStateState extends State<_EmptySensorsState> {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 24),
             child: Text(
-              'Use + to add discovered relays or nodes. Pull down to refresh telemetry after adding them.',
+              'Use + to add discovered relays or nodes. Your device will appear here automatically when available.',
               textAlign: TextAlign.center,
             ),
-          ),
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: isConnected && !_discoveryInProgress
-                ? _discoverSensors
-                : null,
-            icon: _discoveryInProgress
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.sensors_outlined),
-            label: Text(_discoveryInProgress
-                ? 'Discovering...'
-                : 'Discover Sensors'),
           ),
         ],
       ),
