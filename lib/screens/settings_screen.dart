@@ -426,6 +426,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return 'Channel $channelIdx unavailable';
   }
 
+  Future<void> _sendTestFastLocationUpdate() async {
+    final appProvider = context.read<AppProvider>();
+    final sent = await appProvider.sendTestFastLocationUpdate();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          sent
+              ? 'Test fast GPS update sent.'
+              : 'Unable to send test fast GPS update.',
+        ),
+        backgroundColor: sent ? Colors.green : Colors.orange,
+      ),
+    );
+  }
+
   Future<void> _editFastLocationChannel() async {
     final channels =
         List<Contact>.from(context.read<ContactsProvider>().channels)
@@ -1853,6 +1870,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: _editFastLocationChannel,
+            ),
+            ListTile(
+              leading: const Icon(Icons.send),
+              title: const Text('Test send update'),
+              subtitle: const Text(
+                'Send one fast GPS update immediately to the configured channel.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _sendTestFastLocationUpdate,
             ),
             ListTile(
               leading: Icon(Icons.location_on),

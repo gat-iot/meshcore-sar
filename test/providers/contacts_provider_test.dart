@@ -781,6 +781,19 @@ void main() {
       expect(updated.advLat, equals((44.123456 * 1e6).round()));
       expect(updated.advLon, equals((13.654321 * 1e6).round()));
       expect(updated.lastAdvert, equals(1700001234));
+      expect(updated.lastMod, equals(1700001234));
+      expect(
+        provider.estimatedLocationFor(updated.publicKeyHex),
+        isNotNull,
+      );
+      expect(
+        provider.estimatedLocationFor(updated.publicKeyHex)!.latitude,
+        closeTo(44.123456, 0.000001),
+      );
+      expect(
+        provider.estimatedLocationFor(updated.publicKeyHex)!.longitude,
+        closeTo(13.654321, 0.000001),
+      );
     });
 
     test('ignores unknown sender prefix safely', () {

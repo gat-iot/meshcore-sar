@@ -2879,8 +2879,13 @@ class AppProvider with ChangeNotifier {
       timestampSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
     );
     debugPrint(
-      '📍 [AppProvider] Sending fast GPS update ($reason): '
-      '${position.latitude}, ${position.longitude} via channel $channelIdx',
+      '📤 [AppProvider] Fast GPS send '
+      'reason=$reason '
+      'sender=$senderKey6 '
+      'channel=$channelIdx '
+      'lat=${position.latitude} '
+      'lon=${position.longitude} '
+      'ts=${packet.timestampSeconds}',
     );
     try {
       await connectionProvider.sendChannelData(
@@ -2888,9 +2893,30 @@ class AppProvider with ChangeNotifier {
         dataType: MeshCoreConstants.dataTypeDev,
         payload: packet.encodeBinary(),
       );
+      debugPrint(
+        '✅ [AppProvider] Fast GPS sent '
+        'sender=$senderKey6 channel=$channelIdx ts=${packet.timestampSeconds}',
+      );
     } catch (e) {
       debugPrint('⚠️ [AppProvider] Fast GPS send failed: $e');
     }
+  }
+
+  Future<bool> sendTestFastLocationUpdate() async {
+    if (!connectionProvider.deviceInfo.isConnected) {
+      return false;
+    }
+
+    final position = await locationTrackingService.getCurrentPosition(
+      timeLimit: const Duration(seconds: 10),
+      retryCount: 1,
+    );
+    if (position == null) {
+      return false;
+    }
+
+    await _sendFastLocationUpdate(position, reason: 'test');
+    return true;
   }
 
   Contact? _resolveVoiceFetchRequester(VoiceFetchRequest request) {

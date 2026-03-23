@@ -1143,13 +1143,34 @@ class ContactsProvider with ChangeNotifier {
       ),
     );
 
+    debugPrint(
+      '📥 [ContactsProvider] Fast GPS received '
+      'sender=${packet.senderKey6} '
+      'contact=${contact.displayName} '
+      'contactKey=${contact.publicKeyHex} '
+      'lat=${packet.latitude} '
+      'lon=${packet.longitude} '
+      'ts=${packet.timestampSeconds}',
+    );
+
     final updatedContact = contact.copyWith(
       telemetry: updatedTelemetry,
       lastAdvert: packet.timestampSeconds,
+      lastMod: packet.timestampSeconds,
       advLat: _coordinateToAdvertMicrodegrees(packet.latitude),
       advLon: _coordinateToAdvertMicrodegrees(packet.longitude),
     );
     _contacts[contact.publicKeyHex] = updatedContact;
+    _estimatedLocations[contact.publicKeyHex] = LatLng(
+      packet.latitude,
+      packet.longitude,
+    );
+    debugPrint(
+      '✅ [ContactsProvider] Fast GPS applied '
+      'contact=${updatedContact.displayName} '
+      'contactKey=${updatedContact.publicKeyHex} '
+      'lastAdvert=${updatedContact.lastAdvert}',
+    );
     _persistContacts();
     notifyListeners();
   }
