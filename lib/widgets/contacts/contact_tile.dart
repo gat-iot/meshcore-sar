@@ -157,6 +157,7 @@ class ContactTile extends StatelessWidget {
                       icon: Icons.folder_copy_outlined,
                       label: label,
                     ),
+                  ..._buildSignalPills(context),
                 ],
               ),
               if (location != null) ...[
@@ -324,6 +325,34 @@ class ContactTile extends StatelessWidget {
     );
   }
 
+  List<Widget> _buildSignalPills(BuildContext context) {
+    if (!contact.isRepeater && !contact.isSensor) return [];
+    final contactsProvider = context.read<ContactsProvider>();
+    final advert = contactsProvider.pendingAdvertByKey(contact.publicKey);
+    if (advert == null) return [];
+
+    final pills = <Widget>[];
+    if (advert.rxRssiDbm != null) {
+      pills.add(
+        _buildMetaPill(
+          context,
+          icon: Icons.arrow_downward_rounded,
+          label: '${advert.rxRssiDbm} dBm',
+        ),
+      );
+    }
+    if (advert.repeaterLastRssi != null) {
+      pills.add(
+        _buildMetaPill(
+          context,
+          icon: Icons.arrow_upward_rounded,
+          label: '${advert.repeaterLastRssi} dBm',
+        ),
+      );
+    }
+    return pills;
+  }
+
   Widget _buildCompactSubtitle(BuildContext context, String? distanceText) {
     final location = contact.displayLocation;
     final compactPills = <Widget>[
@@ -338,6 +367,7 @@ class ContactTile extends StatelessWidget {
           icon: Icons.location_disabled_outlined,
           label: AppLocalizations.of(context)!.noGpsData,
         ),
+      ..._buildSignalPills(context),
     ];
 
     return Padding(

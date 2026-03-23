@@ -429,6 +429,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _editFastLocationChannel() async {
     final channels =
         List<Contact>.from(context.read<ContactsProvider>().channels)
+          ..removeWhere((c) => c.isPublicChannel)
           ..sort((a, b) {
             final aIdx = a.publicKey.length > 1 ? a.publicKey[1] : 0;
             final bIdx = b.publicKey.length > 1 ? b.publicKey[1] : 0;

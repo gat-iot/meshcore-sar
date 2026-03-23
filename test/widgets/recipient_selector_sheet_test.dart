@@ -204,4 +204,43 @@ void main() {
     expect(find.textContaining('Channel 3'), findsNothing);
     expect(find.text(channel.publicKeyShort.toUpperCase()), findsNothing);
   });
+
+  testWidgets('shows contact activity instead of the public key', (
+    tester,
+  ) async {
+    final contact = buildContact(
+      name: 'John Smith',
+      type: ContactType.chat,
+      secondByte: 4,
+    );
+    final messagesProvider = MessagesProvider()
+      ..addMessage(
+        Message(
+          id: 'contact-activity',
+          messageType: MessageType.contact,
+          recipientPublicKey: contact.publicKey,
+          pathLen: 1,
+          textType: MessageTextType.plain,
+          senderTimestamp:
+              DateTime.now()
+                  .subtract(const Duration(hours: 2))
+                  .millisecondsSinceEpoch ~/
+              1000,
+          text: 'check-in',
+          receivedAt: DateTime.now().subtract(const Duration(hours: 2)),
+        ),
+      );
+
+    await pumpSheet(
+      tester,
+      contacts: [contact],
+      channels: const [],
+      messagesProvider: messagesProvider,
+      showAllOption: false,
+    );
+
+    expect(find.text('John Smith'), findsOneWidget);
+    expect(find.text('2h ago'), findsOneWidget);
+    expect(find.text(contact.publicKeyShort), findsNothing);
+  });
 }
