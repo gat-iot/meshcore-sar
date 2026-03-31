@@ -1,5 +1,5 @@
-name: meshcore_sar_app
-description: "MeshCore SAR (Search & Rescue) app with BLE mesh networking and offline maps"
+name: outdoor_mesh_comm
+description: "户外组网通讯 - 基于 MeshCore 的离网通信应用，支持消息、语音、图片、地图和实时位置共享"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
