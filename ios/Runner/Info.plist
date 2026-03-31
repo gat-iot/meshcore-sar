@@ -11,7 +11,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>MeshCore SAR</string>
+	<string>户外组网通讯</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
