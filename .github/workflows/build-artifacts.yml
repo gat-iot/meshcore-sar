@@ -13,7 +13,7 @@ permissions:
 
 env:
   FLUTTER_VERSION: "3.41.4"
-  APP_NAME: meshcore-sar
+  APP_NAME: outdoor-mesh-comm
   ANDROID_NDK_VERSION: "27.0.12077973"
 
 jobs:
