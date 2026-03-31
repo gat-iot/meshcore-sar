@@ -32,7 +32,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
-        android:label="MeshCore SAR"
+        android:label="户外组网通讯"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity
